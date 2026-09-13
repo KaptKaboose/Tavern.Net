@@ -8,7 +8,7 @@
              xmlns:behaviors="clr-namespace:Tavern.Net.Behaviors"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance vm:GameBoardViewModel}"
-             d:DesignWidth="1200" d:DesignHeight="800">
+             d:DesignWidth="1600" d:DesignHeight="950">
     <!-- CardTemplate and the NullToVisibility converter come from Views/SharedTemplates.xaml (merged in App.xaml),
          so StackZoneView's peek popup can reuse the exact same card visual. -->
     <Grid>
@@ -53,8 +53,10 @@
                     <RowDefinition Height="Auto"/>
                     <!-- Fixed (not Auto) so Hand reserves its space even when empty — Auto would
                          collapse it to zero height with no cards, shifting Memory's position
-                         every time the hand size changed. -->
-                    <RowDefinition Height="142"/>
+                         every time the hand size changed. Tall enough for one row of full-size
+                         (112x157, +margin) cards; the Viewbox below only shrinks cards when a
+                         big hand doesn't fit the row's width, not because of this height. -->
+                    <RowDefinition Height="170"/>
                 </Grid.RowDefinitions>
 
                 <!-- Material: top-left, no border. -->
@@ -90,10 +92,10 @@
                 </ItemsControl>
 
                 <!-- Memory: bordered bar, upright cards, directly below Field. -->
-                <GroupBox Grid.Row="1" Grid.Column="1" Header="Memory" Width="600" HorizontalAlignment="Center" Margin="0,8,0,8"
+                <GroupBox Grid.Row="1" Grid.Column="1" Header="Memory" Width="950" HorizontalAlignment="Center" Margin="0,8,0,8"
                           behaviors:CardDropBehavior.TargetZone="Memory"
                           behaviors:CardDropBehavior.MoveCommand="{Binding MoveCardToCommand}">
-                    <ScrollViewer Height="135" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                    <ScrollViewer Height="170" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
                         <ItemsControl ItemsSource="{Binding Memory.Cards}" ItemTemplate="{StaticResource CardTemplate}">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
@@ -102,20 +104,27 @@
                     </ScrollViewer>
                 </GroupBox>
 
-                <!-- Hand: bottom, no border or label. Fills the full row width (Background=Transparent
-                     makes that whole area droppable, same reasoning as Field's Canvas) so it's a
-                     stable, permanently-present drop target — the cards themselves are centered
-                     within it via the panel's own alignment, not the container's. -->
-                <ItemsControl Grid.Row="2" Grid.Column="1" Margin="0,0,0,8" Background="Transparent"
-                              ItemsSource="{Binding Hand.Cards}" ItemTemplate="{StaticResource CardTemplate}"
-                              behaviors:CardDropBehavior.TargetZone="Hand"
-                              behaviors:CardDropBehavior.MoveCommand="{Binding MoveCardToCommand}">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"/>
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                </ItemsControl>
+                <!-- Hand: bottom, no border or label. Spans under Material too (col 0-1, not col 2 —
+                     that's reserved the full height for Banishment/Main/Graveyard, so extending
+                     into it would make Hand a second overlapping drop target there) for extra
+                     width before a big hand needs to shrink. The Border fills the whole row
+                     (Background=Transparent, same reasoning as Field's Canvas) so it's a stable,
+                     permanently-present drop target no matter how small the Viewbox scales the
+                     cards down to. The Viewbox only ever shrinks (StretchDirection=DownOnly) —
+                     a hand that already fits renders at full size, centered. -->
+                <Border Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,0,0,8" Background="Transparent"
+                        behaviors:CardDropBehavior.TargetZone="Hand"
+                        behaviors:CardDropBehavior.MoveCommand="{Binding MoveCardToCommand}">
+                    <Viewbox Stretch="Uniform" StretchDirection="DownOnly">
+                        <ItemsControl ItemsSource="{Binding Hand.Cards}" ItemTemplate="{StaticResource CardTemplate}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </Viewbox>
+                </Border>
 
                 <!-- Banishment / Main / Graveyard: right-edge column, spanning the full height. Banishment is a sideways stack. -->
                 <StackPanel Grid.Row="0" Grid.RowSpan="3" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Top">
@@ -166,7 +175,8 @@
         <Button Grid.Column="0" Grid.ColumnSpan="2"
                 Visibility="{Binding ZoomedCard, Converter={StaticResource NullToVisibility}}"
                 Command="{Binding CloseZoomCommand}"
-                Focusable="False" Cursor="Arrow">
+                Focusable="False" Cursor="Arrow"
+                d:IsHidden="True">
             <Button.Template>
                 <ControlTemplate TargetType="Button">
                     <Border Background="#CC000000">

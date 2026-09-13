@@ -6,7 +6,8 @@
         xmlns:vm="clr-namespace:Tavern.Net.ViewModels"
         xmlns:views="clr-namespace:Tavern.Net.Views"
         mc:Ignorable="d"
-        Title="Tavern.Net" Height="800" Width="1300" WindowStartupLocation="CenterScreen">
+        Title="Tavern.Net" Height="950" Width="1600" WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize">
     <Window.Resources>
         <DataTemplate DataType="{x:Type vm:DeckImportViewModel}">
             <views:DeckImportView/>
