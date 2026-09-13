@@ -1,0 +1,164 @@
+<UserControl x:Class="Tavern.Net.Views.GameBoardView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:Tavern.Net.ViewModels"
+             xmlns:views="clr-namespace:Tavern.Net.Views"
+             xmlns:behaviors="clr-namespace:Tavern.Net.Behaviors"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:GameBoardViewModel}"
+             d:DesignWidth="1200" d:DesignHeight="800">
+    <!-- CardTemplate and the NullToVisibility converter come from Views/SharedTemplates.xaml (merged in App.xaml),
+         so StackZoneView's peek popup can reuse the exact same card visual. -->
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="260"/>
+        </Grid.ColumnDefinitions>
+
+        <Grid Grid.Column="0" Margin="12">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- Header: life + turn + global actions -->
+            <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
+                <Button Content="-" Width="28" Command="{Binding DecreaseLifeCommand}"/>
+                <TextBlock Text="{Binding Player.Life, StringFormat='Life: {0}'}" FontSize="18" FontWeight="Bold"
+                           VerticalAlignment="Center" Margin="8,0"/>
+                <Button Content="+" Width="28" Command="{Binding IncreaseLifeCommand}"/>
+
+                <TextBlock Text="{Binding Stats.TurnCount, StringFormat='   Turn {0}'}" FontSize="18"
+                           VerticalAlignment="Center" Margin="16,0,0,0"/>
+                <Button Content="End Turn" Margin="16,0,0,0" Padding="8,2" Command="{Binding EndTurnCommand}"/>
+
+                <Button Content="Draw" Margin="16,0,0,0" Padding="8,2" Command="{Binding DrawCardCommand}"/>
+                <Button Content="Draw Opening Hand" Margin="8,0,0,0" Padding="8,2" Command="{Binding DrawOpeningHandCommand}"/>
+                <Button Content="Mulligan" Margin="8,0,0,0" Padding="8,2" Command="{Binding MulliganCommand}"/>
+            </StackPanel>
+
+            <!-- The board: Field, Memory, and Hand are stacked as distinct, non-overlapping regions
+                 (not layered on top of each other) — Material sits to their left, Banishment/Main/
+                 Graveyard to their right. -->
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                    <!-- Fixed (not Auto) so Hand reserves its space even when empty — Auto would
+                         collapse it to zero height with no cards, shifting Memory's position
+                         every time the hand size changed. -->
+                    <RowDefinition Height="142"/>
+                </Grid.RowDefinitions>
+
+                <!-- Material: top-left, no border. -->
+                <views:StackZoneView Grid.Row="0" Grid.Column="0" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                     Zone="{Binding MaterialDeck}" HeaderText="Material"
+                                     TargetZone="MaterialDeck" MoveCommand="{Binding MoveCardToCommand}"/>
+
+                <!-- Field: a bounded region (not the whole board) — drop a card anywhere in it and
+                     it stays exactly there. No border or label. -->
+                <ItemsControl x:Name="FieldItemsControl" Grid.Row="0" Grid.Column="1" Margin="8"
+                              ItemsSource="{Binding Field.Cards}" ItemTemplate="{StaticResource CardTemplate}"
+                              Background="Transparent"
+                              behaviors:CardDropBehavior.TargetZone="Field"
+                              behaviors:CardDropBehavior.MoveCommand="{Binding MoveCardToCommand}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <!-- Canvas never sizes itself to its container (it always measures as
+                                 0x0, regardless of available space) — children still render/hit-test
+                                 fine at their absolute positions, but the "empty" surrounding area
+                                 wouldn't be part of the Canvas's own bounds at all without this,
+                                 meaning it wouldn't be droppable. -->
+                            <Canvas Background="Transparent"
+                                    Width="{Binding ActualWidth, ElementName=FieldItemsControl}"
+                                    Height="{Binding ActualHeight, ElementName=FieldItemsControl}"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemContainerStyle>
+                        <Style TargetType="ContentPresenter">
+                            <Setter Property="Canvas.Left" Value="{Binding Instance.FieldX}"/>
+                            <Setter Property="Canvas.Top" Value="{Binding Instance.FieldY}"/>
+                        </Style>
+                    </ItemsControl.ItemContainerStyle>
+                </ItemsControl>
+
+                <!-- Memory: bordered bar, upright cards, directly below Field. -->
+                <GroupBox Grid.Row="1" Grid.Column="1" Header="Memory" Width="600" HorizontalAlignment="Center" Margin="0,8,0,8"
+                          behaviors:CardDropBehavior.TargetZone="Memory"
+                          behaviors:CardDropBehavior.MoveCommand="{Binding MoveCardToCommand}">
+                    <ScrollViewer Height="135" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                        <ItemsControl ItemsSource="{Binding Memory.Cards}" ItemTemplate="{StaticResource CardTemplate}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </GroupBox>
+
+                <!-- Hand: bottom, no border or label. Fills the full row width (Background=Transparent
+                     makes that whole area droppable, same reasoning as Field's Canvas) so it's a
+                     stable, permanently-present drop target — the cards themselves are centered
+                     within it via the panel's own alignment, not the container's. -->
+                <ItemsControl Grid.Row="2" Grid.Column="1" Margin="0,0,0,8" Background="Transparent"
+                              ItemsSource="{Binding Hand.Cards}" ItemTemplate="{StaticResource CardTemplate}"
+                              behaviors:CardDropBehavior.TargetZone="Hand"
+                              behaviors:CardDropBehavior.MoveCommand="{Binding MoveCardToCommand}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                </ItemsControl>
+
+                <!-- Banishment / Main / Graveyard: right-edge column, spanning the full height. Banishment is a sideways stack. -->
+                <StackPanel Grid.Row="0" Grid.RowSpan="3" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Top">
+                    <views:StackZoneView Margin="8,0,0,16"
+                                         Zone="{Binding Banishment}" HeaderText="Banishment" ShowBorder="True" IsSideways="True"
+                                         TargetZone="Banishment" MoveCommand="{Binding MoveCardToCommand}"/>
+                    <views:StackZoneView Margin="8,0,0,16"
+                                         Zone="{Binding MainDeck}" HeaderText="Main"
+                                         TargetZone="MainDeck" MoveCommand="{Binding MoveCardToCommand}"/>
+                    <views:StackZoneView Margin="8,0,0,0"
+                                         Zone="{Binding Graveyard}" HeaderText="Graveyard" ShowBorder="True"
+                                         TargetZone="Graveyard" MoveCommand="{Binding MoveCardToCommand}"/>
+                </StackPanel>
+            </Grid>
+        </Grid>
+
+        <!-- Right: stats panel -->
+        <Border Grid.Column="1" BorderBrush="#33000000" BorderThickness="1,0,0,0" Padding="10">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Top" Text="Session stats" FontSize="16" FontWeight="Bold" Margin="0,0,0,8"/>
+                <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                    <TextBlock Text="{Binding Stats.CardsDrawnCount, StringFormat='Cards drawn: {0}'}"/>
+                    <TextBlock Text="{Binding Stats.MulliganCount, StringFormat='Mulligans: {0}'}"/>
+                </StackPanel>
+
+                <TextBlock DockPanel.Dock="Top" Text="Life history" FontWeight="Bold" Margin="0,4,0,4"/>
+                <ListBox DockPanel.Dock="Top" Height="100" ItemsSource="{Binding Stats.LifeHistory}" Margin="0,0,0,8">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}"/>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <TextBlock DockPanel.Dock="Top" Text="Play log" FontWeight="Bold" Margin="0,4,0,4"/>
+                <ListBox ItemsSource="{Binding Stats.PlayLog}" ScrollViewer.VerticalScrollBarVisibility="Auto">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}" TextWrapping="Wrap"/>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+        </Border>
+    </Grid>
+</UserControl>

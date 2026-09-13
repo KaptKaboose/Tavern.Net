@@ -1,0 +1,22 @@
+<Window x:Class="Tavern.Net.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="clr-namespace:Tavern.Net.ViewModels"
+        xmlns:views="clr-namespace:Tavern.Net.Views"
+        mc:Ignorable="d"
+        Title="Tavern.Net" Height="800" Width="1300" WindowStartupLocation="CenterScreen">
+    <Window.Resources>
+        <DataTemplate DataType="{x:Type vm:DeckImportViewModel}">
+            <views:DeckImportView/>
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:GameBoardViewModel}">
+            <views:GameBoardView/>
+        </DataTemplate>
+    </Window.Resources>
+
+    <Grid>
+        <ContentControl Content="{Binding CurrentView}"/>
+    </Grid>
+</Window>

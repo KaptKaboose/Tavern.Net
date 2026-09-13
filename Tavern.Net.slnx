@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Tavern.Net/Tavern.Net.csproj" />
+  <Project Path="Tavern.Net.Tests/Tavern.Net.Tests.csproj" />
+</Solution>
