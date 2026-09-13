@@ -160,5 +160,30 @@
                 </ListBox>
             </DockPanel>
         </Border>
+
+        <!-- Zoom overlay: right-click any card (CardZoomBehavior) opens it here full-size over
+             everything else; clicking anywhere — scrim or card — closes it again. -->
+        <Button Grid.Column="0" Grid.ColumnSpan="2"
+                Visibility="{Binding ZoomedCard, Converter={StaticResource NullToVisibility}}"
+                Command="{Binding CloseZoomCommand}"
+                Focusable="False" Cursor="Arrow">
+            <Button.Template>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="#CC000000">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Button.Template>
+            <Border Width="420" Height="588" CornerRadius="10" ClipToBounds="True"
+                    Background="#333" BorderBrush="White" BorderThickness="2">
+                <Grid>
+                    <Image Source="{Binding ZoomedCard.Artwork}" Stretch="Uniform"
+                           Visibility="{Binding ZoomedCard.Artwork, Converter={StaticResource NullToVisibility}}"/>
+                    <TextBlock Text="{Binding ZoomedCard.Name}" TextWrapping="Wrap" TextAlignment="Center"
+                               VerticalAlignment="Center" Foreground="White" FontSize="28" Margin="16"
+                               Visibility="{Binding ZoomedCard.Artwork, Converter={StaticResource NullToVisibility}, ConverterParameter=Invert}"/>
+                </Grid>
+            </Border>
+        </Button>
     </Grid>
 </UserControl>

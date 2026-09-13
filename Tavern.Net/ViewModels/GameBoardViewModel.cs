@@ -24,6 +24,10 @@ public sealed partial class GameBoardViewModel : ObservableObject
     public ZoneViewModel Banishment { get; }
     public ZoneViewModel Memory { get; }
 
+    /// <summary>The card currently shown full-size in the zoom overlay, or null when it's closed.</summary>
+    [ObservableProperty]
+    private CardViewModel? _zoomedCard;
+
     public GameBoardViewModel(GameSession session, Player player, GrandArchiveApiClient apiClient)
     {
         _session = session;
@@ -73,32 +77,29 @@ public sealed partial class GameBoardViewModel : ObservableObject
         }
     }
 
-    [RelayCommand]
-    private void PlayToField(CardViewModel? card) => Move(card, ZoneType.Field);
-
-    [RelayCommand]
-    private void Materialize(CardViewModel? card) => Move(card, ZoneType.Field);
-
-    [RelayCommand]
-    private void ReturnToHand(CardViewModel? card) => Move(card, ZoneType.Hand);
-
-    [RelayCommand]
-    private void ReturnToDeck(CardViewModel? card) => Move(card, ZoneType.MainDeck);
-
-    [RelayCommand]
-    private void Discard(CardViewModel? card) => Move(card, ZoneType.Graveyard);
-
-    [RelayCommand]
-    private void Banish(CardViewModel? card) => Move(card, ZoneType.Banishment);
-
+    /// <summary>Tap state only means something on the Field, so a click anywhere else is a no-op.</summary>
     [RelayCommand]
     private void ToggleTapped(CardViewModel? card)
     {
-        if (card is not null)
+        if (card is null)
         {
-            card.Instance.IsTapped = !card.Instance.IsTapped;
+            return;
         }
+
+        var zone = Player.Zones.First(kv => kv.Value.Cards.Contains(card.Instance)).Key;
+        if (zone != ZoneType.Field)
+        {
+            return;
+        }
+
+        card.Instance.IsTapped = !card.Instance.IsTapped;
     }
+
+    [RelayCommand]
+    private void ZoomCard(CardViewModel? card) => ZoomedCard = card;
+
+    [RelayCommand]
+    private void CloseZoom() => ZoomedCard = null;
 
     private void Move(CardViewModel? card, ZoneType destination, double? fieldX = null, double? fieldY = null)
     {

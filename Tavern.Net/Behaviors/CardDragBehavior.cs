@@ -28,6 +28,10 @@ public static class CardDragBehavior
     private static Point _dragStartScreenPoint;
     private static Point _grabOffsetInElement;
 
+    // Set once OnPreviewMouseMove actually kicks off DoDragDrop, so the paired MouseLeftButtonUp
+    // can tell a real drag apart from a plain click (which taps/untaps the card instead).
+    private static bool _dragStarted;
+
     // The adorner for whichever drag is currently in progress (only one drag can be active at
     // a time), updated from GiveFeedback rather than DragOver — see OnGiveFeedback for why.
     private static DragAdorner? _activeAdorner;
@@ -70,12 +74,14 @@ public static class CardDragBehavior
         {
             element.PreviewMouseLeftButtonDown += OnPreviewMouseLeftButtonDown;
             element.PreviewMouseMove += OnPreviewMouseMove;
+            element.PreviewMouseLeftButtonUp += OnPreviewMouseLeftButtonUp;
             element.GiveFeedback += OnGiveFeedback;
         }
         else
         {
             element.PreviewMouseLeftButtonDown -= OnPreviewMouseLeftButtonDown;
             element.PreviewMouseMove -= OnPreviewMouseMove;
+            element.PreviewMouseLeftButtonUp -= OnPreviewMouseLeftButtonUp;
             element.GiveFeedback -= OnGiveFeedback;
         }
     }
@@ -84,6 +90,21 @@ public static class CardDragBehavior
     {
         _dragStartScreenPoint = e.GetPosition(null);
         _grabOffsetInElement = e.GetPosition((IInputElement)sender);
+        _dragStarted = false;
+    }
+
+    /// <summary>A press-and-release that never crossed the drag threshold is a click — toggle tapped.</summary>
+    private static void OnPreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_dragStarted || sender is not FrameworkElement { DataContext: CardViewModel card })
+        {
+            return;
+        }
+
+        if (card.Board.ToggleTappedCommand.CanExecute(card))
+        {
+            card.Board.ToggleTappedCommand.Execute(card);
+        }
     }
 
     private static void OnGiveFeedback(object sender, GiveFeedbackEventArgs e)
@@ -145,6 +166,7 @@ public static class CardDragBehavior
             return;
         }
 
+        _dragStarted = true;
         _loggedFirstFeedbackThisDrag = false;
         _loggedMissingAdornerThisDrag = false;
 

@@ -6,14 +6,17 @@
 
     <conv:NullToVisibilityConverter x:Key="NullToVisibility"/>
 
-    <!-- One face-up card: art if loaded, name placeholder otherwise, draggable, right-click for actions. -->
+    <!-- One face-up card: art if loaded, name placeholder otherwise. Left-click taps/untaps it
+         (only meaningful on the Field — see GameBoardViewModel.ToggleTapped), drag moves it
+         between zones, and right-click immediately opens the full-size zoom overlay. -->
     <DataTemplate x:Key="CardTemplate" DataType="{x:Type vm:CardViewModel}">
-        <Border Width="90" Height="126" Margin="3" CornerRadius="4" ClipToBounds="True"
+        <Border Width="112" Height="157" Margin="3" CornerRadius="4" ClipToBounds="True"
                 BorderBrush="#55000000" BorderThickness="1"
                 Background="#333"
                 RenderTransformOrigin="0.5,0.5"
                 Cursor="Hand"
-                behaviors:CardDragBehavior.IsDraggable="True">
+                behaviors:CardDragBehavior.IsDraggable="True"
+                behaviors:CardZoomBehavior.IsZoomable="True">
             <Border.Style>
                 <Style TargetType="Border">
                     <Setter Property="RenderTransform">
@@ -28,25 +31,12 @@
                     </Style.Triggers>
                 </Style>
             </Border.Style>
-            <Border.ContextMenu>
-                <ContextMenu>
-                    <MenuItem Header="Play to Field" Command="{Binding Board.PlayToFieldCommand}" CommandParameter="{Binding}"/>
-                    <MenuItem Header="Materialize (from Material Deck)" Command="{Binding Board.MaterializeCommand}" CommandParameter="{Binding}"/>
-                    <MenuItem Header="Return to Hand" Command="{Binding Board.ReturnToHandCommand}" CommandParameter="{Binding}"/>
-                    <MenuItem Header="Return to Deck" Command="{Binding Board.ReturnToDeckCommand}" CommandParameter="{Binding}"/>
-                    <Separator/>
-                    <MenuItem Header="Discard" Command="{Binding Board.DiscardCommand}" CommandParameter="{Binding}"/>
-                    <MenuItem Header="Banish" Command="{Binding Board.BanishCommand}" CommandParameter="{Binding}"/>
-                    <Separator/>
-                    <MenuItem Header="Tap / Untap" Command="{Binding Board.ToggleTappedCommand}" CommandParameter="{Binding}"/>
-                </ContextMenu>
-            </Border.ContextMenu>
 
             <Grid>
                 <Image Source="{Binding Artwork}" Stretch="UniformToFill"
                        Visibility="{Binding Artwork, Converter={StaticResource NullToVisibility}}"/>
                 <TextBlock Text="{Binding Name}" TextWrapping="Wrap" TextAlignment="Center"
-                           VerticalAlignment="Center" Foreground="White" Margin="4" FontSize="11"
+                           VerticalAlignment="Center" Foreground="White" Margin="4" FontSize="13"
                            Visibility="{Binding Artwork, Converter={StaticResource NullToVisibility}, ConverterParameter=Invert}"/>
             </Grid>
         </Border>

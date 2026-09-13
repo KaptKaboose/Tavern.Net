@@ -18,13 +18,13 @@
                 behaviors:CardDropBehavior.MoveCommand="{Binding MoveCommand, ElementName=Root}">
             <Border.Style>
                 <Style TargetType="Border">
-                    <Setter Property="Width" Value="90"/>
-                    <Setter Property="Height" Value="126"/>
+                    <Setter Property="Width" Value="112"/>
+                    <Setter Property="Height" Value="157"/>
                     <Setter Property="BorderThickness" Value="0"/>
                     <Style.Triggers>
                         <DataTrigger Binding="{Binding IsSideways, ElementName=Root}" Value="True">
-                            <Setter Property="Width" Value="126"/>
-                            <Setter Property="Height" Value="90"/>
+                            <Setter Property="Width" Value="157"/>
+                            <Setter Property="Height" Value="112"/>
                         </DataTrigger>
                         <DataTrigger Binding="{Binding ShowBorder, ElementName=Root}" Value="True">
                             <Setter Property="BorderThickness" Value="1"/>
