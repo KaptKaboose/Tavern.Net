@@ -9,8 +9,9 @@ namespace Tavern.Net.Views;
 /// <summary>
 /// A collapsed "pile" widget (just a card count) for zones that don't need every
 /// card visible at once — Material Deck, Main Deck, Graveyard, Banishment. Clicking
-/// it opens a popup fanning out the actual cards (draggable, right-clickable, using
-/// the same CardTemplate as everywhere else), which closes again once you click away.
+/// it asks the board (via <see cref="PeekCommand"/>) to fan the actual cards out in its
+/// screen-wide peek overlay (draggable, right-clickable, scrollable, using the same
+/// CardTemplate as everywhere else).
 /// </summary>
 public partial class StackZoneView : UserControl
 {
@@ -68,6 +69,15 @@ public partial class StackZoneView : UserControl
         set => SetValue(MoveCommandProperty, value);
     }
 
+    public static readonly DependencyProperty PeekCommandProperty =
+        DependencyProperty.Register(nameof(PeekCommand), typeof(ICommand), typeof(StackZoneView));
+
+    public ICommand? PeekCommand
+    {
+        get => (ICommand?)GetValue(PeekCommandProperty);
+        set => SetValue(PeekCommandProperty, value);
+    }
+
     public StackZoneView()
     {
         InitializeComponent();
@@ -75,9 +85,15 @@ public partial class StackZoneView : UserControl
 
     private void OnPileClicked(object sender, MouseButtonEventArgs e)
     {
-        if (Zone?.Cards.Count > 0)
+        if (Zone is null || Zone.Cards.Count == 0)
         {
-            PeekPopup.IsOpen = !PeekPopup.IsOpen;
+            return;
+        }
+
+        var request = new PeekedZoneInfo(Zone, HeaderText ?? Zone.Type.ToString());
+        if (PeekCommand is not null && PeekCommand.CanExecute(request))
+        {
+            PeekCommand.Execute(request);
         }
     }
 }

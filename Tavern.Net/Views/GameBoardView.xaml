@@ -54,15 +54,16 @@
                     <!-- Fixed (not Auto) so Hand reserves its space even when empty — Auto would
                          collapse it to zero height with no cards, shifting Memory's position
                          every time the hand size changed. Tall enough for one row of full-size
-                         (112x157, +margin) cards; the Viewbox below only shrinks cards when a
+                         (125x175, +margin) cards; the Viewbox below only shrinks cards when a
                          big hand doesn't fit the row's width, not because of this height. -->
-                    <RowDefinition Height="170"/>
+                    <RowDefinition Height="190"/>
                 </Grid.RowDefinitions>
 
                 <!-- Material: top-left, no border. -->
                 <views:StackZoneView Grid.Row="0" Grid.Column="0" HorizontalAlignment="Left" VerticalAlignment="Top"
                                      Zone="{Binding MaterialDeck}" HeaderText="Material"
-                                     TargetZone="MaterialDeck" MoveCommand="{Binding MoveCardToCommand}"/>
+                                     TargetZone="MaterialDeck" MoveCommand="{Binding MoveCardToCommand}"
+                                     PeekCommand="{Binding PeekZoneCommand}"/>
 
                 <!-- Field: a bounded region (not the whole board) — drop a card anywhere in it and
                      it stays exactly there. No border or label. -->
@@ -95,7 +96,7 @@
                 <GroupBox Grid.Row="1" Grid.Column="1" Header="Memory" Width="950" HorizontalAlignment="Center" Margin="0,8,0,8"
                           behaviors:CardDropBehavior.TargetZone="Memory"
                           behaviors:CardDropBehavior.MoveCommand="{Binding MoveCardToCommand}">
-                    <ScrollViewer Height="170" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                    <ScrollViewer Height="190" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
                         <ItemsControl ItemsSource="{Binding Memory.Cards}" ItemTemplate="{StaticResource CardTemplate}">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
@@ -130,13 +131,16 @@
                 <StackPanel Grid.Row="0" Grid.RowSpan="3" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Top">
                     <views:StackZoneView Margin="8,0,0,16"
                                          Zone="{Binding Banishment}" HeaderText="Banishment" ShowBorder="True" IsSideways="True"
-                                         TargetZone="Banishment" MoveCommand="{Binding MoveCardToCommand}"/>
+                                         TargetZone="Banishment" MoveCommand="{Binding MoveCardToCommand}"
+                                         PeekCommand="{Binding PeekZoneCommand}"/>
                     <views:StackZoneView Margin="8,0,0,16"
                                          Zone="{Binding MainDeck}" HeaderText="Main"
-                                         TargetZone="MainDeck" MoveCommand="{Binding MoveCardToCommand}"/>
+                                         TargetZone="MainDeck" MoveCommand="{Binding MoveCardToCommand}"
+                                         PeekCommand="{Binding PeekZoneCommand}"/>
                     <views:StackZoneView Margin="8,0,0,0"
                                          Zone="{Binding Graveyard}" HeaderText="Graveyard" ShowBorder="True"
-                                         TargetZone="Graveyard" MoveCommand="{Binding MoveCardToCommand}"/>
+                                         TargetZone="Graveyard" MoveCommand="{Binding MoveCardToCommand}"
+                                         PeekCommand="{Binding PeekZoneCommand}"/>
                 </StackPanel>
             </Grid>
         </Grid>
@@ -170,6 +174,41 @@
             </DockPanel>
         </Border>
 
+        <!-- Peek overlay: clicking a pile (StackZoneView.PeekCommand) fans its cards out here,
+             above the main board but below the zoom overlay so zooming a card while peeking
+             still shows on top. Unlike the zoom overlay, only the scrim (not the card panel)
+             closes it on click — cards inside stay draggable/right-clickable, and the panel
+             scrolls instead of trying to fit an entire deck on screen at once. -->
+        <Grid Grid.Column="0" Grid.ColumnSpan="2"
+              Visibility="{Binding PeekedZone, Converter={StaticResource NullToVisibility}}"
+              d:IsHidden="True">
+            <Button Command="{Binding ClosePeekCommand}" Focusable="False" Cursor="Arrow">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="#CC000000"/>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+
+            <Border MaxWidth="1200" MaxHeight="820" Margin="40" Padding="16"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Background="#333" BorderBrush="White" BorderThickness="2" CornerRadius="10">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="{Binding PeekedZone.HeaderText}"
+                               Foreground="White" FontSize="20" FontWeight="Bold" Margin="0,0,0,12"/>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl ItemsSource="{Binding PeekedZone.Zone.Cards}" ItemTemplate="{StaticResource CardTemplate}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Grid>
+
         <!-- Zoom overlay: right-click any card (CardZoomBehavior) opens it here full-size over
              everything else; clicking anywhere — scrim or card — closes it again. -->
         <Button Grid.Column="0" Grid.ColumnSpan="2"
@@ -185,7 +224,7 @@
                 </ControlTemplate>
             </Button.Template>
             <Border Width="420" Height="588" CornerRadius="10" ClipToBounds="True"
-                    Background="#333" BorderBrush="White" BorderThickness="2">
+                    Background="#333" BorderBrush="Black" BorderThickness="2">
                 <Grid>
                     <Image Source="{Binding ZoomedCard.Artwork}" Stretch="Uniform"
                            Visibility="{Binding ZoomedCard.Artwork, Converter={StaticResource NullToVisibility}}"/>

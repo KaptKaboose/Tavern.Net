@@ -18,13 +18,13 @@
                 behaviors:CardDropBehavior.MoveCommand="{Binding MoveCommand, ElementName=Root}">
             <Border.Style>
                 <Style TargetType="Border">
-                    <Setter Property="Width" Value="112"/>
-                    <Setter Property="Height" Value="157"/>
+                    <Setter Property="Width" Value="125"/>
+                    <Setter Property="Height" Value="175"/>
                     <Setter Property="BorderThickness" Value="0"/>
                     <Style.Triggers>
                         <DataTrigger Binding="{Binding IsSideways, ElementName=Root}" Value="True">
-                            <Setter Property="Width" Value="157"/>
-                            <Setter Property="Height" Value="112"/>
+                            <Setter Property="Width" Value="175"/>
+                            <Setter Property="Height" Value="125"/>
                         </DataTrigger>
                         <DataTrigger Binding="{Binding ShowBorder, ElementName=Root}" Value="True">
                             <Setter Property="BorderThickness" Value="1"/>
@@ -36,19 +36,5 @@
             <TextBlock Text="{Binding Zone.Cards.Count, ElementName=Root}" Foreground="White" FontSize="20"
                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </Border>
-
-        <Popup x:Name="PeekPopup" PlacementTarget="{Binding ElementName=PileBorder}" Placement="Bottom"
-               StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
-            <Border Background="#EEE" BorderBrush="Black" BorderThickness="1" CornerRadius="4" Padding="6">
-                <ItemsControl ItemsSource="{Binding Zone.Cards, ElementName=Root}"
-                              ItemTemplate="{StaticResource CardTemplate}">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <WrapPanel MaxWidth="400"/>
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                </ItemsControl>
-            </Border>
-        </Popup>
     </StackPanel>
 </UserControl>

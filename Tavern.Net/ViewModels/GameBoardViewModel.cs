@@ -28,6 +28,10 @@ public sealed partial class GameBoardViewModel : ObservableObject
     [ObservableProperty]
     private CardViewModel? _zoomedCard;
 
+    /// <summary>The pile currently fanned out in the peek overlay, or null when it's closed.</summary>
+    [ObservableProperty]
+    private PeekedZoneInfo? _peekedZone;
+
     public GameBoardViewModel(GameSession session, Player player, GrandArchiveApiClient apiClient)
     {
         _session = session;
@@ -100,6 +104,21 @@ public sealed partial class GameBoardViewModel : ObservableObject
 
     [RelayCommand]
     private void CloseZoom() => ZoomedCard = null;
+
+    /// <summary>Clicking the same pile again closes it; clicking a different one switches to it.</summary>
+    [RelayCommand]
+    private void PeekZone(PeekedZoneInfo? info)
+    {
+        if (info is null)
+        {
+            return;
+        }
+
+        PeekedZone = PeekedZone?.Zone == info.Zone ? null : info;
+    }
+
+    [RelayCommand]
+    private void ClosePeek() => PeekedZone = null;
 
     private void Move(CardViewModel? card, ZoneType destination, double? fieldX = null, double? fieldY = null)
     {

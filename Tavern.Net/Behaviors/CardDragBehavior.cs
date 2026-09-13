@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using Tavern.Net.ViewModels;
 
@@ -180,11 +181,23 @@ public static class CardDragBehavior
 
         if (adornerRoot is not null && adornerLayer is not null)
         {
+            // A frozen bitmap, not a live VisualBrush(element) — the card being dragged may live
+            // inside the peek overlay (see below), which closes the instant the drag starts. A
+            // live VisualBrush mirrors its source's current rendering, so it would go blank the
+            // moment that source stops being rendered; a frozen snapshot keeps following the
+            // cursor unaffected, matching "anchor stays on mouse" regardless of what closing the
+            // peek does to the card's original visual container.
+            var pixelWidth = Math.Max(1, (int)Math.Ceiling(element.ActualWidth));
+            var pixelHeight = Math.Max(1, (int)Math.Ceiling(element.ActualHeight));
+            var renderTarget = new RenderTargetBitmap(pixelWidth, pixelHeight, 96, 96, PixelFormats.Pbgra32);
+            renderTarget.Render(element);
+            renderTarget.Freeze();
+
             var snapshot = new Rectangle
             {
                 Width = element.ActualWidth,
                 Height = element.ActualHeight,
-                Fill = new VisualBrush(element) { Stretch = Stretch.None },
+                Fill = new ImageBrush(renderTarget) { Stretch = Stretch.None },
                 Opacity = 0.85,
                 IsHitTestVisible = false,
             };
@@ -196,6 +209,14 @@ public static class CardDragBehavior
 
             _activeAdorner = adorner;
             _activeAdornerRoot = adornerRoot;
+        }
+
+        // Close the peek overlay (if one is open) now that the ghost has its own frozen snapshot
+        // to follow the cursor with — the overlay covers the whole board, so without closing it
+        // here a card dragged from inside it would have nowhere real to be dropped.
+        if (card.Board.ClosePeekCommand.CanExecute(null))
+        {
+            card.Board.ClosePeekCommand.Execute(null);
         }
 
         try

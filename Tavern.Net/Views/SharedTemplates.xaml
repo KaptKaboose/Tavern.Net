@@ -10,7 +10,7 @@
          (only meaningful on the Field — see GameBoardViewModel.ToggleTapped), drag moves it
          between zones, and right-click immediately opens the full-size zoom overlay. -->
     <DataTemplate x:Key="CardTemplate" DataType="{x:Type vm:CardViewModel}">
-        <Border Width="112" Height="157" Margin="3" CornerRadius="4" ClipToBounds="True"
+        <Border Width="125" Height="175" Margin="3" CornerRadius="4" ClipToBounds="True"
                 BorderBrush="#55000000" BorderThickness="1"
                 Background="#333"
                 RenderTransformOrigin="0.5,0.5"
@@ -36,7 +36,7 @@
                 <Image Source="{Binding Artwork}" Stretch="UniformToFill"
                        Visibility="{Binding Artwork, Converter={StaticResource NullToVisibility}}"/>
                 <TextBlock Text="{Binding Name}" TextWrapping="Wrap" TextAlignment="Center"
-                           VerticalAlignment="Center" Foreground="White" Margin="4" FontSize="13"
+                           VerticalAlignment="Center" Foreground="White" Margin="4" FontSize="14"
                            Visibility="{Binding Artwork, Converter={StaticResource NullToVisibility}, ConverterParameter=Invert}"/>
             </Grid>
         </Border>

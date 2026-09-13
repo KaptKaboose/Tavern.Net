@@ -67,6 +67,7 @@ public sealed class GameSession
             throw new InvalidOperationException($"{card.Card.Name} was not found in {from}.");
         }
 
+        card.IsTapped = false;
         player.GetZone(to).Cards.Add(card);
 
         if (to == ZoneType.Field && fieldX is not null && fieldY is not null)
