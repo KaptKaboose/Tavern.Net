@@ -1,6 +1,8 @@
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Tavern.Net.GameData.Models;
 
@@ -19,6 +21,7 @@ public sealed class GrandArchiveApiClient
 
     private readonly HttpClient _http;
     private readonly string _imageCacheDirectory;
+    private readonly string _cardCacheDirectory;
 
     public GrandArchiveApiClient(HttpClient? httpClient = null)
     {
@@ -28,25 +31,67 @@ public sealed class GrandArchiveApiClient
             _http.BaseAddress = new Uri("https://api.gatcg.com");
         }
 
-        _imageCacheDirectory = Path.Combine(
+        var appDataDirectory = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "Tavern.Net",
-            "ImageCache");
+            "Tavern.Net");
+
+        _imageCacheDirectory = Path.Combine(appDataDirectory, "ImageCache");
         Directory.CreateDirectory(_imageCacheDirectory);
+
+        _cardCacheDirectory = Path.Combine(appDataDirectory, "CardCache");
+        Directory.CreateDirectory(_cardCacheDirectory);
     }
 
+    /// <summary>
+    /// Searches for cards by name, disk-caching the response so a decklist that references the
+    /// same card again — the common case, since most decks run multiple copies — and re-imports
+    /// of the same list don't re-hit the network for every line.
+    /// </summary>
     public async Task<SearchCardsResponse> SearchCardsAsync(
         string name,
         int page = 1,
         int pageSize = 50,
         CancellationToken cancellationToken = default)
     {
+        var cacheFile = GetCardCacheFilePath($"search|{name}|{page}|{pageSize}");
+        if (File.Exists(cacheFile))
+        {
+            var cachedJson = await File.ReadAllTextAsync(cacheFile, cancellationToken);
+            var cachedResponse = JsonSerializer.Deserialize<SearchCardsResponse>(cachedJson, JsonOptions);
+            if (cachedResponse is not null)
+            {
+                return cachedResponse;
+            }
+        }
+
         var query = $"name={Uri.EscapeDataString(name)}&page={page}&page_size={pageSize}";
 
         var response = await _http.GetFromJsonAsync<SearchCardsResponse>(
-            $"/cards/search?{query}", JsonOptions, cancellationToken);
+            $"/cards/search?{query}", JsonOptions, cancellationToken) ?? new SearchCardsResponse();
 
-        return response ?? new SearchCardsResponse();
+        await File.WriteAllTextAsync(cacheFile, JsonSerializer.Serialize(response, JsonOptions), cancellationToken);
+        return response;
+    }
+
+    private string GetCardCacheFilePath(string cacheKey)
+    {
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(cacheKey)));
+        return Path.Combine(_cardCacheDirectory, $"{hash}.json");
+    }
+
+    /// <summary>Deletes all cached card data and card images, so the next lookup re-fetches from the API.</summary>
+    public void ClearCache()
+    {
+        ClearDirectory(_cardCacheDirectory);
+        ClearDirectory(_imageCacheDirectory);
+    }
+
+    private static void ClearDirectory(string directory)
+    {
+        foreach (var file in Directory.GetFiles(directory))
+        {
+            File.Delete(file);
+        }
     }
 
     public async Task<CardDto?> GetCardBySlugAsync(string slug, CancellationToken cancellationToken = default)

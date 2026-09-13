@@ -26,9 +26,12 @@
             <TextBlock DockPanel.Dock="Top" Text="Paste your decklist" FontSize="18" FontWeight="Bold" Margin="0,0,0,8"/>
             <TextBlock DockPanel.Dock="Top" Margin="0,0,0,8" TextWrapping="Wrap" Foreground="Gray"
                        Text="One card per line, e.g. '4 Card Name'. Supports Omnidex-style '# Main Deck' / '# Material Deck' / '# Sideboard' headers, or 'Main:' / 'Material:' style; otherwise cards are auto-sorted by type."/>
-            <Button DockPanel.Dock="Bottom" Content="Import" Margin="0,8,0,0" Padding="12,6"
-                    HorizontalAlignment="Left"
-                    Command="{Binding ImportCommand}"/>
+            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,8,0,0">
+                <Button Content="Import" Padding="12,6" Command="{Binding ImportCommand}"/>
+                <Button Content="Clear Cache" Padding="12,6" Margin="8,0,0,0" Command="{Binding ClearCacheCommand}"
+                        ToolTip="Deletes cached card data and images, so the next import re-fetches everything from the API."/>
+                <TextBlock Text="{Binding CacheStatusMessage}" Foreground="Gray" VerticalAlignment="Center" Margin="12,0,0,0"/>
+            </StackPanel>
             <TextBox Text="{Binding DecklistText, UpdateSourceTrigger=PropertyChanged}"
                      AcceptsReturn="True" AcceptsTab="True"
                      TextWrapping="NoWrap"

@@ -24,6 +24,9 @@ public sealed partial class DeckImportViewModel : ObservableObject
     [ObservableProperty]
     private bool _canStartGame;
 
+    [ObservableProperty]
+    private string? _cacheStatusMessage;
+
     public ObservableCollection<ResolvedLineViewModel> ResolvedLines { get; } = new();
 
     /// <summary>Raised once the player confirms all lines and wants to begin play.</summary>
@@ -76,6 +79,13 @@ public sealed partial class DeckImportViewModel : ObservableObject
         {
             IsImporting = false;
         }
+    }
+
+    [RelayCommand]
+    private void ClearCache()
+    {
+        _apiClient.ClearCache();
+        CacheStatusMessage = "Cache cleared — the next import will re-fetch card data.";
     }
 
     [RelayCommand]
