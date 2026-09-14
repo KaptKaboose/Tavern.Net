@@ -6,11 +6,16 @@
              xmlns:vm="clr-namespace:Tavern.Net.ViewModels"
              xmlns:views="clr-namespace:Tavern.Net.Views"
              xmlns:behaviors="clr-namespace:Tavern.Net.Behaviors"
+             xmlns:conv="clr-namespace:Tavern.Net.Converters"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance vm:GameBoardViewModel}"
              d:DesignWidth="1600" d:DesignHeight="950">
     <!-- CardTemplate and the NullToVisibility converter come from Views/SharedTemplates.xaml (merged in App.xaml),
          so StackZoneView's peek popup can reuse the exact same card visual. -->
+    <UserControl.Resources>
+        <conv:TurnPhaseToBrushConverter x:Key="PhaseToBrush"/>
+        <conv:TurnPhaseToFontWeightConverter x:Key="PhaseToFontWeight"/>
+    </UserControl.Resources>
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*"/>
@@ -23,21 +28,60 @@
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
-            <!-- Header: life + turn + global actions -->
-            <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
-                <Button Content="-" Width="28" Command="{Binding DecreaseLifeCommand}"/>
-                <TextBlock Text="{Binding Player.Life, StringFormat='Life: {0}'}" FontSize="18" FontWeight="Bold"
-                           VerticalAlignment="Center" Margin="8,0"/>
-                <Button Content="+" Width="28" Command="{Binding IncreaseLifeCommand}"/>
+            <!-- Header: life + turn (left), the turn-phase tracker (centered), global actions (right). -->
+            <Grid Grid.Row="0" Margin="0,0,0,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
 
-                <TextBlock Text="{Binding Stats.TurnCount, StringFormat='   Turn {0}'}" FontSize="18"
-                           VerticalAlignment="Center" Margin="16,0,0,0"/>
-                <Button Content="End Turn" Margin="16,0,0,0" Padding="8,2" Command="{Binding EndTurnCommand}"/>
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <Button Content="-" Width="28" Command="{Binding DecreaseLifeCommand}"/>
+                    <TextBlock Text="{Binding Player.Life, StringFormat='Life: {0}'}" FontSize="18" FontWeight="Bold"
+                               VerticalAlignment="Center" Margin="8,0"/>
+                    <Button Content="+" Width="28" Command="{Binding IncreaseLifeCommand}"/>
 
-                <Button Content="Draw" Margin="16,0,0,0" Padding="8,2" Command="{Binding DrawCardCommand}"/>
-                <Button Content="Draw Opening Hand" Margin="8,0,0,0" Padding="8,2" Command="{Binding DrawOpeningHandCommand}"/>
-                <Button Content="Mulligan" Margin="8,0,0,0" Padding="8,2" Command="{Binding MulliganCommand}"/>
-            </StackPanel>
+                    <TextBlock Text="{Binding Stats.TurnCount, StringFormat='   Turn {0}'}" FontSize="18"
+                               VerticalAlignment="Center" Margin="16,0,0,0"/>
+                </StackPanel>
+
+                <!-- Wake Up => Materialization => Recollection => Draw => Main => End, with the
+                     current phase highlighted. A fixed set of 6, so written out directly rather
+                     than templated from TurnPhase's values. -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock Text="Wake Up" FontSize="14" VerticalAlignment="Center"
+                               Foreground="{Binding CurrentPhase, Converter={StaticResource PhaseToBrush}, ConverterParameter=WakeUp}"
+                               FontWeight="{Binding CurrentPhase, Converter={StaticResource PhaseToFontWeight}, ConverterParameter=WakeUp}"/>
+                    <TextBlock Text=" ➤ " FontSize="14" Foreground="Gray" VerticalAlignment="Center"/>
+                    <TextBlock Text="Materialization" FontSize="14" VerticalAlignment="Center"
+                               Foreground="{Binding CurrentPhase, Converter={StaticResource PhaseToBrush}, ConverterParameter=Materialization}"
+                               FontWeight="{Binding CurrentPhase, Converter={StaticResource PhaseToFontWeight}, ConverterParameter=Materialization}"/>
+                    <TextBlock Text=" ➤ " FontSize="14" Foreground="Gray" VerticalAlignment="Center"/>
+                    <TextBlock Text="Recollection" FontSize="14" VerticalAlignment="Center"
+                               Foreground="{Binding CurrentPhase, Converter={StaticResource PhaseToBrush}, ConverterParameter=Recollection}"
+                               FontWeight="{Binding CurrentPhase, Converter={StaticResource PhaseToFontWeight}, ConverterParameter=Recollection}"/>
+                    <TextBlock Text=" ➤ " FontSize="14" Foreground="Gray" VerticalAlignment="Center"/>
+                    <TextBlock Text="Draw" FontSize="14" VerticalAlignment="Center"
+                               Foreground="{Binding CurrentPhase, Converter={StaticResource PhaseToBrush}, ConverterParameter=Draw}"
+                               FontWeight="{Binding CurrentPhase, Converter={StaticResource PhaseToFontWeight}, ConverterParameter=Draw}"/>
+                    <TextBlock Text=" ➤ " FontSize="14" Foreground="Gray" VerticalAlignment="Center"/>
+                    <TextBlock Text="Main" FontSize="14" VerticalAlignment="Center"
+                               Foreground="{Binding CurrentPhase, Converter={StaticResource PhaseToBrush}, ConverterParameter=Main}"
+                               FontWeight="{Binding CurrentPhase, Converter={StaticResource PhaseToFontWeight}, ConverterParameter=Main}"/>
+                    <TextBlock Text=" ➤ " FontSize="14" Foreground="Gray" VerticalAlignment="Center"/>
+                    <TextBlock Text="End" FontSize="14" VerticalAlignment="Center"
+                               Foreground="{Binding CurrentPhase, Converter={StaticResource PhaseToBrush}, ConverterParameter=End}"
+                               FontWeight="{Binding CurrentPhase, Converter={StaticResource PhaseToFontWeight}, ConverterParameter=End}"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <Button Content="Next Phase" Padding="8,2" Command="{Binding NextPhaseCommand}"/>
+                    <Button Content="Draw" Margin="16,0,0,0" Padding="8,2" Command="{Binding DrawCardCommand}"/>
+                    <Button Content="Draw Opening Hand" Margin="8,0,0,0" Padding="8,2" Command="{Binding DrawOpeningHandCommand}"/>
+                    <Button Content="Mulligan" Margin="8,0,0,0" Padding="8,2" Command="{Binding MulliganCommand}"/>
+                </StackPanel>
+            </Grid>
 
             <!-- The board: Field, Memory, and Hand are stacked as distinct, non-overlapping regions
                  (not layered on top of each other) — Material sits to their left, Banishment/Main/

@@ -32,11 +32,16 @@ public sealed partial class GameBoardViewModel : ObservableObject
     [ObservableProperty]
     private PeekedZoneInfo? _peekedZone;
 
+    /// <summary>Mirrors <see cref="GameSession.CurrentPhase"/> so the board can bind to it.</summary>
+    [ObservableProperty]
+    private TurnPhase _currentPhase;
+
     public GameBoardViewModel(GameSession session, Player player, GrandArchiveApiClient apiClient)
     {
         _session = session;
         _apiClient = apiClient;
         Player = player;
+        _currentPhase = session.CurrentPhase;
 
         Hand = new ZoneViewModel(player.GetZone(ZoneType.Hand), apiClient, this);
         Field = new ZoneViewModel(player.GetZone(ZoneType.Field), apiClient, this);
@@ -62,8 +67,13 @@ public sealed partial class GameBoardViewModel : ObservableObject
     [RelayCommand]
     private void Mulligan() => _session.Mulligan(Player);
 
+    /// <summary>Advances to the next phase of the turn; advancing past End starts the next turn.</summary>
     [RelayCommand]
-    private void EndTurn() => _session.NextTurn(Player);
+    private void NextPhase()
+    {
+        _session.AdvancePhase(Player);
+        CurrentPhase = _session.CurrentPhase;
+    }
 
     [RelayCommand]
     private void IncreaseLife() => _session.AdjustLife(Player, 1);

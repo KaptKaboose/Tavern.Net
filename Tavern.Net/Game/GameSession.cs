@@ -7,9 +7,21 @@ namespace Tavern.Net.Game;
 /// </summary>
 public sealed class GameSession
 {
+    private static readonly TurnPhase[] PhaseOrder =
+    {
+        TurnPhase.WakeUp,
+        TurnPhase.Materialization,
+        TurnPhase.Recollection,
+        TurnPhase.Draw,
+        TurnPhase.Main,
+        TurnPhase.End,
+    };
+
     private readonly Random _random;
 
     public List<Player> Players { get; } = new();
+
+    public TurnPhase CurrentPhase { get; private set; } = TurnPhase.WakeUp;
 
     public GameSession(Random? random = null)
     {
@@ -121,5 +133,61 @@ public sealed class GameSession
     {
         player.Stats.TurnCount++;
         player.Stats.Log("New turn.");
+    }
+
+    /// <summary>
+    /// Advances to the next phase of <paramref name="player"/>'s turn, running whichever automatic
+    /// behavior belongs to the phase being entered. Advancing past End starts the next turn — in
+    /// goldfish mode that's just <paramref name="player"/> going again; multiplayer (not implemented
+    /// yet) will need this to hand the turn to whichever player is up next instead.
+    /// </summary>
+    public void AdvancePhase(Player player)
+    {
+        var nextIndex = Array.IndexOf(PhaseOrder, CurrentPhase) + 1;
+        if (nextIndex >= PhaseOrder.Length)
+        {
+            NextTurn(player);
+            nextIndex = 0;
+        }
+
+        CurrentPhase = PhaseOrder[nextIndex];
+
+        switch (CurrentPhase)
+        {
+            case TurnPhase.WakeUp:
+                WakeUp(player);
+                break;
+            case TurnPhase.Recollection:
+                Recollect(player);
+                break;
+            case TurnPhase.Draw:
+                DrawCard(player);
+                break;
+        }
+    }
+
+    /// <summary>Untaps every card on the Field. Runs automatically at the start of the Wake Up phase.</summary>
+    public void WakeUp(Player player)
+    {
+        foreach (var card in player.GetZone(ZoneType.Field).Cards)
+        {
+            card.IsTapped = false;
+        }
+
+        player.Stats.Log("Wake Up: untapped the Field.");
+    }
+
+    /// <summary>
+    /// Returns every card in Memory to Hand. Runs automatically at the start of the Recollection
+    /// phase, but is also its own public method so a future card effect can call it independently
+    /// of the phase it happens to be resolved in.
+    /// </summary>
+    public void Recollect(Player player)
+    {
+        var memory = player.GetZone(ZoneType.Memory);
+        foreach (var card in memory.Cards.ToList())
+        {
+            MoveCard(player, card, ZoneType.Memory, ZoneType.Hand);
+        }
     }
 }
