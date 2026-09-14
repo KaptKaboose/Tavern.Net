@@ -29,6 +29,7 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     public ZoneViewModel Banishment { get; }
     public ZoneViewModel Memory { get; }
     public ZoneViewModel Champion { get; }
+    public ZoneViewModel Tokens { get; }
 
     /// <summary>The card currently shown full-size in the zoom overlay, or null when it's closed.</summary>
     [ObservableProperty]
@@ -70,6 +71,37 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         Banishment = new ZoneViewModel(player.GetZone(ZoneType.Banishment), apiClient, this);
         Memory = new ZoneViewModel(player.GetZone(ZoneType.Memory), apiClient, this);
         Champion = new ZoneViewModel(player.GetZone(ZoneType.Champion), apiClient, this);
+        Tokens = new ZoneViewModel(player.GetZone(ZoneType.Tokens), apiClient, this);
+
+        // Populated once here, not by GameSession.StartNewGame — the Tokens zone is a static
+        // catalog, not deck content, and StartNewGame deliberately leaves it untouched (see its
+        // own comment) so it survives every subsequent "New Game" reset without refetching.
+        if (player.GetZone(ZoneType.Tokens).Cards.Count == 0)
+        {
+            _ = LoadTokenCatalogAsync();
+        }
+    }
+
+    private async Task LoadTokenCatalogAsync()
+    {
+        var tokens = await _apiClient.GetTokensAsync();
+
+        // Pin tokens this deck's own cards can actually summon (per the API's referenced_by
+        // links) to the front, so the common case doesn't mean scrolling the whole catalog.
+        // Deck cards are already loaded into Main/Material by DeckImportViewModel.StartGame
+        // before GameBoardViewModel is ever constructed, so this reads real names, not a stub.
+        var deckCardNames = Player.GetZone(ZoneType.MainDeck).Cards
+            .Concat(Player.GetZone(ZoneType.MaterialDeck).Cards)
+            .Select(c => c.Card.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var ordered = tokens.OrderByDescending(token => token.ReferencedBy.Any(r => deckCardNames.Contains(r.Name)));
+
+        var tokenZone = Player.GetZone(ZoneType.Tokens);
+        foreach (var token in ordered)
+        {
+            tokenZone.Cards.Add(new CardInstance(token, ZoneType.Tokens));
+        }
     }
 
     [RelayCommand]

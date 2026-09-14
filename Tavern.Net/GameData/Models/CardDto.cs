@@ -81,6 +81,25 @@ public sealed class CardOtherOrientationEdition
     public string? Orientation { get; set; }
 }
 
+/// <summary>One entry of <see cref="CardDto.ReferencedBy"/>/<see cref="CardDto.References"/> — a
+/// structured link the API exposes between a card and another card it names in its own effect
+/// (e.g. a champion that "summons" a specific token). Used to pin a deck's actual tokens to the
+/// top of the Tokens catalog instead of leaving all of them in an arbitrary order.</summary>
+public sealed class CardReference
+{
+    [JsonPropertyName("kind")]
+    public string? Kind { get; set; }
+
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = "";
+
+    [JsonPropertyName("slug")]
+    public string? Slug { get; set; }
+
+    [JsonPropertyName("direction")]
+    public string? Direction { get; set; }
+}
+
 public sealed class CardDto
 {
     [JsonPropertyName("uuid")]
@@ -134,6 +153,14 @@ public sealed class CardDto
     [JsonPropertyName("editions")]
     public List<CardEdition> Editions { get; set; } = new();
 
+    /// <summary>Cards that reference this one (e.g. a champion whose effect summons this token).</summary>
+    [JsonPropertyName("referenced_by")]
+    public List<CardReference> ReferencedBy { get; set; } = new();
+
+    /// <summary>Cards this one references (e.g. the token a champion's effect summons).</summary>
+    [JsonPropertyName("references")]
+    public List<CardReference> References { get; set; } = new();
+
     /// <summary>The edition to display/use for artwork — first available edition.</summary>
     [JsonIgnore]
     public CardEdition? PrimaryEdition => Editions.Count > 0 ? Editions[0] : null;
@@ -143,6 +170,8 @@ public sealed class CardDto
                      || string.Equals(t, "Regalia", StringComparison.OrdinalIgnoreCase));
 
     public bool IsChampion => Types.Any(t => string.Equals(t, "Champion", StringComparison.OrdinalIgnoreCase));
+
+    public bool IsToken => Types.Any(t => string.Equals(t, "Token", StringComparison.OrdinalIgnoreCase));
 }
 
 public sealed class SearchCardsResponse

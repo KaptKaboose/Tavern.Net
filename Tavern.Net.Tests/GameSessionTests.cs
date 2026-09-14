@@ -14,6 +14,9 @@ public class GameSessionTests
     private static CardInstance MakeChampion(string name, double life) =>
         new(new CardDto { Name = name, Types = new List<string> { "Champion" }, Life = life });
 
+    private static CardInstance MakeToken(string name = "Test Token") =>
+        new(new CardDto { Name = name, Types = new List<string> { "Token" } }, ZoneType.Tokens);
+
     private static Player MakePlayerWithDeck(int deckSize)
     {
         var session = new GameSession();
@@ -228,6 +231,67 @@ public class GameSessionTests
     }
 
     [Fact]
+    public void MoveCard_TokenFromTokensToField_SpawnsCopyAndLeavesCatalogEntryInPlace()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        var catalogToken = MakeToken("Training Dummy");
+        player.GetZone(ZoneType.Tokens).Cards.Add(catalogToken);
+
+        session.MoveCard(player, catalogToken, ZoneType.Tokens, ZoneType.Field, fieldX: 30, fieldY: 40);
+
+        Assert.Same(catalogToken, Assert.Single(player.GetZone(ZoneType.Tokens).Cards));
+        var spawned = Assert.Single(player.GetZone(ZoneType.Field).Cards);
+        Assert.NotSame(catalogToken, spawned);
+        Assert.Equal("Training Dummy", spawned.Card.Name);
+        Assert.Equal(30, spawned.FieldX);
+        Assert.Equal(40, spawned.FieldY);
+    }
+
+    [Fact]
+    public void MoveCard_TokenFromTokensToField_CanBeSpawnedMultipleTimes()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        var catalogToken = MakeToken();
+        player.GetZone(ZoneType.Tokens).Cards.Add(catalogToken);
+
+        session.MoveCard(player, catalogToken, ZoneType.Tokens, ZoneType.Field);
+        session.MoveCard(player, catalogToken, ZoneType.Tokens, ZoneType.Field);
+
+        Assert.Equal(2, player.GetZone(ZoneType.Field).Cards.Count);
+        Assert.Single(player.GetZone(ZoneType.Tokens).Cards);
+    }
+
+    [Fact]
+    public void MoveCard_TokenFromFieldToTokens_DiscardsIt()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        var spawned = MakeToken();
+        player.GetZone(ZoneType.Field).Cards.Add(spawned);
+
+        session.MoveCard(player, spawned, ZoneType.Field, ZoneType.Tokens);
+
+        Assert.Empty(player.GetZone(ZoneType.Field).Cards);
+        Assert.Empty(player.GetZone(ZoneType.Tokens).Cards);
+    }
+
+    [Fact]
+    public void MoveCard_TokenToAnyOtherZone_IsIgnored()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        var spawned = MakeToken();
+        player.GetZone(ZoneType.Field).Cards.Add(spawned);
+
+        session.MoveCard(player, spawned, ZoneType.Field, ZoneType.Graveyard);
+
+        Assert.Empty(player.GetZone(ZoneType.Graveyard).Cards);
+        Assert.Same(spawned, Assert.Single(player.GetZone(ZoneType.Field).Cards));
+    }
+
+    [Fact]
     public void RepositionOnField_UpdatesPositionWithoutChangingZoneOrLogging()
     {
         var session = new GameSession();
@@ -421,6 +485,24 @@ public class GameSessionTests
         Assert.Equal(TurnPhase.Draw, session.CurrentPhase);
         Assert.Single(player.GetZone(ZoneType.Hand).Cards);
         Assert.Equal(4, player.GetZone(ZoneType.MainDeck).Cards.Count);
+    }
+
+    [Fact]
+    public void StartNewGame_LeavesTokensCatalogUntouchedAndDiscardsSpawnedFieldTokens()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        var baseChampion = MakeBaseChampion();
+        player.GetZone(ZoneType.MaterialDeck).Cards.Add(baseChampion);
+        var catalogToken = MakeToken("Training Dummy");
+        player.GetZone(ZoneType.Tokens).Cards.Add(catalogToken);
+        var spawnedToken = MakeToken("Training Dummy");
+        player.GetZone(ZoneType.Field).Cards.Add(spawnedToken);
+
+        session.StartNewGame();
+
+        Assert.Same(catalogToken, Assert.Single(player.GetZone(ZoneType.Tokens).Cards));
+        Assert.DoesNotContain(spawnedToken, player.GetZone(ZoneType.Field).Cards);
     }
 
     [Fact]

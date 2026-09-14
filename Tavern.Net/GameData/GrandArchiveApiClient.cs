@@ -73,6 +73,31 @@ public sealed class GrandArchiveApiClient
         return response;
     }
 
+    /// <summary>
+    /// Fetches every Token card in the game (the whole catalog is small — a few dozen — so this is
+    /// a single page, disk-cached like <see cref="SearchCardsAsync"/>) for the Tokens zone's
+    /// always-available browsable pile.
+    /// </summary>
+    public async Task<IReadOnlyList<CardDto>> GetTokensAsync(CancellationToken cancellationToken = default)
+    {
+        var cacheFile = GetCardCacheFilePath("tokens|catalog");
+        if (File.Exists(cacheFile))
+        {
+            var cachedJson = await File.ReadAllTextAsync(cacheFile, cancellationToken);
+            var cachedResponse = JsonSerializer.Deserialize<SearchCardsResponse>(cachedJson, JsonOptions);
+            if (cachedResponse is not null)
+            {
+                return cachedResponse.Data;
+            }
+        }
+
+        var response = await _http.GetFromJsonAsync<SearchCardsResponse>(
+            "/cards/search?type=token&page_size=100", JsonOptions, cancellationToken) ?? new SearchCardsResponse();
+
+        await File.WriteAllTextAsync(cacheFile, JsonSerializer.Serialize(response, JsonOptions), cancellationToken);
+        return response.Data;
+    }
+
     private string GetCardCacheFilePath(string cacheKey)
     {
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(cacheKey)));

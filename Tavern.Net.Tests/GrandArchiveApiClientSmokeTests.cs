@@ -25,6 +25,21 @@ public class GrandArchiveApiClientSmokeTests
     }
 
     [Fact]
+    public async Task GetTokensAsync_ReturnsRealTokenDataWithReferencedByLinks()
+    {
+        var client = new GrandArchiveApiClient();
+
+        var tokens = await client.GetTokensAsync();
+
+        Assert.NotEmpty(tokens);
+        Assert.All(tokens, t => Assert.True(t.IsToken));
+        // "Training Dummy" is referenced_by "Dummy Trainer" (a SUMMON link) — confirms the
+        // referenced_by field actually round-trips through CardDto, not just that it deserializes.
+        var trainingDummy = Assert.Single(tokens, t => t.Name == "Training Dummy");
+        Assert.Contains(trainingDummy.ReferencedBy, r => r.Name == "Dummy Trainer");
+    }
+
+    [Fact]
     public async Task GetCardImagePathAsync_DownloadsAndCachesImage()
     {
         var client = new GrandArchiveApiClient();

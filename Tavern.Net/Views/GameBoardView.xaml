@@ -102,7 +102,7 @@
                      enter (enforced in GameSession.MoveCard) and a new arrival auto-stacks on top;
                      face-up, unlike Material/Main, since it's the champion currently in play.
                      ShowOverlay=False: no count/scrim, just the top champion's own art. -->
-                <views:StackZoneView Grid.Row="0" Grid.Column="0" HorizontalAlignment="Left" VerticalAlignment="Top"
+                <views:StackZoneView Grid.Row="0" Grid.RowSpan="3" Grid.Column="0" HorizontalAlignment="Left" VerticalAlignment="Top"
                                      Margin="0,20,0,0"
                                      Zone="{Binding Champion}" HeaderText="Champion" ShowBorder="True" ShowOverlay="False"
                                      TargetZone="Champion" MoveCommand="{Binding MoveCardToCommand}"
@@ -111,10 +111,21 @@
                 <!-- Material: moved down to roughly align with Main over in the right-hand stack
                      (approximate — that stack is a StackPanel, not a Grid, so there's no exact
                      row to match against). -->
-                <views:StackZoneView Grid.Row="0" Grid.Column="0" HorizontalAlignment="Left" VerticalAlignment="Top"
+                <views:StackZoneView Grid.Row="0" Grid.RowSpan="3" Grid.Column="0" HorizontalAlignment="Left" VerticalAlignment="Top"
                                      Margin="0,240,0,0"
                                      Zone="{Binding MaterialDeck}" HeaderText="Material" IsFaceDown="True"
                                      TargetZone="MaterialDeck" MoveCommand="{Binding MoveCardToCommand}"
+                                     PeekCommand="{Binding PeekZoneCommand}"/>
+
+                <!-- Tokens: bottom-left, roughly in line with Graveyard over in the right-hand
+                     stack. A permanent, always-populated catalog — click to browse every token in
+                     the game and drag one onto the Field to spawn a fresh copy (GameSession.
+                     MoveToken); drag a spawned copy back here to discard it, since that's the only
+                     other zone a token can ever go to. -->
+                <views:StackZoneView Grid.Row="0" Grid.RowSpan="3" Grid.Column="0" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                     Margin="0,450,0,0"
+                                     Zone="{Binding Tokens}" HeaderText="Tokens" ShowBorder="True"
+                                     TargetZone="Tokens" MoveCommand="{Binding MoveCardToCommand}"
                                      PeekCommand="{Binding PeekZoneCommand}"/>
 
                 <!-- Field: a bounded region (not the whole board) — drop a card anywhere in it and

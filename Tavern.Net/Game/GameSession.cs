@@ -102,9 +102,18 @@ public sealed class GameSession
             player.Life = 15;
             _pendingFirstTurnFastForward.Add(player);
 
-            var allCards = player.Zones.Values.SelectMany(zone => zone.Cards).ToList();
+            // Tokens is excluded from both the sweep and the clear: it's a static, always-present
+            // catalog (one CardInstance per token type, loaded once by GameBoardViewModel), not
+            // deck content — sweeping it in would both lose it forever (nothing ever rebuilds it,
+            // unlike MaterialDeck/MainDeck below) and reset it needlessly on every new game.
+            var allCards = player.Zones.Values.Where(zone => zone.Type != ZoneType.Tokens).SelectMany(zone => zone.Cards).ToList();
             foreach (var zone in player.Zones.Values)
             {
+                if (zone.Type == ZoneType.Tokens)
+                {
+                    continue;
+                }
+
                 zone.Cards.Clear();
             }
 
@@ -222,6 +231,13 @@ public sealed class GameSession
 
     public void MoveCard(Player player, CardInstance card, ZoneType from, ZoneType to, double? fieldX = null, double? fieldY = null)
     {
+        // Tokens follow entirely different rules from every other card — see MoveToken.
+        if (card.Card.IsToken)
+        {
+            MoveToken(player, card, from, to, fieldX, fieldY);
+            return;
+        }
+
         // Silently ignore a move across a one-way zone barrier (e.g. MaterialDeck -> Hand) —
         // rather than throw, since a drag-drop that lands on a blocked zone shouldn't crash.
         if (ZoneBarriers.Contains((card.HomeZone, to)))
@@ -282,6 +298,37 @@ public sealed class GameSession
         }
 
         player.Stats.Log($"Moved {card.Card.Name} from {from} to {to}.");
+    }
+
+    /// <summary>
+    /// Tokens aren't real deck cards — the Tokens zone holds a permanent, never-moving catalog
+    /// (one CardInstance per token type, loaded once by GameBoardViewModel). Dragging a catalog
+    /// entry onto the Field spawns a brand-new copy; the catalog entry itself never leaves the
+    /// Tokens zone. Dragging a spawned copy back onto Tokens discards it — the only way to get rid
+    /// of one, since it can't go to Hand/Graveyard/etc. like a real card. Any other source/
+    /// destination pairing for a token is a silent no-op, same as a blocked ZoneBarriers hit.
+    /// </summary>
+    private void MoveToken(Player player, CardInstance card, ZoneType from, ZoneType to, double? fieldX, double? fieldY)
+    {
+        if (from == ZoneType.Tokens && to == ZoneType.Field)
+        {
+            var spawned = new CardInstance(card.Card, ZoneType.Field)
+            {
+                FieldX = fieldX ?? 0,
+                FieldY = fieldY ?? 0,
+            };
+            player.GetZone(ZoneType.Field).Cards.Add(spawned);
+            player.Stats.Log($"Summoned {card.Card.Name} token.");
+            return;
+        }
+
+        if (from == ZoneType.Field && to == ZoneType.Tokens)
+        {
+            if (player.GetZone(ZoneType.Field).Cards.Remove(card))
+            {
+                player.Stats.Log($"Discarded {card.Card.Name} token.");
+            }
+        }
     }
 
     /// <summary>Repositions a card already on the Field, without any zone change or log entry — used while dragging within the Field.</summary>

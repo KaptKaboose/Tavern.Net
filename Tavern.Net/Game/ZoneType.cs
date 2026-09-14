@@ -10,4 +10,5 @@ public enum ZoneType
     Banishment,
     Memory,
     Champion,
+    Tokens,
 }
