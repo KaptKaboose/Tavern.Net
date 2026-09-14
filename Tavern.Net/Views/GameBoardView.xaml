@@ -243,7 +243,8 @@
                 <DockPanel>
                     <TextBlock DockPanel.Dock="Top" Text="{Binding PeekedZone.HeaderText}"
                                Foreground="White" FontSize="20" FontWeight="Bold" Margin="0,0,0,12"/>
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                  behaviors:AutoScrollOnDragBehavior.IsEnabled="True">
                         <ItemsControl ItemsSource="{Binding PeekedZone.Zone.Cards}" ItemTemplate="{StaticResource CardTemplate}">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
@@ -278,7 +279,8 @@
                     <TextBlock DockPanel.Dock="Top" Foreground="#A0AEC0" TextWrapping="Wrap" Margin="0,0,0,12"
                                Text="Press G to draw another card. Drag cards into Top or Bottom — drop on a card to insert before it, or on empty space to add it to the end. Closes automatically once every drawn card is sorted."/>
 
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                  behaviors:AutoScrollOnDragBehavior.IsEnabled="True">
                         <StackPanel>
                             <TextBlock Text="Drawn" Foreground="White" FontWeight="Bold" Margin="0,0,0,4"/>
                             <ItemsControl ItemsSource="{Binding GlimpseStaging}" ItemTemplate="{StaticResource CardTemplate}" Margin="0,0,0,16">
