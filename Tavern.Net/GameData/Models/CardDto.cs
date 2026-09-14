@@ -107,6 +107,8 @@ public sealed class CardDto
     public bool IsChampionOrRegalia =>
         Types.Any(t => string.Equals(t, "Champion", StringComparison.OrdinalIgnoreCase)
                      || string.Equals(t, "Regalia", StringComparison.OrdinalIgnoreCase));
+
+    public bool IsChampion => Types.Any(t => string.Equals(t, "Champion", StringComparison.OrdinalIgnoreCase));
 }
 
 public sealed class SearchCardsResponse

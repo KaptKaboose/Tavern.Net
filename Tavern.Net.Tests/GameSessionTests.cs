@@ -107,25 +107,6 @@ public class GameSessionTests
     }
 
     [Fact]
-    public void Mulligan_ReturnsHandToDeckAndDrawsSameHandSize()
-    {
-        var player = MakePlayerWithDeck(deckSize: 10);
-        var session = new GameSession();
-        session.Players.Add(player);
-        for (var i = 0; i < 5; i++)
-        {
-            session.DrawCard(player);
-        }
-        Assert.Equal(5, player.GetZone(ZoneType.Hand).Cards.Count);
-
-        session.Mulligan(player);
-
-        Assert.Equal(5, player.GetZone(ZoneType.Hand).Cards.Count);
-        Assert.Equal(5, player.GetZone(ZoneType.MainDeck).Cards.Count);
-        Assert.Equal(1, player.Stats.MulliganCount);
-    }
-
-    [Fact]
     public void AdjustLife_UpdatesLifeAndRecordsHistory()
     {
         var session = new GameSession();
@@ -274,5 +255,73 @@ public class GameSessionTests
         Assert.Equal(TurnPhase.Draw, session.CurrentPhase);
         Assert.Single(player.GetZone(ZoneType.Hand).Cards);
         Assert.Equal(4, player.GetZone(ZoneType.MainDeck).Cards.Count);
+    }
+
+    [Fact]
+    public void StartNewGame_RebuildsMainAndMaterialFromWhereverCardsEnded_UpAndClearsOtherZones()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        var mainCards = new List<CardInstance>();
+        for (var i = 0; i < 10; i++)
+        {
+            var card = new CardInstance(new CardDto { Name = $"Main {i}" }, ZoneType.MainDeck, homeOrder: i);
+            mainCards.Add(card);
+            player.GetZone(ZoneType.MainDeck).Cards.Add(card);
+        }
+        var champion = new CardInstance(new CardDto { Name = "Champion" }, ZoneType.MaterialDeck, homeOrder: 0);
+        var regalia = new CardInstance(new CardDto { Name = "Regalia" }, ZoneType.MaterialDeck, homeOrder: 1);
+        player.GetZone(ZoneType.MaterialDeck).Cards.Add(champion);
+        player.GetZone(ZoneType.MaterialDeck).Cards.Add(regalia);
+        // Scatter cards around the board the way a played game would.
+        player.GetZone(ZoneType.Hand).Cards.Add(mainCards[0]);
+        player.GetZone(ZoneType.MainDeck).Cards.Remove(mainCards[0]);
+        champion.IsTapped = true;
+        champion.FieldX = 42;
+        champion.FieldY = 17;
+        player.GetZone(ZoneType.Field).Cards.Add(champion);
+        player.GetZone(ZoneType.MaterialDeck).Cards.Remove(champion);
+        player.Life = 5;
+
+        session.StartNewGame();
+
+        Assert.Empty(player.GetZone(ZoneType.Field).Cards);
+        Assert.Equal(20, player.Life);
+        Assert.Equal(0, player.Stats.TurnCount);
+        Assert.False(champion.IsTapped);
+        Assert.Equal(0, champion.FieldX);
+        Assert.Equal(0, champion.FieldY);
+        Assert.Equal(new[] { champion, regalia }, player.GetZone(ZoneType.MaterialDeck).Cards);
+        // Opening hand: drawn after the deck is rebuilt, so it comes out of all 10 Main cards
+        // (shuffled), not just whichever ones hadn't wandered off to Hand/Field before the reset.
+        Assert.Equal(GameSession.OpeningHandSize, player.GetZone(ZoneType.Hand).Cards.Count);
+        Assert.Equal(10 - GameSession.OpeningHandSize, player.GetZone(ZoneType.MainDeck).Cards.Count);
+        var handAndDeck = player.GetZone(ZoneType.Hand).Cards.Concat(player.GetZone(ZoneType.MainDeck).Cards);
+        Assert.Equal(mainCards.ToHashSet(), handAndDeck.ToHashSet());
+        Assert.Equal(TurnPhase.Materialization, session.CurrentPhase);
+    }
+
+    [Fact]
+    public void AdvancePhase_AfterStartNewGame_FastForwardsOnceThenResumesNormalProgression()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        player.GetZone(ZoneType.MainDeck).Cards.Add(MakeCard());
+        session.StartNewGame(); // Materialization, TurnCount 0, PlayerNumber 0.
+
+        session.AdvancePhase(player); // Fast-forward: Materialization -> Main.
+        Assert.Equal(TurnPhase.Main, session.CurrentPhase);
+        Assert.Equal(0, player.Stats.TurnCount);
+
+        session.AdvancePhase(player); // Normal progression resumes: Main -> End.
+        Assert.Equal(TurnPhase.End, session.CurrentPhase);
+        Assert.Equal(0, player.Stats.TurnCount);
+
+        session.AdvancePhase(player); // End -> next turn, WakeUp.
+        Assert.Equal(TurnPhase.WakeUp, session.CurrentPhase);
+        Assert.Equal(1, player.Stats.TurnCount);
+
+        session.AdvancePhase(player); // Confirm it isn't still fast-forwarding.
+        Assert.Equal(TurnPhase.Materialization, session.CurrentPhase);
     }
 }

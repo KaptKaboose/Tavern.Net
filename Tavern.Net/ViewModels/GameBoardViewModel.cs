@@ -8,8 +8,6 @@ namespace Tavern.Net.ViewModels;
 
 public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShortcutHandler
 {
-    private const int OpeningHandSize = 7;
-
     private readonly GameSession _session;
     private readonly GrandArchiveApiClient _apiClient;
 
@@ -59,14 +57,11 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     [RelayCommand]
     private void DrawOpeningHand()
     {
-        for (var i = 0; i < OpeningHandSize; i++)
+        for (var i = 0; i < GameSession.OpeningHandSize; i++)
         {
             _session.DrawCard(Player);
         }
     }
-
-    [RelayCommand]
-    private void Mulligan() => _session.Mulligan(Player);
 
     /// <summary>Advances to the next phase of the turn; advancing past End starts the next turn.</summary>
     [RelayCommand]
@@ -92,6 +87,11 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
                 {
                     DrawCardCommand.Execute(null);
                 }
+                return true;
+            case Key.N:
+                // StartNewGame already draws each player's opening hand as part of setup.
+                _session.StartNewGame();
+                CurrentPhase = _session.CurrentPhase;
                 return true;
             default:
                 return false;

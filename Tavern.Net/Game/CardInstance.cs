@@ -14,6 +14,16 @@ public sealed partial class CardInstance : ObservableObject
 
     public CardDto Card { get; }
 
+    /// <summary>
+    /// Which starting deck this copy belongs to (MainDeck or MaterialDeck) and its position within
+    /// that deck's original decklist order. Set once at import time and never changed afterward —
+    /// GameSession.StartNewGame uses it to figure out where a card that's since wandered off to
+    /// Hand/Field/Graveyard/etc. belongs when rebuilding the two decks for a fresh game.
+    /// </summary>
+    public ZoneType HomeZone { get; }
+
+    public int HomeOrder { get; }
+
     [ObservableProperty]
     private bool _isTapped;
 
@@ -24,8 +34,10 @@ public sealed partial class CardInstance : ObservableObject
     [ObservableProperty]
     private double _fieldY;
 
-    public CardInstance(CardDto card)
+    public CardInstance(CardDto card, ZoneType homeZone = ZoneType.MainDeck, int homeOrder = 0)
     {
         Card = card;
+        HomeZone = homeZone;
+        HomeOrder = homeOrder;
     }
 }

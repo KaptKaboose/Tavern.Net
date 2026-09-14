@@ -98,6 +98,8 @@ public sealed partial class DeckImportViewModel : ObservableObject
 
         var session = new GameSession();
         var player = session.AddPlayer("You");
+        var mainOrder = 0;
+        var materialOrder = 0;
 
         foreach (var line in ResolvedLines)
         {
@@ -114,7 +116,10 @@ public sealed partial class DeckImportViewModel : ObservableObject
 
             for (var i = 0; i < line.SourceLine.Quantity; i++)
             {
-                player.GetZone(zoneType).Cards.Add(new CardInstance(card));
+                // HomeOrder records this copy's place in the original decklist so
+                // GameSession.StartNewGame can rebuild Material in its original order later.
+                var homeOrder = zoneType == ZoneType.MainDeck ? mainOrder++ : materialOrder++;
+                player.GetZone(zoneType).Cards.Add(new CardInstance(card, zoneType, homeOrder));
             }
         }
 

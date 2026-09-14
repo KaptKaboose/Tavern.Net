@@ -6,6 +6,8 @@ public sealed partial class Player : ObservableObject
 {
     public string Name { get; }
 
+    public int PlayerNumber { get; }
+
     [ObservableProperty]
     private int _life = 20;
 
@@ -14,9 +16,10 @@ public sealed partial class Player : ObservableObject
     public Dictionary<ZoneType, Zone> Zones { get; } = Enum.GetValues<ZoneType>()
         .ToDictionary(z => z, z => new Zone(z));
 
-    public Player(string name, int startingLife = 20)
+    public Player(string name, int playerNumber, int startingLife = 20)
     {
         Name = name;
+        PlayerNumber = playerNumber;
         _life = startingLife;
     }
 

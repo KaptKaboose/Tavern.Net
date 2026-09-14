@@ -74,12 +74,6 @@
                                Foreground="{Binding CurrentPhase, Converter={StaticResource PhaseToBrush}, ConverterParameter=End}"
                                FontWeight="{Binding CurrentPhase, Converter={StaticResource PhaseToFontWeight}, ConverterParameter=End}"/>
                 </StackPanel>
-
-                <!-- Next Phase is Spacebar now (GameBoardViewModel.HandleKey via MainWindow's
-                     PreviewKeyDown), not a button — see IKeyboardShortcutHandler. -->
-                <StackPanel Grid.Column="2" Orientation="Horizontal">
-                    <Button Content="Draw Opening Hand" Margin="8,0,0,0" Padding="8,2" Command="{Binding DrawOpeningHandCommand}"/>
-                </StackPanel>
             </Grid>
 
             <!-- The board: Field, Memory, and Hand are stacked as distinct, non-overlapping regions

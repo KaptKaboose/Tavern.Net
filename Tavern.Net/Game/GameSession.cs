@@ -7,6 +7,8 @@ namespace Tavern.Net.Game;
 /// </summary>
 public sealed class GameSession
 {
+    public const int OpeningHandSize = 7;
+
     private static readonly TurnPhase[] PhaseOrder =
     {
         TurnPhase.WakeUp,
@@ -30,7 +32,7 @@ public sealed class GameSession
 
     public Player AddPlayer(string name, int startingLife = 20)
     {
-        var player = new Player(name, startingLife);
+        var player = new Player(name, Players.Count, startingLife);
         Players.Add(player);
         return player;
     }
@@ -46,6 +48,79 @@ public sealed class GameSession
         }
 
         player.Stats.Log($"Shuffled {zoneType}.");
+    }
+
+    /// <summary>
+    /// Resets for a fresh game using the same imported deck: every card — wherever it's wandered
+    /// off to since (Field, Graveyard, a materialized Material card, etc.) — goes back to its
+    /// original deck (<see cref="CardInstance.HomeZone"/>), Material restored in its original
+    /// decklist order (<see cref="CardInstance.HomeOrder"/>) since that order can matter, Main
+    /// reassembled the same way and then shuffled since its order never matters. Each player then
+    /// draws their opening hand — that's as much a part of "the game has started" as the shuffle,
+    /// so it belongs here rather than something every caller has to remember to do afterward.
+    /// </summary>
+    public void StartNewGame()
+    {
+        foreach (var player in Players)
+        {
+            player.Stats.PlayLog.Clear();
+            player.Stats.TurnCount = 0;
+            player.Life = 20;
+
+            var allCards = player.Zones.Values.SelectMany(zone => zone.Cards).ToList();
+            foreach (var zone in player.Zones.Values)
+            {
+                zone.Cards.Clear();
+            }
+
+            foreach (var card in allCards)
+            {
+                card.IsTapped = false;
+                card.FieldX = 0;
+                card.FieldY = 0;
+            }
+
+            var materialDeck = player.GetZone(ZoneType.MaterialDeck);
+            foreach (var card in allCards.Where(c => c.HomeZone == ZoneType.MaterialDeck).OrderBy(c => c.HomeOrder))
+            {
+                materialDeck.Cards.Add(card);
+            }
+
+            var mainDeck = player.GetZone(ZoneType.MainDeck);
+            foreach (var card in allCards.Where(c => c.HomeZone == ZoneType.MainDeck).OrderBy(c => c.HomeOrder))
+            {
+                mainDeck.Cards.Add(card);
+            }
+
+            Shuffle(player, ZoneType.MainDeck);
+
+            // Play the base champion from the Material Deck to the Field, since that's a required starting action
+            var baseChampion = allCards.FirstOrDefault(c => c.Card.IsChampion && c.Card.Level == 0 && c.HomeZone == ZoneType.MaterialDeck);
+            MoveCard(player, baseChampion!, ZoneType.MaterialDeck, ZoneType.Field, 0, 0);
+
+            // Draw the opening hand based on the base champion effect
+            var baseChampionEffect = baseChampion?.Card.Effect?.ToLower();
+            var openingHandSize = OpeningHandSize;
+            if (baseChampionEffect is not null)
+            {
+                switch (baseChampionEffect)
+                {
+                    case string e when e.Contains("draw seven"):
+                        openingHandSize = 7;
+                        break;
+                    case string e when e.Contains("draw six"):
+                        openingHandSize = 6;
+                        break;
+                }
+            }
+
+            for (var i = 0; i < openingHandSize; i++)
+            {
+                DrawCard(player);
+            }
+        }
+
+        SetPhase(TurnPhase.Materialization, Players[0]);
     }
 
     /// <summary>Moves the top card of <paramref name="from"/> to <paramref name="to"/>. Returns false if the source zone was empty.</summary>
@@ -98,30 +173,6 @@ public sealed class GameSession
         card.FieldY = y;
     }
 
-    /// <summary>Shuffles the whole hand back into the main deck, reshuffles, then draws a fresh hand of the same size.</summary>
-    public void Mulligan(Player player)
-    {
-        var hand = player.GetZone(ZoneType.Hand);
-        var deck = player.GetZone(ZoneType.MainDeck);
-        var handSize = hand.Cards.Count;
-
-        foreach (var card in hand.Cards.ToList())
-        {
-            hand.Cards.Remove(card);
-            deck.Cards.Add(card);
-        }
-
-        Shuffle(player);
-
-        for (var i = 0; i < handSize; i++)
-        {
-            DrawCard(player);
-        }
-
-        player.Stats.MulliganCount++;
-        player.Stats.Log($"Took a mulligan (hand size {handSize}).");
-    }
-
     public void AdjustLife(Player player, int delta)
     {
         player.Life += delta;
@@ -143,6 +194,22 @@ public sealed class GameSession
     /// </summary>
     public void AdvancePhase(Player player)
     {
+        // Turn 1 fast-forward, but only the very first advance after StartNewGame (still sitting
+        // in the Materialization it sets) — guarding on TurnCount == 0 alone re-triggers this on
+        // every later call too, since nothing in this branch ever increments it, which trapped the
+        // phase on Main/Draw forever instead of ever reaching End.
+        if (player.Stats.TurnCount == 0 && CurrentPhase == TurnPhase.Materialization)
+        {
+            if (player.PlayerNumber == 0)
+            {
+                SetPhase(TurnPhase.Main, player);
+                return;
+            }
+
+            SetPhase(TurnPhase.Draw, player);
+            return;
+        }
+
         var nextIndex = Array.IndexOf(PhaseOrder, CurrentPhase) + 1;
         if (nextIndex >= PhaseOrder.Length)
         {
@@ -150,20 +217,7 @@ public sealed class GameSession
             nextIndex = 0;
         }
 
-        CurrentPhase = PhaseOrder[nextIndex];
-
-        switch (CurrentPhase)
-        {
-            case TurnPhase.WakeUp:
-                WakeUp(player);
-                break;
-            case TurnPhase.Recollection:
-                Recollect(player);
-                break;
-            case TurnPhase.Draw:
-                DrawCard(player);
-                break;
-        }
+        SetPhase(PhaseOrder[nextIndex], player);
     }
 
     /// <summary>Untaps every card on the Field. Runs automatically at the start of the Wake Up phase.</summary>
@@ -188,6 +242,24 @@ public sealed class GameSession
         foreach (var card in memory.Cards.ToList())
         {
             MoveCard(player, card, ZoneType.Memory, ZoneType.Hand);
+        }
+    }
+
+    void SetPhase(TurnPhase phase, Player player)
+    {
+        CurrentPhase = phase;
+
+        switch (CurrentPhase)
+        {
+            case TurnPhase.WakeUp:
+                WakeUp(player);
+                break;
+            case TurnPhase.Recollection:
+                Recollect(player);
+                break;
+            case TurnPhase.Draw:
+                DrawCard(player);
+                break;
         }
     }
 }
