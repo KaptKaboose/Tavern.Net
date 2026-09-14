@@ -54,15 +54,6 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     [RelayCommand]
     private void DrawCard() => _session.DrawCard(Player);
 
-    [RelayCommand]
-    private void DrawOpeningHand()
-    {
-        for (var i = 0; i < GameSession.OpeningHandSize; i++)
-        {
-            _session.DrawCard(Player);
-        }
-    }
-
     /// <summary>Advances to the next phase of the turn; advancing past End starts the next turn.</summary>
     [RelayCommand]
     private void NextPhase()

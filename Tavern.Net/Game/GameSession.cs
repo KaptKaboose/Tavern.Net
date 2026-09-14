@@ -7,7 +7,7 @@ namespace Tavern.Net.Game;
 /// </summary>
 public sealed class GameSession
 {
-    public const int OpeningHandSize = 7;
+    public const int DefaultOpeningHandSize = 7;
 
     private static readonly TurnPhase[] PhaseOrder =
     {
@@ -17,6 +17,15 @@ public sealed class GameSession
         TurnPhase.Draw,
         TurnPhase.Main,
         TurnPhase.End,
+    };
+
+    private static readonly HashSet<(ZoneType From, ZoneType To)> ZoneBarriers = new()
+    {
+        (ZoneType.MaterialDeck, ZoneType.MainDeck),
+        (ZoneType.MaterialDeck, ZoneType.Graveyard),
+        (ZoneType.MaterialDeck, ZoneType.Hand),
+        (ZoneType.MaterialDeck, ZoneType.Memory),
+        (ZoneType.MainDeck, ZoneType.MaterialDeck),
     };
 
     private readonly Random _random;
@@ -100,7 +109,7 @@ public sealed class GameSession
 
             // Draw the opening hand based on the base champion effect
             var baseChampionEffect = baseChampion?.Card.Effect?.ToLower();
-            var openingHandSize = OpeningHandSize;
+            var openingHandSize = DefaultOpeningHandSize;
             if (baseChampionEffect is not null)
             {
                 switch (baseChampionEffect)
@@ -148,6 +157,13 @@ public sealed class GameSession
 
     public void MoveCard(Player player, CardInstance card, ZoneType from, ZoneType to, double? fieldX = null, double? fieldY = null)
     {
+        // Silently ignore a move across a one-way zone barrier (e.g. MaterialDeck -> Hand) —
+        // rather than throw, since a drag-drop that lands on a blocked zone shouldn't crash.
+        if (ZoneBarriers.Contains((card.HomeZone, to)))
+        {
+            return;
+        }
+
         var source = player.GetZone(from);
         if (!source.Cards.Remove(card))
         {

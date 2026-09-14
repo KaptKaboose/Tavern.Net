@@ -7,6 +7,10 @@ public class GameSessionTests
 {
     private static CardInstance MakeCard(string name = "Test Card") => new(new CardDto { Name = name });
 
+    // StartNewGame requires a base (Level 0) Champion in Material to materialize onto the Field.
+    private static CardInstance MakeBaseChampion(string name = "Base Champion", int homeOrder = 0) =>
+        new(new CardDto { Name = name, Types = new List<string> { "Champion" }, Level = 0 }, ZoneType.MaterialDeck, homeOrder);
+
     private static Player MakePlayerWithDeck(int deckSize)
     {
         var session = new GameSession();
@@ -273,6 +277,10 @@ public class GameSessionTests
         var regalia = new CardInstance(new CardDto { Name = "Regalia" }, ZoneType.MaterialDeck, homeOrder: 1);
         player.GetZone(ZoneType.MaterialDeck).Cards.Add(champion);
         player.GetZone(ZoneType.MaterialDeck).Cards.Add(regalia);
+        // A base champion is required for StartNewGame to materialize onto the Field; give it a
+        // later HomeOrder so it doesn't disturb the champion/regalia ordering asserted below.
+        var baseChampion = MakeBaseChampion(homeOrder: 2);
+        player.GetZone(ZoneType.MaterialDeck).Cards.Add(baseChampion);
         // Scatter cards around the board the way a played game would.
         player.GetZone(ZoneType.Hand).Cards.Add(mainCards[0]);
         player.GetZone(ZoneType.MainDeck).Cards.Remove(mainCards[0]);
@@ -285,17 +293,18 @@ public class GameSessionTests
 
         session.StartNewGame();
 
-        Assert.Empty(player.GetZone(ZoneType.Field).Cards);
         Assert.Equal(20, player.Life);
         Assert.Equal(0, player.Stats.TurnCount);
         Assert.False(champion.IsTapped);
         Assert.Equal(0, champion.FieldX);
         Assert.Equal(0, champion.FieldY);
         Assert.Equal(new[] { champion, regalia }, player.GetZone(ZoneType.MaterialDeck).Cards);
+        // StartNewGame's own base-champion materialization puts baseChampion on the Field.
+        Assert.Same(baseChampion, Assert.Single(player.GetZone(ZoneType.Field).Cards));
         // Opening hand: drawn after the deck is rebuilt, so it comes out of all 10 Main cards
         // (shuffled), not just whichever ones hadn't wandered off to Hand/Field before the reset.
-        Assert.Equal(GameSession.OpeningHandSize, player.GetZone(ZoneType.Hand).Cards.Count);
-        Assert.Equal(10 - GameSession.OpeningHandSize, player.GetZone(ZoneType.MainDeck).Cards.Count);
+        Assert.Equal(GameSession.DefaultOpeningHandSize, player.GetZone(ZoneType.Hand).Cards.Count);
+        Assert.Equal(10 - GameSession.DefaultOpeningHandSize, player.GetZone(ZoneType.MainDeck).Cards.Count);
         var handAndDeck = player.GetZone(ZoneType.Hand).Cards.Concat(player.GetZone(ZoneType.MainDeck).Cards);
         Assert.Equal(mainCards.ToHashSet(), handAndDeck.ToHashSet());
         Assert.Equal(TurnPhase.Materialization, session.CurrentPhase);
@@ -307,6 +316,7 @@ public class GameSessionTests
         var session = new GameSession();
         var player = session.AddPlayer("Solo");
         player.GetZone(ZoneType.MainDeck).Cards.Add(MakeCard());
+        player.GetZone(ZoneType.MaterialDeck).Cards.Add(MakeBaseChampion());
         session.StartNewGame(); // Materialization, TurnCount 0, PlayerNumber 0.
 
         session.AdvancePhase(player); // Fast-forward: Materialization -> Main.
