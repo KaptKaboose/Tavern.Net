@@ -129,18 +129,26 @@
                     </ItemsControl.ItemContainerStyle>
                 </ItemsControl>
 
-                <!-- Memory: bordered bar, upright cards, directly below Field. -->
+                <!-- Memory: bordered bar, upright cards, directly below Field. Shrinks to fit like
+                     Hand (Viewbox, StretchDirection=DownOnly — never scales up, only down) instead
+                     of scrolling, so a full row is visible at a glance rather than needing to
+                     scroll through it. The drop target is a Border wrapping the Viewbox, not the
+                     GroupBox itself — Viewbox is a bare Decorator with no Background of its own,
+                     so once its content shrinks, the empty margin around it isn't hit-test visible
+                     and drag-enter stops registering there. Same reasoning as Hand's own Border. -->
                 <GroupBox Grid.Row="1" Grid.Column="1" Header="Memory" Width="950" HorizontalAlignment="Center" Margin="0,8,0,8"
-                          Foreground="#F7FAFC" BorderBrush="#4A5568"
-                          behaviors:CardDropBehavior.TargetZone="Memory"
-                          behaviors:CardDropBehavior.MoveCommand="{Binding MoveCardToCommand}">
-                    <ScrollViewer Height="190" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
-                        <ItemsControl ItemsSource="{Binding Memory.Cards}" ItemTemplate="{StaticResource CardTemplate}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                        </ItemsControl>
-                    </ScrollViewer>
+                          Foreground="#F7FAFC" BorderBrush="#4A5568">
+                    <Border Height="190" Background="Transparent"
+                            behaviors:CardDropBehavior.TargetZone="Memory"
+                            behaviors:CardDropBehavior.MoveCommand="{Binding MoveCardToCommand}">
+                        <Viewbox Stretch="Uniform" StretchDirection="DownOnly">
+                            <ItemsControl ItemsSource="{Binding Memory.Cards}" ItemTemplate="{StaticResource CardTemplate}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                        </Viewbox>
+                    </Border>
                 </GroupBox>
 
                 <!-- Hand: bottom, no border or label. Spans under Material too (col 0-1, not col 2 —
