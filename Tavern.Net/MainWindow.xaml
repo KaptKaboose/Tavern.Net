@@ -7,7 +7,8 @@
         xmlns:views="clr-namespace:Tavern.Net.Views"
         mc:Ignorable="d"
         Title="Tavern.Net" Height="950" Width="1600" WindowStartupLocation="CenterScreen"
-        ResizeMode="NoResize">
+        ResizeMode="NoResize"
+        PreviewKeyDown="OnPreviewKeyDown">
     <Window.Resources>
         <DataTemplate DataType="{x:Type vm:DeckImportViewModel}">
             <views:DeckImportView/>

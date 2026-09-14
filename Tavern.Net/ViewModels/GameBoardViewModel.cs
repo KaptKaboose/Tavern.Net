@@ -1,3 +1,4 @@
+using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Tavern.Net.Game;
@@ -5,7 +6,7 @@ using Tavern.Net.GameData;
 
 namespace Tavern.Net.ViewModels;
 
-public sealed partial class GameBoardViewModel : ObservableObject
+public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShortcutHandler
 {
     private const int OpeningHandSize = 7;
 
@@ -73,6 +74,28 @@ public sealed partial class GameBoardViewModel : ObservableObject
     {
         _session.AdvancePhase(Player);
         CurrentPhase = _session.CurrentPhase;
+    }
+
+    /// <summary>Keyboard shortcuts for the board — add more cases here as they come up.</summary>
+    public bool HandleKey(Key key)
+    {
+        switch (key)
+        {
+            case Key.Space:
+                if (NextPhaseCommand.CanExecute(null))
+                {
+                    NextPhaseCommand.Execute(null);
+                }
+                return true;
+            case Key.D:
+                if (DrawCardCommand.CanExecute(null))
+                {
+                    DrawCardCommand.Execute(null);
+                }
+                return true;
+            default:
+                return false;
+        }
     }
 
     [RelayCommand]

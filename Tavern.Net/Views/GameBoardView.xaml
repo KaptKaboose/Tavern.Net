@@ -75,11 +75,10 @@
                                FontWeight="{Binding CurrentPhase, Converter={StaticResource PhaseToFontWeight}, ConverterParameter=End}"/>
                 </StackPanel>
 
+                <!-- Next Phase is Spacebar now (GameBoardViewModel.HandleKey via MainWindow's
+                     PreviewKeyDown), not a button — see IKeyboardShortcutHandler. -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal">
-                    <Button Content="Next Phase" Padding="8,2" Command="{Binding NextPhaseCommand}"/>
-                    <Button Content="Draw" Margin="16,0,0,0" Padding="8,2" Command="{Binding DrawCardCommand}"/>
                     <Button Content="Draw Opening Hand" Margin="8,0,0,0" Padding="8,2" Command="{Binding DrawOpeningHandCommand}"/>
-                    <Button Content="Mulligan" Margin="8,0,0,0" Padding="8,2" Command="{Binding MulliganCommand}"/>
                 </StackPanel>
             </Grid>
 
