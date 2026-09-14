@@ -12,4 +12,11 @@
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Not auto-included by the SDK's default globbing (that only covers .xaml as Page) — an
+         embedded WPF Resource, so it ships in the assembly and loads via a relative pack URI
+         regardless of the app's working directory, unlike the runtime-downloaded card art. -->
+    <Resource Include="GameData\Images\Grand Archive Back.jpg" />
+  </ItemGroup>
+
 </Project>

@@ -98,7 +98,7 @@
 
                 <!-- Material: top-left, no border. -->
                 <views:StackZoneView Grid.Row="0" Grid.Column="0" HorizontalAlignment="Left" VerticalAlignment="Top"
-                                     Zone="{Binding MaterialDeck}" HeaderText="Material"
+                                     Zone="{Binding MaterialDeck}" HeaderText="Material" IsFaceDown="True"
                                      TargetZone="MaterialDeck" MoveCommand="{Binding MoveCardToCommand}"
                                      PeekCommand="{Binding PeekZoneCommand}"/>
 
@@ -171,7 +171,7 @@
                                          TargetZone="Banishment" MoveCommand="{Binding MoveCardToCommand}"
                                          PeekCommand="{Binding PeekZoneCommand}"/>
                     <views:StackZoneView Margin="8,0,0,16"
-                                         Zone="{Binding MainDeck}" HeaderText="Main"
+                                         Zone="{Binding MainDeck}" HeaderText="Main" IsFaceDown="True"
                                          TargetZone="MainDeck" MoveCommand="{Binding MoveCardToCommand}"
                                          PeekCommand="{Binding PeekZoneCommand}"/>
                     <views:StackZoneView Margin="8,0,0,0"

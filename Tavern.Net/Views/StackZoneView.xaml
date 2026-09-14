@@ -7,34 +7,99 @@
              xmlns:vm="clr-namespace:Tavern.Net.ViewModels"
              xmlns:behaviors="clr-namespace:Tavern.Net.Behaviors"
              mc:Ignorable="d">
+    <UserControl.Resources>
+        <!-- Shared by the pile box and its art layer so both always size identically —
+             one Width/Height/IsSideways swap instead of keeping two copies in sync. -->
+        <Style x:Key="PileSizeStyle" TargetType="FrameworkElement">
+            <Setter Property="Width" Value="125"/>
+            <Setter Property="Height" Value="175"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsSideways, ElementName=Root}" Value="True">
+                    <Setter Property="Width" Value="175"/>
+                    <Setter Property="Height" Value="125"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
     <StackPanel HorizontalAlignment="Center">
         <TextBlock Text="{Binding HeaderText, ElementName=Root}" FontWeight="Bold"
                    HorizontalAlignment="Center" Margin="0,0,0,4"/>
 
-        <!-- The pile itself: a plain count. Click to peek at (and drag/right-click) the actual cards. -->
-        <Border x:Name="PileBorder" Background="#222" CornerRadius="4" Cursor="Hand"
-                MouseLeftButtonUp="OnPileClicked"
-                behaviors:CardDropBehavior.TargetZone="{Binding TargetZone, ElementName=Root}"
-                behaviors:CardDropBehavior.MoveCommand="{Binding MoveCommand, ElementName=Root}">
-            <Border.Style>
-                <Style TargetType="Border">
-                    <Setter Property="Width" Value="125"/>
-                    <Setter Property="Height" Value="175"/>
-                    <Setter Property="BorderThickness" Value="0"/>
-                    <Style.Triggers>
-                        <DataTrigger Binding="{Binding IsSideways, ElementName=Root}" Value="True">
-                            <Setter Property="Width" Value="175"/>
-                            <Setter Property="Height" Value="125"/>
-                        </DataTrigger>
-                        <DataTrigger Binding="{Binding ShowBorder, ElementName=Root}" Value="True">
-                            <Setter Property="BorderThickness" Value="1"/>
-                            <Setter Property="BorderBrush" Value="#55000000"/>
-                        </DataTrigger>
-                    </Style.Triggers>
-                </Style>
-            </Border.Style>
-            <TextBlock Text="{Binding Zone.Cards.Count, ElementName=Root}" Foreground="White" FontSize="20"
-                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
-        </Border>
+        <!-- The pile: a background image (the top card's own art for Graveyard/Banishment, or a
+             generic back for face-down Material/Main) under the existing translucent scrim, which
+             keeps the white count legible over whatever's showing through. Click to peek at (and
+             drag/right-click) the actual cards. -->
+        <Grid Style="{StaticResource PileSizeStyle}">
+            <Border CornerRadius="4" ClipToBounds="True">
+                <Grid>
+                    <!-- Generic face-down back for Material/Main — a bundled asset (not fetched
+                         from the API: it's per-card via other_orientations, which is only ever
+                         populated for genuinely double-faced cards, empty for an ordinary deck). -->
+                    <Image Stretch="UniformToFill" Source="/GameData/Images/Grand%20Archive%20Back.jpg">
+                        <Image.Style>
+                            <Style TargetType="Image">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsFaceDown, ElementName=Root}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Image.Style>
+                    </Image>
+
+                    <!-- Fixed at the card's own portrait size and rotated when the pile is
+                         sideways — matches CardTemplate's IsTapped rotation, so Banishment's art
+                         reads correctly instead of just showing an unrotated slice of a portrait
+                         card. LayoutTransform, not RenderTransform: it applies during measure/
+                         arrange, so WPF treats the rotated 175x125 footprint as this element's
+                         real size and centers it exactly — RenderTransform only rotates after
+                         layout is already finalized around the pre-rotation 125x175 box, which is
+                         what left it overflowing/cut off on the sides. -->
+                    <Image Width="125" Height="175" Stretch="UniformToFill"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           Source="{Binding Zone.Cards[0].Artwork, ElementName=Root}">
+                        <Image.Style>
+                            <Style TargetType="Image">
+                                <Setter Property="LayoutTransform">
+                                    <Setter.Value><RotateTransform Angle="0"/></Setter.Value>
+                                </Setter>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsFaceDown, ElementName=Root}" Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsSideways, ElementName=Root}" Value="True">
+                                        <Setter Property="LayoutTransform">
+                                            <Setter.Value><RotateTransform Angle="90"/></Setter.Value>
+                                        </Setter>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Image.Style>
+                    </Image>
+                </Grid>
+            </Border>
+
+            <Border x:Name="PileBorder" Background="#99222222" Cursor="Hand"
+                    MouseLeftButtonUp="OnPileClicked"
+                    behaviors:CardDropBehavior.TargetZone="{Binding TargetZone, ElementName=Root}"
+                    behaviors:CardDropBehavior.MoveCommand="{Binding MoveCommand, ElementName=Root}">
+                <Border.Style>
+                    <Style TargetType="Border" BasedOn="{StaticResource PileSizeStyle}">
+                        <Setter Property="CornerRadius" Value="4"/>
+                        <Setter Property="BorderThickness" Value="0"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding ShowBorder, ElementName=Root}" Value="True">
+                                <Setter Property="BorderThickness" Value="1"/>
+                                <Setter Property="BorderBrush" Value="#55000000"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <TextBlock Text="{Binding Zone.Cards.Count, ElementName=Root}" Foreground="White" FontSize="20"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+        </Grid>
     </StackPanel>
 </UserControl>

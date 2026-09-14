@@ -51,6 +51,17 @@ public partial class StackZoneView : UserControl
         set => SetValue(IsSidewaysProperty, value);
     }
 
+    /// <summary>True for a face-down pile (Material/Main), which shows a generic card back instead
+    /// of the top card's own artwork.</summary>
+    public static readonly DependencyProperty IsFaceDownProperty =
+        DependencyProperty.Register(nameof(IsFaceDown), typeof(bool), typeof(StackZoneView), new PropertyMetadata(false));
+
+    public bool IsFaceDown
+    {
+        get => (bool)GetValue(IsFaceDownProperty);
+        set => SetValue(IsFaceDownProperty, value);
+    }
+
     public static readonly DependencyProperty TargetZoneProperty =
         DependencyProperty.Register(nameof(TargetZone), typeof(ZoneType?), typeof(StackZoneView));
 

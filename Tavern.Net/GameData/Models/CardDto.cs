@@ -45,6 +45,15 @@ public sealed class CardEdition
 
     [JsonPropertyName("set")]
     public CardSet? Set { get; set; }
+
+    /// <summary>
+    /// The other face of this edition, for a genuinely double-faced card (e.g. a Fatestone that
+    /// flips into a different named card) — the back face for an edition oriented "front", and
+    /// vice versa. Empty for the vast majority of ordinary, single-faced cards; not a generic
+    /// "card back" texture (confirmed against the live API — there isn't one exposed here).
+    /// </summary>
+    [JsonPropertyName("other_orientations")]
+    public List<CardEdition>? OtherOrientations { get; set; }
 }
 
 public sealed class CardDto

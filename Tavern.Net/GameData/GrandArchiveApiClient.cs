@@ -94,23 +94,43 @@ public sealed class GrandArchiveApiClient
         }
     }
 
+    /// <summary>Fetches the full card by slug (GET /cards/{slug}), disk-cached like <see cref="SearchCardsAsync"/>.</summary>
     public async Task<CardDto?> GetCardBySlugAsync(string slug, CancellationToken cancellationToken = default)
     {
+        var cacheFile = GetCardCacheFilePath($"card|{slug}");
+        if (File.Exists(cacheFile))
+        {
+            var cachedJson = await File.ReadAllTextAsync(cacheFile, cancellationToken);
+            var cached = JsonSerializer.Deserialize<CardDto>(cachedJson, JsonOptions);
+            if (cached is not null)
+            {
+                return cached;
+            }
+        }
+
         var response = await _http.GetAsync($"/cards/{Uri.EscapeDataString(slug)}", cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
             return null;
         }
 
-        return await response.Content.ReadFromJsonAsync<CardDto>(JsonOptions, cancellationToken);
+        var card = await response.Content.ReadFromJsonAsync<CardDto>(JsonOptions, cancellationToken);
+        if (card is not null)
+        {
+            await File.WriteAllTextAsync(cacheFile, JsonSerializer.Serialize(card, JsonOptions), cancellationToken);
+        }
+
+        return card;
     }
 
     /// <summary>
-    /// Downloads (and disk-caches) a card image, returning a local file path suitable
-    /// for loading into a WPF BitmapImage. <paramref name="imagePath"/> is the API's
-    /// edition.image value, e.g. "/cards/images/f6p4dnamcf.jpg".
+    /// Downloads (and disk-caches) a card image, returning a local file path suitable for loading
+    /// into a WPF BitmapImage. <paramref name="imagePath"/> is an API image path, e.g.
+    /// "/cards/images/f6p4dnamcf.jpg". <paramref name="rounded"/> requests the API's own
+    /// pre-rounded-corner rendering (the "rounded" query param on /cards/images/{filename}) and is
+    /// cached under a distinct filename, since it's a different image from the square-cornered one.
     /// </summary>
-    public async Task<string?> GetCardImagePathAsync(string imagePath, CancellationToken cancellationToken = default)
+    public async Task<string?> GetCardImagePathAsync(string imagePath, bool rounded = false, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(imagePath))
         {
@@ -118,6 +138,11 @@ public sealed class GrandArchiveApiClient
         }
 
         var fileName = Path.GetFileName(imagePath);
+        if (rounded)
+        {
+            fileName = $"{Path.GetFileNameWithoutExtension(fileName)}.rounded{Path.GetExtension(fileName)}";
+        }
+
         var localPath = Path.Combine(_imageCacheDirectory, fileName);
 
         if (File.Exists(localPath))
@@ -125,7 +150,8 @@ public sealed class GrandArchiveApiClient
             return localPath;
         }
 
-        var response = await _http.GetAsync(imagePath, cancellationToken);
+        var requestPath = rounded ? $"{imagePath}?rounded=true" : imagePath;
+        var response = await _http.GetAsync(requestPath, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
             return null;
