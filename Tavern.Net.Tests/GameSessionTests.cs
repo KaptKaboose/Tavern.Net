@@ -376,8 +376,8 @@ public class GameSessionTests
         Assert.Same(baseChampion, Assert.Single(player.GetZone(ZoneType.Field).Cards));
         // Opening hand: drawn after the deck is rebuilt, so it comes out of all 10 Main cards
         // (shuffled), not just whichever ones hadn't wandered off to Hand/Field before the reset.
-        Assert.Equal(GameSession.DefaultOpeningHandSize, player.GetZone(ZoneType.Hand).Cards.Count);
-        Assert.Equal(10 - GameSession.DefaultOpeningHandSize, player.GetZone(ZoneType.MainDeck).Cards.Count);
+        Assert.Equal(player.StartingHandSize, player.GetZone(ZoneType.Hand).Cards.Count);
+        Assert.Equal(10 - player.StartingHandSize, player.GetZone(ZoneType.MainDeck).Cards.Count);
         var handAndDeck = player.GetZone(ZoneType.Hand).Cards.Concat(player.GetZone(ZoneType.MainDeck).Cards);
         Assert.Equal(mainCards.ToHashSet(), handAndDeck.ToHashSet());
         Assert.Equal(TurnPhase.Materialization, session.CurrentPhase);

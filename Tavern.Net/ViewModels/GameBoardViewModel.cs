@@ -12,6 +12,11 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     private readonly GameSession _session;
     private readonly GrandArchiveApiClient _apiClient;
 
+    // Set by the 'N' handler when StartNewGame hands back cards to glimpse instead of a normal
+    // opening hand; consumed in MoveGlimpseCard the instant that glimpse finishes, drawing the
+    // hand StartNewGame skipped in favor of the glimpse.
+    private bool _drawAfterGlimpsing;
+
     public Player Player { get; }
 
     public GameStats Stats => Player.Stats;
@@ -121,6 +126,12 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
             GlimpseTop.Clear();
             GlimpseBottom.Clear();
             IsGlimpsing = false;
+
+            if (_drawAfterGlimpsing)
+            {
+                _drawAfterGlimpsing = false;
+                _session.DrawStartingHand(Player);
+            }
         }
     }
 
@@ -184,9 +195,21 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
                 }
                 return true;
             case Key.N:
-                // StartNewGame already draws each player's opening hand as part of setup.
-                _session.StartNewGame();
+                // StartNewGame already draws the opening hand as part of setup — unless the base
+                // champion's effect calls for an opening glimpse instead, in which case it hands
+                // the already-drawn cards back here so they can actually be shown (it has no
+                // reference to GlimpseStaging/IsGlimpsing to do that itself).
+                var glimpsedOnNewGame = _session.StartNewGame();
                 CurrentPhase = _session.CurrentPhase;
+                if (glimpsedOnNewGame.Count > 0)
+                {
+                    _drawAfterGlimpsing = true;
+                    IsGlimpsing = true;
+                    foreach (var card in glimpsedOnNewGame)
+                    {
+                        GlimpseStaging.Add(new CardViewModel(card, _apiClient, this));
+                    }
+                }
                 return true;
             case Key.B:
                 // Arm the chord; the count comes from whatever digit key (1-9) is pressed next.

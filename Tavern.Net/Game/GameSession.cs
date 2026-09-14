@@ -7,8 +7,6 @@ namespace Tavern.Net.Game;
 /// </summary>
 public sealed class GameSession
 {
-    public const int DefaultOpeningHandSize = 7;
-
     private static readonly TurnPhase[] PhaseOrder =
     {
         TurnPhase.WakeUp,
@@ -86,8 +84,16 @@ public sealed class GameSession
     /// draws their opening hand — that's as much a part of "the game has started" as the shuffle,
     /// so it belongs here rather than something every caller has to remember to do afterward.
     /// </summary>
-    public void StartNewGame()
+    /// <returns>
+    /// Cards glimpsed for the first player, if their base champion's effect triggers an opening
+    /// glimpse instead of a normal draw — empty otherwise. This class has no reference to the
+    /// Glimpse overlay's UI-side state, so it can pull the cards off the deck but can't show them;
+    /// the caller (GameBoardViewModel) is responsible for staging them and opening the overlay.
+    /// </returns>
+    public IReadOnlyList<CardInstance> StartNewGame()
     {
+        var glimpsedForFirstPlayer = (IReadOnlyList<CardInstance>)Array.Empty<CardInstance>();
+
         foreach (var player in Players)
         {
             player.Stats.PlayLog.Clear();
@@ -129,27 +135,65 @@ public sealed class GameSession
 
             // Draw the opening hand based on the base champion effect
             var baseChampionEffect = baseChampion?.Card.Effect?.ToLower();
-            var openingHandSize = DefaultOpeningHandSize;
             if (baseChampionEffect is not null)
             {
+                if (baseChampionEffect.Contains("memory"))
+                {
+                    player.SetStartsInMemory(true);
+                }
+
                 switch (baseChampionEffect)
                 {
                     case string e when e.Contains("draw seven"):
-                        openingHandSize = 7;
+                        player.SetStartingHandSize(7);
                         break;
                     case string e when e.Contains("draw six"):
-                        openingHandSize = 6;
+                        player.SetStartingHandSize(6);
                         break;
                 }
-            }
 
-            for (var i = 0; i < openingHandSize; i++)
-            {
-                DrawCard(player);
+                // Check for glimpsing
+                if (baseChampionEffect.Contains("glimpse"))
+                {
+                    var glimpseCount = 0;
+                    switch (baseChampionEffect)
+                    {
+                        case string e when e.Contains("glimpse 6"):
+                            glimpseCount = 6;
+                            break;
+                        case string e when e.Contains("glimpse 7"):
+                            glimpseCount = 7;
+                            break;
+                    }
+
+                    if (glimpseCount > 0)
+                    {
+                        var glimpsedCards = new List<CardInstance>();
+                        for (var i = 0; i < glimpseCount; i++)
+                        {
+                            var card = GlimpseNextCard(player);
+                            if (card is not null)
+                            {
+                                glimpsedCards.Add(card);
+                            }
+                        }
+
+                        if (player == Players[0])
+                        {
+                            glimpsedForFirstPlayer = glimpsedCards;
+                        }
+                    }
+                }
+                else
+                {
+                    DrawStartingHand(player);
+                }
             }
         }
 
         SetPhase(TurnPhase.Materialization, Players[0]);
+
+        return glimpsedForFirstPlayer;
     }
 
     /// <summary>Moves the top card of <paramref name="from"/> to <paramref name="to"/>. Returns false if the source zone was empty.</summary>
@@ -229,6 +273,21 @@ public sealed class GameSession
     {
         player.Stats.TurnCount++;
         player.Stats.Log("New turn.");
+    }
+
+    public void DrawStartingHand(Player player)
+    {
+        for (var i = 0; i < player.StartingHandSize; i++)
+        {
+            if (player.StartsInMemory)
+            {
+                DrawCard(player, ZoneType.MainDeck, ZoneType.Memory);
+            }
+            else
+            {
+                DrawCard(player);
+            }
+        }
     }
 
     /// <summary>
