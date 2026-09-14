@@ -158,12 +158,12 @@ public class GameSessionTests
     public void AdjustLife_UpdatesLifeAndRecordsHistory()
     {
         var session = new GameSession();
-        var player = session.AddPlayer("Solo", startingLife: 20);
+        var player = session.AddPlayer("Solo", startingLife: 15);
 
         session.AdjustLife(player, -3);
 
-        Assert.Equal(17, player.Life);
-        Assert.Equal(new LifeHistoryEntry(1, 17), Assert.Single(player.Stats.LifeHistory));
+        Assert.Equal(12, player.Life);
+        Assert.Equal(new LifeHistoryEntry(0, 12), Assert.Single(player.Stats.LifeHistory));
     }
 
     [Fact]
@@ -175,7 +175,7 @@ public class GameSessionTests
         session.NextTurn(player);
         session.NextTurn(player);
 
-        Assert.Equal(3, player.Stats.TurnCount);
+        Assert.Equal(2, player.Stats.TurnCount);
     }
 
     [Fact]
@@ -274,12 +274,12 @@ public class GameSessionTests
             session.AdvancePhase(player);
         }
         Assert.Equal(TurnPhase.End, session.CurrentPhase);
-        Assert.Equal(1, player.Stats.TurnCount);
+        Assert.Equal(0, player.Stats.TurnCount);
 
         session.AdvancePhase(player);
 
         Assert.Equal(TurnPhase.WakeUp, session.CurrentPhase);
-        Assert.Equal(2, player.Stats.TurnCount);
+        Assert.Equal(1, player.Stats.TurnCount);
     }
 
     [Fact]
@@ -366,7 +366,7 @@ public class GameSessionTests
 
         session.StartNewGame();
 
-        Assert.Equal(20, player.Life);
+        Assert.Equal(15, player.Life);
         Assert.Equal(0, player.Stats.TurnCount);
         Assert.False(champion.IsTapped);
         Assert.Equal(0, champion.FieldX);
@@ -406,5 +406,47 @@ public class GameSessionTests
 
         session.AdvancePhase(player); // Confirm it isn't still fast-forwarding.
         Assert.Equal(TurnPhase.Materialization, session.CurrentPhase);
+    }
+
+    [Fact]
+    public void GlimpseNextCard_RemovesTopCardFromMainEntirely()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        var top = MakeCard("Top");
+        var rest = MakeCard("Rest");
+        player.GetZone(ZoneType.MainDeck).Cards.Add(top);
+        player.GetZone(ZoneType.MainDeck).Cards.Add(rest);
+
+        var glimpsed = session.GlimpseNextCard(player);
+
+        Assert.Same(top, glimpsed);
+        Assert.Equal(new[] { rest }, player.GetZone(ZoneType.MainDeck).Cards);
+    }
+
+    [Fact]
+    public void GlimpseNextCard_FromEmptyDeck_ReturnsNull()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+
+        Assert.Null(session.GlimpseNextCard(player));
+    }
+
+    [Fact]
+    public void FinishGlimpse_TopLandsOnTopInOrder_BottomLandsAtBottomInOrder()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        var remaining = MakeCard("Remaining");
+        player.GetZone(ZoneType.MainDeck).Cards.Add(remaining);
+        var top0 = MakeCard("Top 0");
+        var top1 = MakeCard("Top 1");
+        var bottom0 = MakeCard("Bottom 0");
+        var bottom1 = MakeCard("Bottom 1");
+
+        session.FinishGlimpse(player, new[] { top0, top1 }, new[] { bottom0, bottom1 });
+
+        Assert.Equal(new[] { top0, top1, remaining, bottom0, bottom1 }, player.GetZone(ZoneType.MainDeck).Cards);
     }
 }

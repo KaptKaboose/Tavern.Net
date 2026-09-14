@@ -37,6 +37,15 @@ public sealed class GameSession
         ZoneType.Graveyard,
     };
 
+    // Set (per player) by StartNewGame, consumed by that player's very first AdvancePhase call
+    // afterward. Deliberately NOT inferred from TurnCount == 0 — now that TurnCount also defaults
+    // to 0 for a plain session that never called StartNewGame (so the very first-ever game, which
+    // goes through DeckImportViewModel.StartGame instead, still shows "Turn 1" and gets the same
+    // fast-forward), TurnCount == 0 no longer uniquely means "StartNewGame just ran" — it's equally
+    // true partway through any ordinary player's first turn, which made the fast-forward re-fire
+    // there too instead of just once.
+    private readonly HashSet<Player> _pendingFirstTurnFastForward = new();
+
     private readonly Random _random;
 
     public List<Player> Players { get; } = new();
@@ -48,7 +57,7 @@ public sealed class GameSession
         _random = random ?? new Random();
     }
 
-    public Player AddPlayer(string name, int startingLife = 20)
+    public Player AddPlayer(string name, int startingLife = 15)
     {
         var player = new Player(name, Players.Count, startingLife);
         Players.Add(player);
@@ -83,7 +92,8 @@ public sealed class GameSession
         {
             player.Stats.PlayLog.Clear();
             player.Stats.TurnCount = 0;
-            player.Life = 20;
+            player.Life = 15;
+            _pendingFirstTurnFastForward.Add(player);
 
             var allCards = player.Zones.Values.SelectMany(zone => zone.Cards).ToList();
             foreach (var zone in player.Zones.Values)
@@ -229,11 +239,10 @@ public sealed class GameSession
     /// </summary>
     public void AdvancePhase(Player player)
     {
-        // Turn 1 fast-forward, but only the very first advance after StartNewGame (still sitting
-        // in the Materialization it sets) — guarding on TurnCount == 0 alone re-triggers this on
-        // every later call too, since nothing in this branch ever increments it, which trapped the
-        // phase on Main/Draw forever instead of ever reaching End.
-        if (player.Stats.TurnCount == 0 && CurrentPhase == TurnPhase.Materialization)
+        // Fires exactly once per StartNewGame, on that player's first AdvancePhase call afterward
+        // — see _pendingFirstTurnFastForward's own comment for why this can't just be inferred
+        // from TurnCount == 0 anymore.
+        if (_pendingFirstTurnFastForward.Remove(player))
         {
             if (player.PlayerNumber == 0)
             {
@@ -292,6 +301,46 @@ public sealed class GameSession
         {
             MoveCard(player, card, ZoneType.Memory, ZoneType.Banishment);
         }
+    }
+
+    /// <summary>
+    /// Pulls the next card off the top of Main for glimpsing. The card leaves Main entirely —
+    /// not tracked in any zone — until <see cref="FinishGlimpse"/> puts every glimpsed card back.
+    /// Returns null if Main is empty.
+    /// </summary>
+    public CardInstance? GlimpseNextCard(Player player)
+    {
+        var deck = player.GetZone(ZoneType.MainDeck);
+        if (deck.Cards.Count == 0)
+        {
+            return null;
+        }
+
+        var card = deck.Cards[0];
+        deck.Cards.RemoveAt(0);
+        return card;
+    }
+
+    /// <summary>
+    /// Reinserts every glimpsed card into Main once all of them have been sorted into these two
+    /// piles. <paramref name="top"/>[0] ends up on top of the deck (lowest index), the rest follow
+    /// in order below it; <paramref name="bottom"/> is appended in order, so its last entry ends up
+    /// at the very bottom of the deck.
+    /// </summary>
+    public void FinishGlimpse(Player player, IReadOnlyList<CardInstance> top, IReadOnlyList<CardInstance> bottom)
+    {
+        var deck = player.GetZone(ZoneType.MainDeck);
+        for (var i = 0; i < top.Count; i++)
+        {
+            deck.Cards.Insert(i, top[i]);
+        }
+
+        foreach (var card in bottom)
+        {
+            deck.Cards.Add(card);
+        }
+
+        player.Stats.Log($"Glimpsed {top.Count + bottom.Count} card(s): {top.Count} to the top, {bottom.Count} to the bottom.");
     }
 
     void SetPhase(TurnPhase phase, Player player)

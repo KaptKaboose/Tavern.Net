@@ -16,6 +16,7 @@
         <conv:TurnPhaseToBrushConverter x:Key="PhaseToBrush"/>
         <conv:TurnPhaseToFontWeightConverter x:Key="PhaseToFontWeight"/>
         <conv:TurnCountDisplayConverter x:Key="TurnCountDisplay"/>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
     </UserControl.Resources>
     <Grid>
         <Grid.ColumnDefinitions>
@@ -250,6 +251,78 @@
                                 </ItemsPanelTemplate>
                             </ItemsControl.ItemsPanel>
                         </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Grid>
+
+        <!-- Glimpse overlay: 'G' draws the top card of Main into Staging (and opens this if not
+             already open); every later 'G' press draws another, appending to Staging. Drag cards
+             from Staging into Top or Bottom to sort them — dropping directly on another card
+             there inserts before it (GlimpseDropBehavior.InsertBefore, set per-item via
+             ItemContainerStyle), dropping on empty space appends to the end. The instant Staging
+             empties out, every sorted card is reinserted into Main (Top's order lands on top,
+             Bottom's order at the bottom — see GameSession.FinishGlimpse) and this closes
+             automatically. No manual close: nothing but G does anything while glimpsing
+             (GameBoardViewModel.HandleKey enforces that), so there's no scrim button here either. -->
+        <Grid Grid.Column="0" Grid.ColumnSpan="2"
+              Visibility="{Binding IsGlimpsing, Converter={StaticResource BoolToVisibility}}"
+              d:IsHidden="True">
+            <Border Background="#CC000000"/>
+
+            <Border MaxWidth="1200" MaxHeight="860" Margin="40" Padding="16"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Background="#2D3748" BorderBrush="White" BorderThickness="2" CornerRadius="10">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="Glimpsing" Foreground="White" FontSize="20" FontWeight="Bold" Margin="0,0,0,4"/>
+                    <TextBlock DockPanel.Dock="Top" Foreground="#A0AEC0" TextWrapping="Wrap" Margin="0,0,0,12"
+                               Text="Press G to draw another card. Drag cards into Top or Bottom — drop on a card to insert before it, or on empty space to add it to the end. Closes automatically once every drawn card is sorted."/>
+
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel>
+                            <TextBlock Text="Drawn" Foreground="White" FontWeight="Bold" Margin="0,0,0,4"/>
+                            <ItemsControl ItemsSource="{Binding GlimpseStaging}" ItemTemplate="{StaticResource CardTemplate}" Margin="0,0,0,16">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+
+                            <TextBlock Text="Top" Foreground="White" FontWeight="Bold" Margin="0,0,0,4"/>
+                            <Border Background="Transparent" MinHeight="181" Margin="0,0,0,16"
+                                    behaviors:GlimpseDropBehavior.Target="Top"
+                                    behaviors:GlimpseDropBehavior.MoveCommand="{Binding MoveGlimpseCardCommand}">
+                                <ItemsControl ItemsSource="{Binding GlimpseTop}" ItemTemplate="{StaticResource CardTemplate}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemContainerStyle>
+                                        <Style TargetType="ContentPresenter">
+                                            <Setter Property="behaviors:GlimpseDropBehavior.Target" Value="Top"/>
+                                            <Setter Property="behaviors:GlimpseDropBehavior.MoveCommand" Value="{Binding Board.MoveGlimpseCardCommand}"/>
+                                            <Setter Property="behaviors:GlimpseDropBehavior.InsertBefore" Value="{Binding}"/>
+                                        </Style>
+                                    </ItemsControl.ItemContainerStyle>
+                                </ItemsControl>
+                            </Border>
+
+                            <TextBlock Text="Bottom" Foreground="White" FontWeight="Bold" Margin="0,0,0,4"/>
+                            <Border Background="Transparent" MinHeight="181"
+                                    behaviors:GlimpseDropBehavior.Target="Bottom"
+                                    behaviors:GlimpseDropBehavior.MoveCommand="{Binding MoveGlimpseCardCommand}">
+                                <ItemsControl ItemsSource="{Binding GlimpseBottom}" ItemTemplate="{StaticResource CardTemplate}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemContainerStyle>
+                                        <Style TargetType="ContentPresenter">
+                                            <Setter Property="behaviors:GlimpseDropBehavior.Target" Value="Bottom"/>
+                                            <Setter Property="behaviors:GlimpseDropBehavior.MoveCommand" Value="{Binding Board.MoveGlimpseCardCommand}"/>
+                                            <Setter Property="behaviors:GlimpseDropBehavior.InsertBefore" Value="{Binding}"/>
+                                        </Style>
+                                    </ItemsControl.ItemContainerStyle>
+                                </ItemsControl>
+                            </Border>
+                        </StackPanel>
                     </ScrollViewer>
                 </DockPanel>
             </Border>

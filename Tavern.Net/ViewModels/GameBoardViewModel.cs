@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -35,6 +36,19 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     [ObservableProperty]
     private TurnPhase _currentPhase;
 
+    /// <summary>
+    /// Glimpsing state — self-contained ViewModel-side lists, not domain zones, since a glimpsed
+    /// card is genuinely removed from Main until <see cref="FinishGlimpse"/> puts every one of
+    /// them back (see GameSession.GlimpseNextCard/FinishGlimpse). Staging holds cards drawn by 'G'
+    /// that haven't been sorted yet; Top/Bottom are the two sortable piles they get dragged into.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isGlimpsing;
+
+    public ObservableCollection<CardViewModel> GlimpseStaging { get; } = new();
+    public ObservableCollection<CardViewModel> GlimpseTop { get; } = new();
+    public ObservableCollection<CardViewModel> GlimpseBottom { get; } = new();
+
     public GameBoardViewModel(GameSession session, Player player, GrandArchiveApiClient apiClient)
     {
         _session = session;
@@ -57,6 +71,59 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     [RelayCommand]
     private void DrawCardIntoMemory() => _session.DrawCard(Player, ZoneType.MainDeck, ZoneType.Memory);
 
+    /// <summary>'G'. First press opens the overlay and draws the top card; every press after that
+    /// (while it's open) draws one more, appending to Staging. No-ops once Main is empty.</summary>
+    [RelayCommand]
+    private void GlimpseNext()
+    {
+        var card = _session.GlimpseNextCard(Player);
+        if (card is null)
+        {
+            return;
+        }
+
+        IsGlimpsing = true;
+        GlimpseStaging.Add(new CardViewModel(card, _apiClient, this));
+    }
+
+    /// <summary>
+    /// Handles every drag within the Glimpse overlay: removes the card from whichever of the
+    /// three lists currently holds it, then inserts it into the target list — at InsertBefore's
+    /// position if given, otherwise at the end. Auto-finishes (and closes) the instant Staging
+    /// empties out, since that means every drawn card has been sorted.
+    /// </summary>
+    [RelayCommand]
+    private void MoveGlimpseCard(GlimpseDropRequest? request)
+    {
+        if (request is null || request.Card == request.InsertBefore)
+        {
+            return;
+        }
+
+        GlimpseStaging.Remove(request.Card);
+        GlimpseTop.Remove(request.Card);
+        GlimpseBottom.Remove(request.Card);
+
+        var targetList = request.Target == GlimpseTarget.Top ? GlimpseTop : GlimpseBottom;
+        var insertIndex = request.InsertBefore is not null ? targetList.IndexOf(request.InsertBefore) : -1;
+        if (insertIndex < 0)
+        {
+            targetList.Add(request.Card);
+        }
+        else
+        {
+            targetList.Insert(insertIndex, request.Card);
+        }
+
+        if (GlimpseStaging.Count == 0)
+        {
+            _session.FinishGlimpse(Player, GlimpseTop.Select(c => c.Instance).ToList(), GlimpseBottom.Select(c => c.Instance).ToList());
+            GlimpseTop.Clear();
+            GlimpseBottom.Clear();
+            IsGlimpsing = false;
+        }
+    }
+
     /// <summary>Advances to the next phase of the turn; advancing past End starts the next turn.</summary>
     [RelayCommand]
     private void NextPhase()
@@ -73,6 +140,18 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     /// <summary>Keyboard shortcuts for the board — add more cases here as they come up.</summary>
     public bool HandleKey(Key key)
     {
+        // Glimpsing locks out everything except G itself, per its own design — swallow every
+        // other key outright rather than letting it fall through to the normal switch below.
+        if (IsGlimpsing)
+        {
+            if (key == Key.G && GlimpseNextCommand.CanExecute(null))
+            {
+                GlimpseNextCommand.Execute(null);
+            }
+
+            return true;
+        }
+
         if (_banishArmed)
         {
             _banishArmed = false;
@@ -112,6 +191,14 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
             case Key.B:
                 // Arm the chord; the count comes from whatever digit key (1-9) is pressed next.
                 _banishArmed = true;
+                return true;
+            case Key.G:
+                // Not glimpsing yet (the IsGlimpsing branch above handles every later press) —
+                // this is the opening press, which GlimpseNext treats identically to any other.
+                if (GlimpseNextCommand.CanExecute(null))
+                {
+                    GlimpseNextCommand.Execute(null);
+                }
                 return true;
             default:
                 return false;

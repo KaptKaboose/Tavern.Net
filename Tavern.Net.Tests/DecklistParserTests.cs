@@ -115,15 +115,6 @@ public class DecklistParserTests
             3 Winbless Lookout
             2 Windmill Engineer
             2 Chasing Shadows
-            2 Grim Foreboeseech the Winds
-            3 Calming Bre
-            4 Fairy Whispers
-            2 Innervate Agility
-            2 Stifling Trap
-            4 Surveil the Winds
-            3 Winbless Lookout
-            2 Windmill Engineer
-            2 Chasing Shadows
             2 Grim Foreboding
             2 Penumbral Waltz
             2 Revenant's Scourge
@@ -133,13 +124,6 @@ public class DecklistParserTests
             # Sideboard
             1 Censer of Restful Peace
             1 Viridian Protective Trinket
-            1 Evaporation Synchron
-            1 Peer Beyond
-            1 Provoking Stand
-            3 Slice and Dice
-            1 Strategic Planning
-            2 Topsy Decreeeze
-            2 Ensnaring Fumesctive Trinket
             1 Evaporation Synchron
             1 Peer Beyond
             1 Provoking Stand
