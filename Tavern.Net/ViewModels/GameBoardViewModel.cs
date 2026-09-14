@@ -62,9 +62,25 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         CurrentPhase = _session.CurrentPhase;
     }
 
+    // Set by the 'B' case below; consumed by the very next key press. Keeps a bare digit key
+    // from meaning anything on its own — it's only "banish count" for the one keystroke right
+    // after 'B', so future digit-driven shortcuts elsewhere can't collide with this one.
+    private bool _banishArmed;
+
     /// <summary>Keyboard shortcuts for the board — add more cases here as they come up.</summary>
     public bool HandleKey(Key key)
     {
+        if (_banishArmed)
+        {
+            _banishArmed = false;
+            if (TryGetDigit(key, out var count))
+            {
+                _session.Banish(Player, count);
+                return true;
+            }
+            // Any non-digit key cancels the chord and falls through to its own normal handling.
+        }
+
         switch (key)
         {
             case Key.Space:
@@ -84,9 +100,31 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
                 _session.StartNewGame();
                 CurrentPhase = _session.CurrentPhase;
                 return true;
+            case Key.B:
+                // Arm the chord; the count comes from whatever digit key (1-9) is pressed next.
+                _banishArmed = true;
+                return true;
             default:
                 return false;
         }
+    }
+
+    private static bool TryGetDigit(Key key, out int digit)
+    {
+        if (key is >= Key.D1 and <= Key.D9)
+        {
+            digit = key - Key.D1 + 1;
+            return true;
+        }
+
+        if (key is >= Key.NumPad1 and <= Key.NumPad9)
+        {
+            digit = key - Key.NumPad1 + 1;
+            return true;
+        }
+
+        digit = 0;
+        return false;
     }
 
     [RelayCommand]

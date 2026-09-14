@@ -199,6 +199,35 @@ public class GameSessionTests
     }
 
     [Fact]
+    public void Banish_MovesExactlyCountRandomCardsFromMemoryToBanishment()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        for (var i = 0; i < 5; i++)
+        {
+            player.GetZone(ZoneType.Memory).Cards.Add(MakeCard($"Memory {i}"));
+        }
+
+        session.Banish(player, 3);
+
+        Assert.Equal(2, player.GetZone(ZoneType.Memory).Cards.Count);
+        Assert.Equal(3, player.GetZone(ZoneType.Banishment).Cards.Count);
+    }
+
+    [Fact]
+    public void Banish_CountExceedingMemorySize_BanishesWhateverIsThere()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        player.GetZone(ZoneType.Memory).Cards.Add(MakeCard());
+
+        session.Banish(player, 5);
+
+        Assert.Empty(player.GetZone(ZoneType.Memory).Cards);
+        Assert.Single(player.GetZone(ZoneType.Banishment).Cards);
+    }
+
+    [Fact]
     public void AdvancePhase_StepsThroughPhasesInOrder()
     {
         var session = new GameSession();

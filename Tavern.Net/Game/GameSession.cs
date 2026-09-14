@@ -278,6 +278,20 @@ public sealed class GameSession
         }
     }
 
+    /// <summary>
+    /// Banishes up to <paramref name="count"/> random cards from Memory — fewer if Memory doesn't
+    /// have that many.
+    /// </summary>
+    public void Banish(Player player, int count)
+    {
+        var memory = player.GetZone(ZoneType.Memory);
+        var chosen = memory.Cards.OrderBy(_ => _random.Next()).Take(count).ToList();
+        foreach (var card in chosen)
+        {
+            MoveCard(player, card, ZoneType.Memory, ZoneType.Banishment);
+        }
+    }
+
     void SetPhase(TurnPhase phase, Player player)
     {
         CurrentPhase = phase;
