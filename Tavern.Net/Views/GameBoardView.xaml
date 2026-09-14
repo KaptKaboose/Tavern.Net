@@ -15,6 +15,7 @@
     <UserControl.Resources>
         <conv:TurnPhaseToBrushConverter x:Key="PhaseToBrush"/>
         <conv:TurnPhaseToFontWeightConverter x:Key="PhaseToFontWeight"/>
+        <conv:TurnCountDisplayConverter x:Key="TurnCountDisplay"/>
     </UserControl.Resources>
     <Grid>
         <Grid.ColumnDefinitions>
@@ -42,7 +43,7 @@
                                Foreground="#F7FAFC" VerticalAlignment="Center" Margin="8,0"/>
                     <Button Content="+" Width="28" Command="{Binding IncreaseLifeCommand}"/>
 
-                    <TextBlock Text="{Binding Stats.TurnCount, StringFormat='   Turn {0}'}" FontSize="18"
+                    <TextBlock Text="{Binding Stats.TurnCount, Converter={StaticResource TurnCountDisplay}, StringFormat='   Turn {0}'}" FontSize="18"
                                Foreground="#F7FAFC" VerticalAlignment="Center" Margin="16,0,0,0"/>
                 </StackPanel>
 
