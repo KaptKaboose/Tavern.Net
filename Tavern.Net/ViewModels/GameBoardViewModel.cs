@@ -54,6 +54,9 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     [RelayCommand]
     private void DrawCard() => _session.DrawCard(Player);
 
+    [RelayCommand]
+    private void DrawCardIntoMemory() => _session.DrawCard(Player, ZoneType.MainDeck, ZoneType.Memory);
+
     /// <summary>Advances to the next phase of the turn; advancing past End starts the next turn.</summary>
     [RelayCommand]
     private void NextPhase()
@@ -93,6 +96,12 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
                 if (DrawCardCommand.CanExecute(null))
                 {
                     DrawCardCommand.Execute(null);
+                }
+                return true;
+            case Key.S:
+                if (DrawCardIntoMemoryCommand.CanExecute(null))
+                {
+                    DrawCardIntoMemoryCommand.Execute(null);
                 }
                 return true;
             case Key.N:
