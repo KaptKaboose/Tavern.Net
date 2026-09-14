@@ -9,4 +9,5 @@ public enum ZoneType
     Graveyard,
     Banishment,
     Memory,
+    Champion,
 }

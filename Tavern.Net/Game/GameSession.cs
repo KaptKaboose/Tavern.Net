@@ -33,6 +33,7 @@ public sealed class GameSession
         ZoneType.Banishment,
         ZoneType.MainDeck,
         ZoneType.Graveyard,
+        ZoneType.Champion,
     };
 
     // Set (per player) by StartNewGame, consumed by that player's very first AdvancePhase call
@@ -129,9 +130,9 @@ public sealed class GameSession
 
             Shuffle(player, ZoneType.MainDeck);
 
-            // Play the base champion from the Material Deck to the Field, since that's a required starting action
+            // Play the base champion from the Material Deck to the Champion zone, since that's a required starting action
             var baseChampion = allCards.FirstOrDefault(c => c.Card.IsChampion && c.Card.Level == 0 && c.HomeZone == ZoneType.MaterialDeck);
-            MoveCard(player, baseChampion!, ZoneType.MaterialDeck, ZoneType.Field, 0, 0);
+            MoveCard(player, baseChampion!, ZoneType.MaterialDeck, ZoneType.Champion);
 
             // Draw the opening hand based on the base champion effect
             var baseChampionEffect = baseChampion?.Card.Effect?.ToLower();
@@ -228,6 +229,18 @@ public sealed class GameSession
             return;
         }
 
+        // Only Champion cards may enter the Champion zone.
+        if (to == ZoneType.Champion && !card.Card.IsChampion)
+        {
+            return;
+        }
+
+        // Capture the Champion zone's top BEFORE removing the card below — if it's coming from
+        // Champion itself, that removal would otherwise corrupt an after-the-fact "old top" read.
+        var championZoneAffected = from == ZoneType.Champion || to == ZoneType.Champion;
+        var championZone = player.GetZone(ZoneType.Champion);
+        var oldTop = championZoneAffected ? championZone.Cards.FirstOrDefault() : null;
+
         var source = player.GetZone(from);
         if (!source.Cards.Remove(card))
         {
@@ -250,6 +263,22 @@ public sealed class GameSession
         {
             card.FieldX = fieldX.Value;
             card.FieldY = fieldY.Value;
+        }
+
+        // Leveling up/down: when the Champion zone's top card actually changes (not merely
+        // appears from empty or disappears to empty — see the null checks), life shifts by the
+        // difference between the old and new top's Life stat.
+        if (championZoneAffected)
+        {
+            var newTop = championZone.Cards.FirstOrDefault();
+            if (oldTop is not null && newTop is not null && oldTop != newTop)
+            {
+                var delta = (int)((newTop.Card.Life ?? 0) - (oldTop.Card.Life ?? 0));
+                if (delta != 0)
+                {
+                    AdjustLife(player, delta);
+                }
+            }
         }
 
         player.Stats.Log($"Moved {card.Card.Name} from {from} to {to}.");

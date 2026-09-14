@@ -62,6 +62,17 @@ public partial class StackZoneView : UserControl
         set => SetValue(IsFaceDownProperty, value);
     }
 
+    /// <summary>False hides the translucent scrim and card-count number — used by the Champion
+    /// zone, which shows the top champion plainly instead of a collapsed pile.</summary>
+    public static readonly DependencyProperty ShowOverlayProperty =
+        DependencyProperty.Register(nameof(ShowOverlay), typeof(bool), typeof(StackZoneView), new PropertyMetadata(true));
+
+    public bool ShowOverlay
+    {
+        get => (bool)GetValue(ShowOverlayProperty);
+        set => SetValue(ShowOverlayProperty, value);
+    }
+
     public static readonly DependencyProperty TargetZoneProperty =
         DependencyProperty.Register(nameof(TargetZone), typeof(ZoneType?), typeof(StackZoneView));
 

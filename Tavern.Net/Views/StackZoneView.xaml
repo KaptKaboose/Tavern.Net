@@ -8,6 +8,8 @@
              xmlns:behaviors="clr-namespace:Tavern.Net.Behaviors"
              mc:Ignorable="d">
     <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+
         <!-- Shared by the pile box and its art layer so both always size identically —
              one Width/Height/IsSideways swap instead of keeping two copies in sync. -->
         <Style x:Key="PileSizeStyle" TargetType="FrameworkElement">
@@ -81,12 +83,13 @@
                 </Grid>
             </Border>
 
-            <Border x:Name="PileBorder" Background="#99222222" Cursor="Hand"
+            <Border x:Name="PileBorder" Cursor="Hand"
                     MouseLeftButtonUp="OnPileClicked"
                     behaviors:CardDropBehavior.TargetZone="{Binding TargetZone, ElementName=Root}"
                     behaviors:CardDropBehavior.MoveCommand="{Binding MoveCommand, ElementName=Root}">
                 <Border.Style>
                     <Style TargetType="Border" BasedOn="{StaticResource PileSizeStyle}">
+                        <Setter Property="Background" Value="#99222222"/>
                         <Setter Property="CornerRadius" Value="4"/>
                         <Setter Property="BorderThickness" Value="0"/>
                         <Style.Triggers>
@@ -94,11 +97,17 @@
                                 <Setter Property="BorderThickness" Value="1"/>
                                 <Setter Property="BorderBrush" Value="#55000000"/>
                             </DataTrigger>
+                            <!-- ShowOverlay=False (Champion): keep the Border for hit-testing/drop,
+                                 but drop the scrim so the top card art shows through plainly. -->
+                            <DataTrigger Binding="{Binding ShowOverlay, ElementName=Root}" Value="False">
+                                <Setter Property="Background" Value="Transparent"/>
+                            </DataTrigger>
                         </Style.Triggers>
                     </Style>
                 </Border.Style>
                 <TextBlock Text="{Binding Zone.Cards.Count, ElementName=Root}" Foreground="White" FontSize="20"
-                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           Visibility="{Binding ShowOverlay, ElementName=Root, Converter={StaticResource BoolToVisibility}}"/>
             </Border>
         </Grid>
     </StackPanel>

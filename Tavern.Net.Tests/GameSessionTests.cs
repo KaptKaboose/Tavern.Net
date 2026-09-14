@@ -11,6 +11,9 @@ public class GameSessionTests
     private static CardInstance MakeBaseChampion(string name = "Base Champion", int homeOrder = 0) =>
         new(new CardDto { Name = name, Types = new List<string> { "Champion" }, Level = 0 }, ZoneType.MaterialDeck, homeOrder);
 
+    private static CardInstance MakeChampion(string name, double life) =>
+        new(new CardDto { Name = name, Types = new List<string> { "Champion" }, Life = life });
+
     private static Player MakePlayerWithDeck(int deckSize)
     {
         var session = new GameSession();
@@ -136,6 +139,92 @@ public class GameSessionTests
 
         Assert.Equal(0, card.FieldX);
         Assert.Equal(0, card.FieldY);
+    }
+
+    [Fact]
+    public void MoveCard_NonChampionCardToChampionZone_IsIgnored()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        var card = MakeCard("Not A Champion");
+        player.GetZone(ZoneType.Hand).Cards.Add(card);
+
+        session.MoveCard(player, card, ZoneType.Hand, ZoneType.Champion);
+
+        Assert.Empty(player.GetZone(ZoneType.Champion).Cards);
+        Assert.Same(card, Assert.Single(player.GetZone(ZoneType.Hand).Cards));
+    }
+
+    [Fact]
+    public void MoveCard_ChampionCardToChampionZone_StacksOnTop()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        var older = MakeChampion("Older", life: 10);
+        var newer = MakeChampion("Newer", life: 10);
+        player.GetZone(ZoneType.Champion).Cards.Add(older);
+        player.GetZone(ZoneType.Hand).Cards.Add(newer);
+
+        session.MoveCard(player, newer, ZoneType.Hand, ZoneType.Champion);
+
+        Assert.Equal(new[] { newer, older }, player.GetZone(ZoneType.Champion).Cards);
+    }
+
+    [Fact]
+    public void MoveCard_ChampionEntersEmptyChampionZone_DoesNotChangeLife()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo", startingLife: 15);
+        var champion = MakeChampion("Base", life: 8);
+        player.GetZone(ZoneType.Hand).Cards.Add(champion);
+
+        session.MoveCard(player, champion, ZoneType.Hand, ZoneType.Champion);
+
+        Assert.Equal(15, player.Life);
+    }
+
+    [Fact]
+    public void MoveCard_ChampionLeavesChampionZoneEmpty_DoesNotChangeLife()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo", startingLife: 15);
+        var champion = MakeChampion("Base", life: 8);
+        player.GetZone(ZoneType.Champion).Cards.Add(champion);
+
+        session.MoveCard(player, champion, ZoneType.Champion, ZoneType.Graveyard);
+
+        Assert.Equal(15, player.Life);
+    }
+
+    [Fact]
+    public void MoveCard_ChampionLevelsUp_LifeIncreasesByDifference()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo", startingLife: 15);
+        var baseForm = MakeChampion("Base", life: 8);
+        var leveledForm = MakeChampion("Leveled", life: 12);
+        player.GetZone(ZoneType.Champion).Cards.Add(baseForm);
+        player.GetZone(ZoneType.Hand).Cards.Add(leveledForm);
+
+        session.MoveCard(player, leveledForm, ZoneType.Hand, ZoneType.Champion);
+
+        Assert.Equal(19, player.Life);
+        Assert.Equal(new[] { leveledForm, baseForm }, player.GetZone(ZoneType.Champion).Cards);
+    }
+
+    [Fact]
+    public void MoveCard_ChampionDeLevels_LifeDecreasesByDifference()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo", startingLife: 15);
+        var leveledForm = MakeChampion("Leveled", life: 12);
+        var baseForm = MakeChampion("Base", life: 8);
+        player.GetZone(ZoneType.Champion).Cards.Add(leveledForm);
+        player.GetZone(ZoneType.Hand).Cards.Add(baseForm);
+
+        session.MoveCard(player, baseForm, ZoneType.Hand, ZoneType.Champion);
+
+        Assert.Equal(11, player.Life);
     }
 
     [Fact]
@@ -372,8 +461,8 @@ public class GameSessionTests
         Assert.Equal(0, champion.FieldX);
         Assert.Equal(0, champion.FieldY);
         Assert.Equal(new[] { champion, regalia }, player.GetZone(ZoneType.MaterialDeck).Cards);
-        // StartNewGame's own base-champion materialization puts baseChampion on the Field.
-        Assert.Same(baseChampion, Assert.Single(player.GetZone(ZoneType.Field).Cards));
+        // StartNewGame's own base-champion materialization puts baseChampion in the Champion zone.
+        Assert.Same(baseChampion, Assert.Single(player.GetZone(ZoneType.Champion).Cards));
         // Opening hand: drawn after the deck is rebuilt, so it comes out of all 10 Main cards
         // (shuffled), not just whichever ones hadn't wandered off to Hand/Field before the reset.
         Assert.Equal(player.StartingHandSize, player.GetZone(ZoneType.Hand).Cards.Count);

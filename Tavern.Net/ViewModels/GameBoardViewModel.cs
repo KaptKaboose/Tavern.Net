@@ -28,6 +28,7 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     public ZoneViewModel Graveyard { get; }
     public ZoneViewModel Banishment { get; }
     public ZoneViewModel Memory { get; }
+    public ZoneViewModel Champion { get; }
 
     /// <summary>The card currently shown full-size in the zoom overlay, or null when it's closed.</summary>
     [ObservableProperty]
@@ -68,6 +69,7 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         Graveyard = new ZoneViewModel(player.GetZone(ZoneType.Graveyard), apiClient, this);
         Banishment = new ZoneViewModel(player.GetZone(ZoneType.Banishment), apiClient, this);
         Memory = new ZoneViewModel(player.GetZone(ZoneType.Memory), apiClient, this);
+        Champion = new ZoneViewModel(player.GetZone(ZoneType.Champion), apiClient, this);
     }
 
     [RelayCommand]
