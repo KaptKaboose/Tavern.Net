@@ -6,6 +6,23 @@
 
     <conv:NullToVisibilityConverter x:Key="NullToVisibility"/>
 
+    <!-- Implicit (no x:Key, so TargetType alone matches) — every ListBox/TextBox in the app picks
+         these up automatically, matching the app's dark (#1A202C) background instead of the
+         system default white control chrome. -->
+    <Style TargetType="ListBox">
+        <Setter Property="Background" Value="#2D3748"/>
+        <Setter Property="Foreground" Value="#F7FAFC"/>
+        <Setter Property="BorderBrush" Value="#4A5568"/>
+    </Style>
+
+    <Style TargetType="TextBox">
+        <Setter Property="Background" Value="#2D3748"/>
+        <Setter Property="Foreground" Value="#F7FAFC"/>
+        <Setter Property="BorderBrush" Value="#4A5568"/>
+        <Setter Property="CaretBrush" Value="#F7FAFC"/>
+        <Setter Property="SelectionBrush" Value="#4A5568"/>
+    </Style>
+
     <!-- One face-up card: art if loaded, name placeholder otherwise. Left-click taps/untaps it
          (only meaningful on the Field — see GameBoardViewModel.ToggleTapped), drag moves it
          between zones, and right-click immediately opens the full-size zoom overlay. -->

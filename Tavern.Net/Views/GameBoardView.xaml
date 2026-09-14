@@ -39,11 +39,11 @@
                 <StackPanel Grid.Column="0" Orientation="Horizontal">
                     <Button Content="-" Width="28" Command="{Binding DecreaseLifeCommand}"/>
                     <TextBlock Text="{Binding Player.Life, StringFormat='Life: {0}'}" FontSize="18" FontWeight="Bold"
-                               VerticalAlignment="Center" Margin="8,0"/>
+                               Foreground="#F7FAFC" VerticalAlignment="Center" Margin="8,0"/>
                     <Button Content="+" Width="28" Command="{Binding IncreaseLifeCommand}"/>
 
                     <TextBlock Text="{Binding Stats.TurnCount, StringFormat='   Turn {0}'}" FontSize="18"
-                               VerticalAlignment="Center" Margin="16,0,0,0"/>
+                               Foreground="#F7FAFC" VerticalAlignment="Center" Margin="16,0,0,0"/>
                 </StackPanel>
 
                 <!-- Wake Up => Materialization => Recollection => Draw => Main => End, with the
@@ -53,23 +53,23 @@
                     <TextBlock Text="Wake Up" FontSize="14" VerticalAlignment="Center"
                                Foreground="{Binding CurrentPhase, Converter={StaticResource PhaseToBrush}, ConverterParameter=WakeUp}"
                                FontWeight="{Binding CurrentPhase, Converter={StaticResource PhaseToFontWeight}, ConverterParameter=WakeUp}"/>
-                    <TextBlock Text=" ➤ " FontSize="14" Foreground="Gray" VerticalAlignment="Center"/>
+                    <TextBlock Text=" ➤ " FontSize="14" Foreground="#A0AEC0" VerticalAlignment="Center"/>
                     <TextBlock Text="Materialization" FontSize="14" VerticalAlignment="Center"
                                Foreground="{Binding CurrentPhase, Converter={StaticResource PhaseToBrush}, ConverterParameter=Materialization}"
                                FontWeight="{Binding CurrentPhase, Converter={StaticResource PhaseToFontWeight}, ConverterParameter=Materialization}"/>
-                    <TextBlock Text=" ➤ " FontSize="14" Foreground="Gray" VerticalAlignment="Center"/>
+                    <TextBlock Text=" ➤ " FontSize="14" Foreground="#A0AEC0" VerticalAlignment="Center"/>
                     <TextBlock Text="Recollection" FontSize="14" VerticalAlignment="Center"
                                Foreground="{Binding CurrentPhase, Converter={StaticResource PhaseToBrush}, ConverterParameter=Recollection}"
                                FontWeight="{Binding CurrentPhase, Converter={StaticResource PhaseToFontWeight}, ConverterParameter=Recollection}"/>
-                    <TextBlock Text=" ➤ " FontSize="14" Foreground="Gray" VerticalAlignment="Center"/>
+                    <TextBlock Text=" ➤ " FontSize="14" Foreground="#A0AEC0" VerticalAlignment="Center"/>
                     <TextBlock Text="Draw" FontSize="14" VerticalAlignment="Center"
                                Foreground="{Binding CurrentPhase, Converter={StaticResource PhaseToBrush}, ConverterParameter=Draw}"
                                FontWeight="{Binding CurrentPhase, Converter={StaticResource PhaseToFontWeight}, ConverterParameter=Draw}"/>
-                    <TextBlock Text=" ➤ " FontSize="14" Foreground="Gray" VerticalAlignment="Center"/>
+                    <TextBlock Text=" ➤ " FontSize="14" Foreground="#A0AEC0" VerticalAlignment="Center"/>
                     <TextBlock Text="Main" FontSize="14" VerticalAlignment="Center"
                                Foreground="{Binding CurrentPhase, Converter={StaticResource PhaseToBrush}, ConverterParameter=Main}"
                                FontWeight="{Binding CurrentPhase, Converter={StaticResource PhaseToFontWeight}, ConverterParameter=Main}"/>
-                    <TextBlock Text=" ➤ " FontSize="14" Foreground="Gray" VerticalAlignment="Center"/>
+                    <TextBlock Text=" ➤ " FontSize="14" Foreground="#A0AEC0" VerticalAlignment="Center"/>
                     <TextBlock Text="End" FontSize="14" VerticalAlignment="Center"
                                Foreground="{Binding CurrentPhase, Converter={StaticResource PhaseToBrush}, ConverterParameter=End}"
                                FontWeight="{Binding CurrentPhase, Converter={StaticResource PhaseToFontWeight}, ConverterParameter=End}"/>
@@ -131,6 +131,7 @@
 
                 <!-- Memory: bordered bar, upright cards, directly below Field. -->
                 <GroupBox Grid.Row="1" Grid.Column="1" Header="Memory" Width="950" HorizontalAlignment="Center" Margin="0,8,0,8"
+                          Foreground="#F7FAFC" BorderBrush="#4A5568"
                           behaviors:CardDropBehavior.TargetZone="Memory"
                           behaviors:CardDropBehavior.MoveCommand="{Binding MoveCardToCommand}">
                     <ScrollViewer Height="190" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
@@ -183,15 +184,14 @@
         </Grid>
 
         <!-- Right: stats panel -->
-        <Border Grid.Column="1" BorderBrush="#33000000" BorderThickness="1,0,0,0" Padding="10">
+        <Border Grid.Column="1" BorderBrush="#33FFFFFF" BorderThickness="1,0,0,0" Padding="10">
             <DockPanel>
-                <TextBlock DockPanel.Dock="Top" Text="Session stats" FontSize="16" FontWeight="Bold" Margin="0,0,0,8"/>
+                <TextBlock DockPanel.Dock="Top" Text="Session stats" FontSize="16" FontWeight="Bold" Foreground="#F7FAFC" Margin="0,0,0,8"/>
                 <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
-                    <TextBlock Text="{Binding Stats.CardsDrawnCount, StringFormat='Cards drawn: {0}'}"/>
-                    <TextBlock Text="{Binding Stats.MulliganCount, StringFormat='Mulligans: {0}'}"/>
+                    <TextBlock Text="{Binding Stats.CardsDrawnCount, StringFormat='Cards drawn: {0}'}" Foreground="#F7FAFC"/>
                 </StackPanel>
 
-                <TextBlock DockPanel.Dock="Top" Text="Life history" FontWeight="Bold" Margin="0,4,0,4"/>
+                <TextBlock DockPanel.Dock="Top" Text="Life history" FontWeight="Bold" Foreground="#F7FAFC" Margin="0,4,0,4"/>
                 <ListBox DockPanel.Dock="Top" Height="100" ItemsSource="{Binding Stats.LifeHistory}" Margin="0,0,0,8">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
@@ -200,7 +200,7 @@
                     </ListBox.ItemTemplate>
                 </ListBox>
 
-                <TextBlock DockPanel.Dock="Top" Text="Play log" FontWeight="Bold" Margin="0,4,0,4"/>
+                <TextBlock DockPanel.Dock="Top" Text="Play log" FontWeight="Bold" Foreground="#F7FAFC" Margin="0,4,0,4"/>
                 <ListBox ItemsSource="{Binding Stats.PlayLog}" ScrollViewer.VerticalScrollBarVisibility="Auto">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
@@ -229,7 +229,7 @@
 
             <Border MaxWidth="1200" MaxHeight="820" Margin="40" Padding="16"
                     HorizontalAlignment="Center" VerticalAlignment="Center"
-                    Background="#333" BorderBrush="White" BorderThickness="2" CornerRadius="10">
+                    Background="#2D3748" BorderBrush="White" BorderThickness="2" CornerRadius="10">
                 <DockPanel>
                     <TextBlock DockPanel.Dock="Top" Text="{Binding PeekedZone.HeaderText}"
                                Foreground="White" FontSize="20" FontWeight="Bold" Margin="0,0,0,12"/>

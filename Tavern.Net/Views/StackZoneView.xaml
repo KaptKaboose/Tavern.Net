@@ -23,7 +23,7 @@
     </UserControl.Resources>
 
     <StackPanel HorizontalAlignment="Center">
-        <TextBlock Text="{Binding HeaderText, ElementName=Root}" FontWeight="Bold"
+        <TextBlock Text="{Binding HeaderText, ElementName=Root}" FontWeight="Bold" Foreground="#F7FAFC"
                    HorizontalAlignment="Center" Margin="0,0,0,4"/>
 
         <!-- The pile: a background image (the top card's own art for Graveyard/Banishment, or a

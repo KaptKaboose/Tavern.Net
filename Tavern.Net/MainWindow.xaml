@@ -8,6 +8,7 @@
         mc:Ignorable="d"
         Title="Tavern.Net" Height="950" Width="1600" WindowStartupLocation="CenterScreen"
         ResizeMode="NoResize"
+        Background="#1A202C"
         PreviewKeyDown="OnPreviewKeyDown">
     <Window.Resources>
         <DataTemplate DataType="{x:Type vm:DeckImportViewModel}">

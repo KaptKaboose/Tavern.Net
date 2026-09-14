@@ -17,9 +17,6 @@ public sealed partial class GameStats : ObservableObject
     [ObservableProperty]
     private int _cardsDrawnCount;
 
-    [ObservableProperty]
-    private int _mulliganCount;
-
     public ObservableCollection<LifeHistoryEntry> LifeHistory { get; } = new();
 
     public ObservableCollection<string> PlayLog { get; } = new();
