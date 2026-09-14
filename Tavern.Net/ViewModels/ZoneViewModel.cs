@@ -28,7 +28,7 @@ public sealed class ZoneViewModel
 
         foreach (var card in _zone.Cards)
         {
-            AddWrapper(card);
+            AddWrapper(card, Cards.Count);
         }
 
         _zone.Cards.CollectionChanged += OnZoneCardsChanged;
@@ -39,9 +39,14 @@ public sealed class ZoneViewModel
         switch (e.Action)
         {
             case NotifyCollectionChangedAction.Add:
+                // Insert at the same index the domain collection used (e.g. GameSession.MoveCard
+                // inserting at 0 for a stack zone) — appending here regardless would silently
+                // discard that ordering no matter where the underlying card actually landed.
+                var insertAt = e.NewStartingIndex;
                 foreach (CardInstance card in e.NewItems!)
                 {
-                    AddWrapper(card);
+                    AddWrapper(card, insertAt);
+                    insertAt++;
                 }
                 break;
 
@@ -58,17 +63,17 @@ public sealed class ZoneViewModel
                 _wrappers.Clear();
                 foreach (var card in _zone.Cards)
                 {
-                    AddWrapper(card);
+                    AddWrapper(card, Cards.Count);
                 }
                 break;
         }
     }
 
-    private void AddWrapper(CardInstance card)
+    private void AddWrapper(CardInstance card, int index)
     {
         var viewModel = new CardViewModel(card, _apiClient, _board);
         _wrappers[card] = viewModel;
-        Cards.Add(viewModel);
+        Cards.Insert(index, viewModel);
     }
 
     private void RemoveWrapper(CardInstance card)

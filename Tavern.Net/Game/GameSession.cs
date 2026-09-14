@@ -28,6 +28,15 @@ public sealed class GameSession
         (ZoneType.MainDeck, ZoneType.MaterialDeck),
     };
 
+    // Stack zones: a new arrival goes on top (index 0), matching how a physical pile works and
+    // how StackZoneView's peek fans them out. Field/Hand/Memory/MaterialDeck keep append order.
+    private static readonly HashSet<ZoneType> StackZones = new()
+    {
+        ZoneType.Banishment,
+        ZoneType.MainDeck,
+        ZoneType.Graveyard,
+    };
+
     private readonly Random _random;
 
     public List<Player> Players { get; } = new();
@@ -171,7 +180,15 @@ public sealed class GameSession
         }
 
         card.IsTapped = false;
-        player.GetZone(to).Cards.Add(card);
+        var destination = player.GetZone(to);
+        if (StackZones.Contains(to))
+        {
+            destination.Cards.Insert(0, card);
+        }
+        else
+        {
+            destination.Cards.Add(card);
+        }
 
         if (to == ZoneType.Field && fieldX is not null && fieldY is not null)
         {

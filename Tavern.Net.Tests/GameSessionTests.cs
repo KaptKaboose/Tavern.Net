@@ -67,6 +67,36 @@ public class GameSessionTests
     }
 
     [Fact]
+    public void MoveCard_ToStackZone_InsertsAtFront()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        var older = MakeCard("Older");
+        var newer = MakeCard("Newer");
+        player.GetZone(ZoneType.Graveyard).Cards.Add(older);
+        player.GetZone(ZoneType.Hand).Cards.Add(newer);
+
+        session.MoveCard(player, newer, ZoneType.Hand, ZoneType.Graveyard);
+
+        Assert.Equal(new[] { newer, older }, player.GetZone(ZoneType.Graveyard).Cards);
+    }
+
+    [Fact]
+    public void MoveCard_ToNonStackZone_AppendsAtEnd()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        var older = MakeCard("Older");
+        var newer = MakeCard("Newer");
+        player.GetZone(ZoneType.Hand).Cards.Add(older);
+        player.GetZone(ZoneType.Field).Cards.Add(newer);
+
+        session.MoveCard(player, newer, ZoneType.Field, ZoneType.Hand);
+
+        Assert.Equal(new[] { older, newer }, player.GetZone(ZoneType.Hand).Cards);
+    }
+
+    [Fact]
     public void MoveCard_ToField_SetsFieldPosition()
     {
         var session = new GameSession();
