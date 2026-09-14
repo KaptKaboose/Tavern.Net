@@ -94,6 +94,7 @@ public sealed class GameSession
             foreach (var card in allCards)
             {
                 card.IsTapped = false;
+                card.IsFlipped = false;
                 card.FieldX = 0;
                 card.FieldY = 0;
             }
@@ -180,6 +181,7 @@ public sealed class GameSession
         }
 
         card.IsTapped = false;
+        card.IsFlipped = false;
         var destination = player.GetZone(to);
         if (StackZones.Contains(to))
         {

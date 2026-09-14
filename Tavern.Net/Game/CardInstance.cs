@@ -27,6 +27,11 @@ public sealed partial class CardInstance : ObservableObject
     [ObservableProperty]
     private bool _isTapped;
 
+    /// <summary>Showing its other face (double-click) — a real flip for a double-faced card
+    /// (e.g. a Fatestone), or just the generic card back for an ordinary one.</summary>
+    [ObservableProperty]
+    private bool _isFlipped;
+
     /// <summary>Position on the Field's freeform canvas. Meaningless outside the Field zone.</summary>
     [ObservableProperty]
     private double _fieldX;

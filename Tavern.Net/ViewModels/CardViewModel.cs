@@ -1,14 +1,27 @@
+using System.ComponentModel;
 using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Tavern.Net.Game;
 using Tavern.Net.GameData;
+using Tavern.Net.GameData.Models;
 
 namespace Tavern.Net.ViewModels;
 
-/// <summary>Bindable wrapper around a <see cref="CardInstance"/>, including lazily-loaded artwork.</summary>
+/// <summary>
+/// Bindable wrapper around a <see cref="CardInstance"/>. Loads both faces up front — the front
+/// artwork, and the flip target (a real other-orientation image for a double-faced card like a
+/// Fatestone, or the generic card back for an ordinary one) — so double-clicking to flip
+/// (CardInstance.IsFlipped) just swaps which already-loaded bitmap <see cref="Artwork"/> points to.
+/// </summary>
 public sealed partial class CardViewModel : ObservableObject
 {
+    private static readonly Lazy<BitmapImage> GenericCardBack = new(() =>
+        LoadBitmap(new Uri("pack://application:,,,/GameData/Images/Grand%20Archive%20Back.jpg", UriKind.Absolute)));
+
     private readonly GrandArchiveApiClient _apiClient;
+
+    private BitmapImage? _frontArtwork;
+    private BitmapImage? _flippedArtwork;
 
     public CardInstance Instance { get; }
 
@@ -21,7 +34,9 @@ public sealed partial class CardViewModel : ObservableObject
     /// </summary>
     public GameBoardViewModel Board { get; }
 
-    public string Name => Instance.Card.Name;
+    private CardOtherOrientation? OtherOrientation => Instance.Card.PrimaryEdition?.OtherOrientations?.FirstOrDefault();
+
+    public string Name => Instance.IsFlipped ? (OtherOrientation?.Name ?? Instance.Card.Name) : Instance.Card.Name;
 
     public bool IsTapped => Instance.IsTapped;
 
@@ -33,31 +48,58 @@ public sealed partial class CardViewModel : ObservableObject
         Instance = instance;
         _apiClient = apiClient;
         Board = board;
-        Instance.PropertyChanged += (_, _) => OnPropertyChanged(nameof(IsTapped));
+        Instance.PropertyChanged += OnInstancePropertyChanged;
         _ = LoadArtworkAsync();
+    }
+
+    private void OnInstancePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        switch (e.PropertyName)
+        {
+            case nameof(CardInstance.IsTapped):
+                OnPropertyChanged(nameof(IsTapped));
+                break;
+            case nameof(CardInstance.IsFlipped):
+                OnPropertyChanged(nameof(Name));
+                Artwork = Instance.IsFlipped ? _flippedArtwork : _frontArtwork;
+                break;
+        }
     }
 
     private async Task LoadArtworkAsync()
     {
         var imagePath = Instance.Card.PrimaryEdition?.Image;
-        if (string.IsNullOrWhiteSpace(imagePath))
+        if (!string.IsNullOrWhiteSpace(imagePath))
         {
-            return;
+            var localPath = await _apiClient.GetCardImagePathAsync(imagePath);
+            if (localPath is not null)
+            {
+                _frontArtwork = LoadBitmap(new Uri(localPath, UriKind.Absolute));
+            }
         }
 
-        var localPath = await _apiClient.GetCardImagePathAsync(imagePath);
-        if (localPath is null)
+        var otherImagePath = OtherOrientation?.Edition?.Image;
+        if (!string.IsNullOrWhiteSpace(otherImagePath))
         {
-            return;
+            var flippedLocalPath = await _apiClient.GetCardImagePathAsync(otherImagePath);
+            _flippedArtwork = flippedLocalPath is not null ? LoadBitmap(new Uri(flippedLocalPath, UriKind.Absolute)) : GenericCardBack.Value;
+        }
+        else
+        {
+            _flippedArtwork = GenericCardBack.Value;
         }
 
+        Artwork = Instance.IsFlipped ? _flippedArtwork : _frontArtwork;
+    }
+
+    private static BitmapImage LoadBitmap(Uri uri)
+    {
         var bitmap = new BitmapImage();
         bitmap.BeginInit();
         bitmap.CacheOption = BitmapCacheOption.OnLoad;
-        bitmap.UriSource = new Uri(localPath, UriKind.Absolute);
+        bitmap.UriSource = uri;
         bitmap.EndInit();
         bitmap.Freeze();
-
-        Artwork = bitmap;
+        return bitmap;
     }
 }

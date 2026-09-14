@@ -50,10 +50,35 @@ public sealed class CardEdition
     /// The other face of this edition, for a genuinely double-faced card (e.g. a Fatestone that
     /// flips into a different named card) — the back face for an edition oriented "front", and
     /// vice versa. Empty for the vast majority of ordinary, single-faced cards; not a generic
-    /// "card back" texture (confirmed against the live API — there isn't one exposed here).
+    /// "card back" texture (confirmed against the live API — there isn't one exposed here). Each
+    /// entry is a full card-shaped object (its own name/effect/etc.) with a single nested
+    /// "edition" object carrying its image — not shaped like <see cref="CardEdition"/> itself,
+    /// which is why this is its own small type rather than reusing it.
     /// </summary>
     [JsonPropertyName("other_orientations")]
-    public List<CardEdition>? OtherOrientations { get; set; }
+    public List<CardOtherOrientation>? OtherOrientations { get; set; }
+}
+
+/// <summary>One entry of <see cref="CardEdition.OtherOrientations"/> — the other face of a double-faced card.</summary>
+public sealed class CardOtherOrientation
+{
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = "";
+
+    [JsonPropertyName("effect")]
+    public string? Effect { get; set; }
+
+    [JsonPropertyName("edition")]
+    public CardOtherOrientationEdition? Edition { get; set; }
+}
+
+public sealed class CardOtherOrientationEdition
+{
+    [JsonPropertyName("image")]
+    public string? Image { get; set; }
+
+    [JsonPropertyName("orientation")]
+    public string? Orientation { get; set; }
 }
 
 public sealed class CardDto

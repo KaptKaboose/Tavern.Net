@@ -97,6 +97,20 @@ public class GameSessionTests
     }
 
     [Fact]
+    public void MoveCard_ResetsFlippedState()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        var card = MakeCard();
+        card.IsFlipped = true;
+        player.GetZone(ZoneType.Hand).Cards.Add(card);
+
+        session.MoveCard(player, card, ZoneType.Hand, ZoneType.Field);
+
+        Assert.False(card.IsFlipped);
+    }
+
+    [Fact]
     public void MoveCard_ToField_SetsFieldPosition()
     {
         var session = new GameSession();

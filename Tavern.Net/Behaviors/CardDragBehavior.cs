@@ -33,6 +33,12 @@ public static class CardDragBehavior
     // can tell a real drag apart from a plain click (which taps/untaps the card instead).
     private static bool _dragStarted;
 
+    // ClickCount is read from the DOWN event, not the paired UP event — WPF's double-click
+    // tracking is tied to button-down, and reading it on MouseLeftButtonUp (as this originally
+    // did) reported 1 for every click, so a double-click never registered as anything but two
+    // separate taps. This flag carries that DOWN-event reading forward to the matching UP event.
+    private static bool _isDoubleClick;
+
     // The adorner for whichever drag is currently in progress (only one drag can be active at
     // a time), updated from GiveFeedback rather than DragOver — see OnGiveFeedback for why.
     private static DragAdorner? _activeAdorner;
@@ -92,13 +98,31 @@ public static class CardDragBehavior
         _dragStartScreenPoint = e.GetPosition(null);
         _grabOffsetInElement = e.GetPosition((IInputElement)sender);
         _dragStarted = false;
+        _isDoubleClick = e.ClickCount >= 2;
     }
 
-    /// <summary>A press-and-release that never crossed the drag threshold is a click — toggle tapped.</summary>
+    /// <summary>
+    /// A press-and-release that never crossed the drag threshold is a click: toggle tapped, or on
+    /// the second click of a double-click (per _isDoubleClick, read from the paired down event),
+    /// flip instead. A double click on a Field card therefore taps it once, as an accidental side
+    /// effect of the first click already committing before the second one arrives, then flips it —
+    /// tolerated rather than delaying every single click to see if a second one is coming, which
+    /// would make the much more common single-click tap feel laggy.
+    /// </summary>
     private static void OnPreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
         if (_dragStarted || sender is not FrameworkElement { DataContext: CardViewModel card })
         {
+            return;
+        }
+
+        if (_isDoubleClick)
+        {
+            if (card.Board.FlipCardCommand.CanExecute(card))
+            {
+                card.Board.FlipCardCommand.Execute(card);
+            }
+
             return;
         }
 

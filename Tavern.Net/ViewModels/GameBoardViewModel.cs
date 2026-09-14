@@ -161,6 +161,19 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         card.Instance.IsTapped = !card.Instance.IsTapped;
     }
 
+    /// <summary>Double-click target. Unlike tap, flipping isn't Field-only — it's meaningful
+    /// wherever you'd want to check what a double-faced card becomes.</summary>
+    [RelayCommand]
+    private void FlipCard(CardViewModel? card)
+    {
+        if (card is null)
+        {
+            return;
+        }
+
+        card.Instance.IsFlipped = !card.Instance.IsFlipped;
+    }
+
     [RelayCommand]
     private void ZoomCard(CardViewModel? card) => ZoomedCard = card;
 
