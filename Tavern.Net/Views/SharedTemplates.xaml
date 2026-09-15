@@ -131,4 +131,69 @@
         </Border>
     </DataTemplate>
 
+    <!-- Read-only card visual for the Major-event snapshot viewer — wraps CardSnapshotViewModel
+         (immutable CardSnapshot data, not a live CardInstance). No drag/tap/flip behavior, since
+         viewing history never mutates the live game, but right-click zoom is still enabled
+         (CardZoomBehavior routes CardSnapshotViewModel to GameBoardViewModel.ZoomSnapshotCardCommand
+         instead of ZoomCardCommand). -->
+    <DataTemplate x:Key="CardSnapshotTemplate" DataType="{x:Type vm:CardSnapshotViewModel}">
+        <Border Width="125" Height="175" CornerRadius="4" ClipToBounds="True"
+                BorderBrush="#55000000" BorderThickness="1"
+                Background="#333"
+                RenderTransformOrigin="0.5,0.5"
+                Cursor="Hand"
+                behaviors:CardZoomBehavior.IsZoomable="True">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Margin" Value="3"/>
+                    <Setter Property="RenderTransform">
+                        <Setter.Value><RotateTransform Angle="0"/></Setter.Value>
+                    </Setter>
+                    <Style.Triggers>
+                        <!-- A tapped card rotates in place without changing its own 125x175 layout
+                             box, so the rotated art visually overflows ~25px past each side into
+                             its neighbors. Extra left/right margin gives it room to breathe instead
+                             of getting clipped by the cards next to it. -->
+                        <DataTrigger Binding="{Binding Snapshot.IsTapped}" Value="True">
+                            <Setter Property="RenderTransform">
+                                <Setter.Value><RotateTransform Angle="90"/></Setter.Value>
+                            </Setter>
+                            <Setter Property="Margin" Value="28,3,28,3"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+
+            <Grid>
+                <Image Source="{Binding Artwork}" Stretch="UniformToFill"
+                       Visibility="{Binding Artwork, Converter={StaticResource NullToVisibility}}"/>
+                <TextBlock Text="{Binding Name}" TextWrapping="Wrap" TextAlignment="Center"
+                           VerticalAlignment="Center" Foreground="White" Margin="4" FontSize="14"
+                           Visibility="{Binding Artwork, Converter={StaticResource NullToVisibility}, ConverterParameter=Invert}"/>
+
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Top" HorizontalAlignment="Left"
+                            Margin="3" IsHitTestVisible="False">
+                    <Image Width="16" Height="16" Margin="0,0,1,0" Source="/GameData/Images/Tokens/ephemeral.png"
+                           Visibility="{Binding Snapshot.IsEphemeral, Converter={StaticResource BoolToVisibility}}"/>
+                    <Image Width="16" Height="16" Margin="0,0,1,0" Source="/GameData/Images/Tokens/ignited.png"
+                           Visibility="{Binding Snapshot.IsIgnited, Converter={StaticResource BoolToVisibility}}"/>
+                    <Image Width="16" Height="16" Margin="0,0,1,0" Source="/GameData/Images/Tokens/imbued.png"
+                           Visibility="{Binding Snapshot.IsImbued, Converter={StaticResource BoolToVisibility}}"/>
+                    <Image Width="16" Height="16" Margin="0,0,1,0" Source="/GameData/Images/Tokens/ranged.png"
+                           Visibility="{Binding Snapshot.IsRanged, Converter={StaticResource BoolToVisibility}}"/>
+                    <Image Width="16" Height="16" Margin="0,0,1,0" Source="/GameData/Images/Tokens/rooted.png"
+                           Visibility="{Binding Snapshot.IsRooted, Converter={StaticResource BoolToVisibility}}"/>
+                    <Image Width="16" Height="16" Source="/GameData/Images/Tokens/warded.png"
+                           Visibility="{Binding Snapshot.IsWarded, Converter={StaticResource BoolToVisibility}}"/>
+                </StackPanel>
+
+                <Border Background="#CC000000" CornerRadius="8" Padding="5,1" HorizontalAlignment="Right" VerticalAlignment="Top"
+                        Margin="3" IsHitTestVisible="False"
+                        Visibility="{Binding Snapshot.Counter, Converter={StaticResource IntToVisibility}}">
+                    <TextBlock Text="{Binding Snapshot.Counter}" Foreground="White" FontSize="11" FontWeight="Bold"/>
+                </Border>
+            </Grid>
+        </Border>
+    </DataTemplate>
+
 </ResourceDictionary>

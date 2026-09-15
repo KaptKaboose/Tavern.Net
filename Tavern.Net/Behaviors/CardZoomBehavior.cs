@@ -5,8 +5,9 @@ using Tavern.Net.ViewModels;
 namespace Tavern.Net.Behaviors;
 
 /// <summary>
-/// Attached behavior that turns any element whose DataContext is a
-/// <see cref="CardViewModel"/> into a right-click zoom trigger. Usage: set
+/// Attached behavior that turns any element whose DataContext is a <see cref="CardViewModel"/>
+/// (live board) or <see cref="CardSnapshotViewModel"/> (read-only snapshot viewer) into a
+/// right-click zoom trigger, routing to that DataContext's own Board and zoom command. Usage: set
 /// <c>behaviors:CardZoomBehavior.IsZoomable="True"</c> on the element in XAML.
 /// </summary>
 public static class CardZoomBehavior
@@ -36,16 +37,21 @@ public static class CardZoomBehavior
 
     private static void OnPreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (sender is not FrameworkElement { DataContext: CardViewModel card })
+        if (sender is not FrameworkElement element)
         {
             return;
         }
 
         e.Handled = true;
 
-        if (card.Board.ZoomCardCommand.CanExecute(card))
+        switch (element.DataContext)
         {
-            card.Board.ZoomCardCommand.Execute(card);
+            case CardViewModel card when card.Board.ZoomCardCommand.CanExecute(card):
+                card.Board.ZoomCardCommand.Execute(card);
+                break;
+            case CardSnapshotViewModel snapshot when snapshot.Board.ZoomSnapshotCardCommand.CanExecute(snapshot):
+                snapshot.Board.ZoomSnapshotCardCommand.Execute(snapshot);
+                break;
         }
     }
 }

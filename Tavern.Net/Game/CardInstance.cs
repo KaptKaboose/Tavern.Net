@@ -79,7 +79,7 @@ public sealed partial class CardInstance : ObservableObject
     }
 
     /// <summary>Clears the counter and every status — called whenever a card leaves the Field/
-    /// Champion zone, or is flipped, per GameSession.MoveCard and GameBoardViewModel.FlipCard.</summary>
+    /// Champion zone, or is flipped, per GameSession.MoveCard and GameSession.FlipCard.</summary>
     public void ResetCounterAndStatuses()
     {
         Counter = 0;
@@ -89,5 +89,33 @@ public sealed partial class CardInstance : ObservableObject
         IsRanged = false;
         IsRooted = false;
         IsWarded = false;
+    }
+
+    /// <summary>Toggles one of the six fixed statuses by name (matching the token image file names,
+    /// capitalized) — a single dispatch point so callers (GameSession.ToggleStatus) don't need
+    /// their own copy of this switch.</summary>
+    public void ToggleStatus(string name)
+    {
+        switch (name)
+        {
+            case "Ephemeral":
+                IsEphemeral = !IsEphemeral;
+                break;
+            case "Ignited":
+                IsIgnited = !IsIgnited;
+                break;
+            case "Imbued":
+                IsImbued = !IsImbued;
+                break;
+            case "Ranged":
+                IsRanged = !IsRanged;
+                break;
+            case "Rooted":
+                IsRooted = !IsRooted;
+                break;
+            case "Warded":
+                IsWarded = !IsWarded;
+                break;
+        }
     }
 }

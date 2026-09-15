@@ -291,11 +291,27 @@
                     <TextBlock Text="{Binding Stats.DamageDealtCount, StringFormat='Damage dealt: {0}'}" Foreground="#F7FAFC"/>
                 </StackPanel>
 
-                <TextBlock DockPanel.Dock="Top" Text="Play log" FontWeight="Bold" Foreground="#F7FAFC" Margin="0,4,0,4"/>
-                <ListBox ItemsSource="{Binding Stats.PlayLog}" ScrollViewer.VerticalScrollBarVisibility="Auto">
+                <!-- Curated, always-visible log — GameStats.PlayLog still records literally every
+                     action underneath, but is no longer shown directly here (see GameSession's
+                     RecordMajorEvent/RecordLifeOrDamageChange). Click an entry to open a read-only
+                     view of the board exactly as it was at that moment. -->
+                <TextBlock DockPanel.Dock="Top" Text="Major events" FontWeight="Bold" Foreground="#F7FAFC" Margin="0,4,0,4"/>
+                <ListBox ItemsSource="{Binding Stats.MajorEvents}" ScrollViewer.VerticalScrollBarVisibility="Auto">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
-                            <TextBlock Text="{Binding}" TextWrapping="Wrap"/>
+                            <Button Command="{Binding DataContext.ViewMajorEventCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                    CommandParameter="{Binding}"
+                                    HorizontalContentAlignment="Left" Padding="4,2"
+                                    Background="Transparent" BorderThickness="0" Foreground="#F7FAFC" Cursor="Hand">
+                                <TextBlock TextWrapping="Wrap">
+                                    <TextBlock.Text>
+                                        <MultiBinding StringFormat="Turn {0}: {1}">
+                                            <Binding Path="Turn" Converter="{StaticResource TurnCountDisplay}"/>
+                                            <Binding Path="Description"/>
+                                        </MultiBinding>
+                                    </TextBlock.Text>
+                                </TextBlock>
+                            </Button>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
@@ -346,6 +362,164 @@
                                 <ItemsPanelTemplate>
                                     <WrapPanel/>
                                 </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Grid>
+
+        <!-- Snapshot viewer: read-only board state at the moment of a clicked Major event
+             (GameBoardViewModel.ViewMajorEventCommand / GameSession.TakeSnapshot). Never touches
+             the live game — closing it just hides it, same as every other overlay here. Laid out
+             spatially like the live board (Field/Memory/Hand directly, Field cards flowed into a
+             wrapping grid rather than their live drag positions) rather than a flat list;
+             Champion/Graveyard/Banishment/Material/Main render as clickable pile boxes — click one to open its full
+             contents (ViewedSnapshotPile, below) — mirroring which zones StackZoneView renders as
+             piles on the live board. All cards use CardSnapshotTemplate — no drag/zoom/tap/flip,
+             since this is history, not the live board. -->
+        <Grid Grid.Column="0" Grid.ColumnSpan="2"
+              Visibility="{Binding ViewedMajorEvent, Converter={StaticResource NullToVisibility}}"
+              d:IsHidden="True">
+            <Button Command="{Binding CloseMajorEventViewCommand}" Focusable="False" Cursor="Arrow">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="#CC000000"/>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+
+            <Border Width="1360" MaxHeight="820" Margin="40" Padding="16"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Background="#2D3748" BorderBrush="White" BorderThickness="2" CornerRadius="10">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Foreground="White" FontSize="20" FontWeight="Bold" Margin="0,0,0,4"
+                               TextWrapping="Wrap">
+                        <TextBlock.Text>
+                            <MultiBinding StringFormat="Turn {0}: {1}">
+                                <Binding Path="ViewedMajorEvent.Turn" Converter="{StaticResource TurnCountDisplay}"/>
+                                <Binding Path="ViewedMajorEvent.Description"/>
+                            </MultiBinding>
+                        </TextBlock.Text>
+                    </TextBlock>
+                    <TextBlock DockPanel.Dock="Top" Foreground="#A0AEC0" Margin="0,0,0,12">
+                        <Run Text="{Binding ViewedMajorEvent.Snapshot.Life, StringFormat='Life: {0}'}"/>
+                        <Run Text="   "/>
+                        <Run Text="{Binding ViewedMajorEvent.Snapshot.DamageDealtCount, StringFormat='Damage dealt: {0}'}"/>
+                        <Run Text="   "/>
+                        <Run Text="{Binding ViewedMajorEvent.Snapshot.Phase, StringFormat='Phase: {0}'}"/>
+                    </TextBlock>
+
+                    <!-- Two fully independent columns (no RowSpan) — each sizes to its own natural
+                         content and sits at the top of the shared row, rather than one stretching
+                         to match the other's height. A RowSpan'd pile panel previously stretched
+                         to fill the Field+Memory+Hand height and then spread that inflated space
+                         evenly across its own rows (huge gaps), and the same interaction with
+                         Auto-sized rows was pushing Hand out of its own visible space. -->
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="290"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Left: Field / Memory / Hand, stacked. -->
+                            <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                                <!-- Field: cards flow left-to-right, wrapping to new rows as needed
+                                     (WrapPanel), rather than the live board's freeform x/y drag
+                                     positions — reconstructing the exact saved positions turned out
+                                     to be more trouble than it was worth for a read-only view. The
+                                     Border has no fixed Height, so it grows to fit however many rows
+                                     the cards wrap into instead of clipping them. -->
+                                <TextBlock Text="Field" Foreground="White" FontWeight="Bold" Margin="0,0,0,4"/>
+                                <Border MinHeight="190" Background="#1A202C" CornerRadius="6" Margin="0,0,0,12">
+                                    <ItemsControl ItemsSource="{Binding ViewedFieldCards}" ItemTemplate="{StaticResource CardSnapshotTemplate}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate><WrapPanel Margin="3"/></ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                    </ItemsControl>
+                                </Border>
+
+                                <!-- Memory -->
+                                <StackPanel Margin="0,0,0,12"
+                                            Visibility="{Binding HasViewedMemoryCards, Converter={StaticResource BoolToVisibility}}">
+                                    <TextBlock Text="Memory" Foreground="White" FontWeight="Bold" Margin="0,0,0,4"/>
+                                    <ItemsControl ItemsSource="{Binding ViewedMemoryCards}" ItemTemplate="{StaticResource CardSnapshotTemplate}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                    </ItemsControl>
+                                </StackPanel>
+
+                                <!-- Hand -->
+                                <StackPanel Visibility="{Binding HasViewedHandCards, Converter={StaticResource BoolToVisibility}}">
+                                    <TextBlock Text="Hand" Foreground="White" FontWeight="Bold" Margin="0,0,0,4"/>
+                                    <ItemsControl ItemsSource="{Binding ViewedHandCards}" ItemTemplate="{StaticResource CardSnapshotTemplate}">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- Right: piles — Champion, Graveyard, Banishment, Material, Main.
+                                 Click one to open its full contents (ViewSnapshotPileCommand,
+                                 below). Two per row (UniformGrid, not a width-dependent WrapPanel,
+                                 so it's always exactly 2 regardless of pile count). VerticalAlignment
+                                 Top keeps it sized to its own content instead of stretching to
+                                 match the left column's height. -->
+                            <ItemsControl Grid.Column="1" VerticalAlignment="Top" ItemsSource="{Binding ViewedSnapshotPiles}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><UniformGrid Columns="2"/></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Margin="0,0,0,8" HorizontalAlignment="Center">
+                                            <TextBlock Text="{Binding Zone}" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                                            <Button Padding="0" Background="Transparent" BorderThickness="0" Cursor="Hand"
+                                                    Command="{Binding DataContext.ViewSnapshotPileCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                    CommandParameter="{Binding}">
+                                                <Grid>
+                                                    <ContentControl Content="{Binding Cards[0]}" ContentTemplate="{StaticResource CardSnapshotTemplate}" IsHitTestVisible="False"/>
+                                                    <Border Background="#CC000000" CornerRadius="8" Padding="6,2" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,6">
+                                                        <TextBlock Foreground="White" FontWeight="Bold" Text="{Binding Cards.Count}"/>
+                                                    </Border>
+                                                </Grid>
+                                            </Button>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Grid>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Grid>
+
+        <!-- Snapshot pile popup: full contents of a clicked pile box (Champion/Graveyard/
+             Banishment/Material/Main), on top of the snapshot viewer itself. Read-only, same as
+             the snapshot viewer — closing it just hides it. -->
+        <Grid Grid.Column="0" Grid.ColumnSpan="2"
+              Visibility="{Binding ViewedSnapshotPile, Converter={StaticResource NullToVisibility}}"
+              d:IsHidden="True">
+            <Button Command="{Binding CloseSnapshotPileViewCommand}" Focusable="False" Cursor="Arrow">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="#CC000000"/>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+
+            <Border MaxWidth="1200" MaxHeight="820" Margin="40" Padding="16"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Background="#2D3748" BorderBrush="White" BorderThickness="2" CornerRadius="10">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="{Binding ViewedSnapshotPile.Zone}"
+                               Foreground="White" FontSize="20" FontWeight="Bold" Margin="0,0,0,12"/>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl ItemsSource="{Binding ViewedSnapshotPile.Cards}" ItemTemplate="{StaticResource CardSnapshotTemplate}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
                             </ItemsControl.ItemsPanel>
                         </ItemsControl>
                     </ScrollViewer>
@@ -527,24 +701,36 @@
                         Background="#2D3748" BorderBrush="White" BorderThickness="2" CornerRadius="10"
                         Visibility="{Binding ShowCounterAndStatusPanel, Converter={StaticResource BoolToVisibility}}">
                     <StackPanel>
+                        <!-- Status/Tap toggles bind IsChecked OneWay (display only) and drive the
+                             actual change through a Command instead — routing through
+                             GameSession.ToggleStatus/ToggleTapped so it's logged and (for Tap)
+                             breaks any open Life/Damage coalescing streak. A TwoWay binding here
+                             would double-toggle: WPF flips IsChecked itself on click, then the
+                             command would flip the real property again. -->
                         <TextBlock Text="Status" Foreground="#F7FAFC" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,8"/>
                         <UniformGrid Columns="2" Margin="0,0,0,16">
-                            <ToggleButton Style="{StaticResource StatusToggleStyle}" IsChecked="{Binding ZoomedCard.Instance.IsEphemeral, Mode=TwoWay}">
+                            <ToggleButton Style="{StaticResource StatusToggleStyle}" IsChecked="{Binding ZoomedCard.Instance.IsEphemeral, Mode=OneWay}"
+                                          Command="{Binding ToggleZoomedCardStatusCommand}" CommandParameter="Ephemeral">
                                 <Image Source="/GameData/Images/Tokens/ephemeral.png" Stretch="Uniform"/>
                             </ToggleButton>
-                            <ToggleButton Style="{StaticResource StatusToggleStyle}" IsChecked="{Binding ZoomedCard.Instance.IsIgnited, Mode=TwoWay}">
+                            <ToggleButton Style="{StaticResource StatusToggleStyle}" IsChecked="{Binding ZoomedCard.Instance.IsIgnited, Mode=OneWay}"
+                                          Command="{Binding ToggleZoomedCardStatusCommand}" CommandParameter="Ignited">
                                 <Image Source="/GameData/Images/Tokens/ignited.png" Stretch="Uniform"/>
                             </ToggleButton>
-                            <ToggleButton Style="{StaticResource StatusToggleStyle}" IsChecked="{Binding ZoomedCard.Instance.IsImbued, Mode=TwoWay}">
+                            <ToggleButton Style="{StaticResource StatusToggleStyle}" IsChecked="{Binding ZoomedCard.Instance.IsImbued, Mode=OneWay}"
+                                          Command="{Binding ToggleZoomedCardStatusCommand}" CommandParameter="Imbued">
                                 <Image Source="/GameData/Images/Tokens/imbued.png" Stretch="Uniform"/>
                             </ToggleButton>
-                            <ToggleButton Style="{StaticResource StatusToggleStyle}" IsChecked="{Binding ZoomedCard.Instance.IsRanged, Mode=TwoWay}">
+                            <ToggleButton Style="{StaticResource StatusToggleStyle}" IsChecked="{Binding ZoomedCard.Instance.IsRanged, Mode=OneWay}"
+                                          Command="{Binding ToggleZoomedCardStatusCommand}" CommandParameter="Ranged">
                                 <Image Source="/GameData/Images/Tokens/ranged.png" Stretch="Uniform"/>
                             </ToggleButton>
-                            <ToggleButton Style="{StaticResource StatusToggleStyle}" IsChecked="{Binding ZoomedCard.Instance.IsRooted, Mode=TwoWay}">
+                            <ToggleButton Style="{StaticResource StatusToggleStyle}" IsChecked="{Binding ZoomedCard.Instance.IsRooted, Mode=OneWay}"
+                                          Command="{Binding ToggleZoomedCardStatusCommand}" CommandParameter="Rooted">
                                 <Image Source="/GameData/Images/Tokens/rooted.png" Stretch="Uniform"/>
                             </ToggleButton>
-                            <ToggleButton Style="{StaticResource StatusToggleStyle}" IsChecked="{Binding ZoomedCard.Instance.IsWarded, Mode=TwoWay}">
+                            <ToggleButton Style="{StaticResource StatusToggleStyle}" IsChecked="{Binding ZoomedCard.Instance.IsWarded, Mode=OneWay}"
+                                          Command="{Binding ToggleZoomedCardStatusCommand}" CommandParameter="Warded">
                                 <Image Source="/GameData/Images/Tokens/warded.png" Stretch="Uniform"/>
                             </ToggleButton>
                         </UniformGrid>
@@ -557,19 +743,52 @@
                             <Button Style="{StaticResource CounterButtonStyle}" Content="+" Command="{Binding IncreaseCounterCommand}"/>
                         </StackPanel>
 
-                        <!-- Tap/untap: a direct two-way binding (not ToggleTappedCommand) is safe
-                             here specifically because this whole panel is already gated on the
-                             card being in Field or Champion — the same precondition
-                             ToggleTappedCommand itself checks for its other caller, a plain click
-                             on a Field card. -->
                         <TextBlock Text="Tapped" Foreground="#F7FAFC" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,16,0,8"/>
                         <ToggleButton Style="{StaticResource StatusToggleStyle}" HorizontalAlignment="Center"
-                                      IsChecked="{Binding ZoomedCard.Instance.IsTapped, Mode=TwoWay}">
+                                      IsChecked="{Binding ZoomedCard.Instance.IsTapped, Mode=OneWay}"
+                                      Command="{Binding ToggleZoomedCardTappedCommand}">
                             <TextBlock Text="Tap" Foreground="#F7FAFC" FontWeight="Bold" FontSize="14"/>
                         </ToggleButton>
                     </StackPanel>
                 </Border>
             </StackPanel>
+        </Grid>
+
+        <!-- Snapshot zoom overlay: right-click a card in the review panel (CardZoomBehavior routes
+             CardSnapshotViewModel to ZoomSnapshotCardCommand) opens it here full-size. No
+             status/counter side panel like the live Zoom overlay above — a snapshot is read-only,
+             nothing here is editable. Always shows FrontArtwork, the card's true printed face,
+             rather than whatever face happens to be showing on the board: the player owns every
+             card in their own snapshot, so there's no reason to hide it from them even if it's
+             currently flipped face-down. -->
+        <Grid Grid.Column="0" Grid.ColumnSpan="2"
+              Visibility="{Binding ZoomedSnapshotCard, Converter={StaticResource NullToVisibility}}"
+              d:IsHidden="True">
+            <Button Command="{Binding CloseSnapshotZoomCommand}" Focusable="False" Cursor="Arrow">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="#CC000000"/>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+
+            <Button Command="{Binding CloseSnapshotZoomCommand}" Focusable="False" Cursor="Arrow"
+                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border Width="420" Height="588" CornerRadius="10" ClipToBounds="True"
+                                Background="#333" BorderBrush="Black" BorderThickness="2">
+                            <Grid>
+                                <Image Source="{Binding ZoomedSnapshotCard.FrontArtwork}" Stretch="Uniform"
+                                       Visibility="{Binding ZoomedSnapshotCard.FrontArtwork, Converter={StaticResource NullToVisibility}}"/>
+                                <TextBlock Text="{Binding ZoomedSnapshotCard.Snapshot.Card.Name}" TextWrapping="Wrap" TextAlignment="Center"
+                                           VerticalAlignment="Center" Foreground="White" FontSize="28" Margin="16"
+                                           Visibility="{Binding ZoomedSnapshotCard.FrontArtwork, Converter={StaticResource NullToVisibility}, ConverterParameter=Invert}"/>
+                            </Grid>
+                        </Border>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
         </Grid>
     </Grid>
 </UserControl>

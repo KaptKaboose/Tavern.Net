@@ -45,6 +45,12 @@ public sealed class GameSession
     // there too instead of just once.
     private readonly HashSet<Player> _pendingFirstTurnFastForward = new();
 
+    // True while the most recent MajorEvent for this player is a Life/Damage change that hasn't
+    // been closed yet — by a tap, a flip, or any other Major event — and so can still absorb the
+    // next same-direction Life/Damage change instead of starting a new log entry. See
+    // RecordLifeOrDamageChange and BreakCoalescingStreak.
+    private readonly Dictionary<Player, bool> _canCoalesceLastMajorEvent = new();
+
     private readonly Random _random;
 
     public List<Player> Players { get; } = new();
@@ -98,6 +104,8 @@ public sealed class GameSession
         foreach (var player in Players)
         {
             player.Stats.PlayLog.Clear();
+            player.Stats.MajorEvents.Clear();
+            _canCoalesceLastMajorEvent[player] = false;
             player.Stats.TurnCount = 0;
             player.Life = 15;
             player.Stats.DamageDealtCount = 0;
@@ -201,6 +209,8 @@ public sealed class GameSession
                     DrawStartingHand(player);
                 }
             }
+
+            RecordMajorEvent(player, "Game started.", insertAtStart: true);
         }
 
         SetPhase(TurnPhase.Materialization, Players[0]);
@@ -339,6 +349,22 @@ public sealed class GameSession
         }
 
         player.Stats.Log($"Moved {card.Card.Name} from {from} to {to}.");
+
+        switch (to)
+        {
+            case ZoneType.Field:
+                RecordMajorEvent(player, $"Played {card.Card.Name} to the Field.");
+                break;
+            case ZoneType.Graveyard:
+                RecordMajorEvent(player, $"{card.Card.Name} went to the Graveyard.");
+                break;
+            case ZoneType.Banishment:
+                RecordMajorEvent(player, $"Banished {card.Card.Name}.");
+                break;
+            case ZoneType.Champion:
+                RecordMajorEvent(player, $"{card.Card.Name} materialized as Champion.");
+                break;
+        }
     }
 
     /// <summary>
@@ -360,6 +386,7 @@ public sealed class GameSession
             };
             player.GetZone(ZoneType.Field).Cards.Add(spawned);
             player.Stats.Log($"Summoned {card.Card.Name} token.");
+            RecordMajorEvent(player, $"Summoned {card.Card.Name} token.");
             return;
         }
 
@@ -368,6 +395,7 @@ public sealed class GameSession
             if (player.GetZone(ZoneType.Field).Cards.Remove(card))
             {
                 player.Stats.Log($"Discarded {card.Card.Name} token.");
+                RecordMajorEvent(player, $"Discarded {card.Card.Name} token.");
             }
         }
     }
@@ -383,6 +411,7 @@ public sealed class GameSession
     {
         player.Life += delta;
         player.Stats.Log($"Life changed by {delta:+0;-0} to {player.Life}.");
+        RecordLifeOrDamageChange(player, MajorEventKind.LifeChanged, "Life", delta);
     }
 
     /// <summary>Adjusts the running damage-dealt tally (a manual count, since goldfishing has no
@@ -392,12 +421,49 @@ public sealed class GameSession
     {
         player.Stats.DamageDealtCount = Math.Max(0, player.Stats.DamageDealtCount + delta);
         player.Stats.Log($"Damage dealt changed by {delta:+0;-0} to {player.Stats.DamageDealtCount}.");
+        RecordLifeOrDamageChange(player, MajorEventKind.DamageDealt, "Damage dealt", delta);
     }
 
     public void NextTurn(Player player)
     {
         player.Stats.TurnCount++;
         player.Stats.Log("New turn.");
+        RecordMajorEvent(player, $"Turn {player.Stats.TurnCount + 1} started.");
+    }
+
+    /// <summary>Toggles a card's tapped state — meaningful in play (Field/Champion), but callable
+    /// on any card; GameBoardViewModel gates which UI gestures are allowed to invoke it for which
+    /// zones. Breaks any open Life/Damage coalescing streak: tapping is how most cards attack, so
+    /// two damage-dealt bursts separated by a different card tapping are genuinely separate
+    /// instances, not one running total (see RecordLifeOrDamageChange).</summary>
+    public void ToggleTapped(Player player, CardInstance card)
+    {
+        card.IsTapped = !card.IsTapped;
+        player.Stats.Log($"{(card.IsTapped ? "Tapped" : "Untapped")} {card.Card.Name}.");
+        BreakCoalescingStreak(player);
+    }
+
+    /// <summary>Flips a card and resets its counter/statuses (same as leaving Field/Champion —
+    /// see CardInstance.ResetCounterAndStatuses) and breaks any open Life/Damage coalescing streak,
+    /// same reasoning as ToggleTapped.</summary>
+    public void FlipCard(Player player, CardInstance card)
+    {
+        card.IsFlipped = !card.IsFlipped;
+        card.ResetCounterAndStatuses();
+        player.Stats.Log($"Flipped {card.Card.Name}.");
+        BreakCoalescingStreak(player);
+    }
+
+    public void AdjustCounter(Player player, CardInstance card, int delta)
+    {
+        card.Counter += delta;
+        player.Stats.Log($"{card.Card.Name}'s counter changed by {delta:+0;-0} to {card.Counter}.");
+    }
+
+    public void ToggleStatus(Player player, CardInstance card, string statusName)
+    {
+        card.ToggleStatus(statusName);
+        player.Stats.Log($"Toggled {statusName} on {card.Card.Name}.");
     }
 
     public void DrawStartingHand(Player player)
@@ -452,6 +518,11 @@ public sealed class GameSession
     public void WakeUp(Player player)
     {
         foreach (var card in player.GetZone(ZoneType.Field).Cards)
+        {
+            card.IsTapped = false;
+        }
+
+        foreach (var card in player.GetZone(ZoneType.Champion).Cards)
         {
             card.IsTapped = false;
         }
@@ -525,6 +596,93 @@ public sealed class GameSession
         }
 
         player.Stats.Log($"Glimpsed {top.Count + bottom.Count} card(s): {top.Count} to the top, {bottom.Count} to the bottom.");
+    }
+
+    /// <summary>
+    /// Records a non-coalescing Major event: always a new MajorEvents entry, and always closes any
+    /// open Life/Damage coalescing streak (see RecordLifeOrDamageChange) — even a card just being
+    /// played is a distinct enough moment that a life change before and after it shouldn't merge.
+    /// <paramref name="insertAtStart"/> is only for StartNewGame's own "Game started." entry — the
+    /// snapshot still has to be taken after the base champion materializes and the opening hand is
+    /// drawn (otherwise it'd show an empty board), but the entry itself needs to read first in the
+    /// log, ahead of the materialization event that setup incidentally records along the way.
+    /// </summary>
+    private void RecordMajorEvent(Player player, string description, bool insertAtStart = false)
+    {
+        var majorEvent = new MajorEvent
+        {
+            Description = description,
+            Kind = MajorEventKind.Other,
+            Turn = player.Stats.TurnCount,
+            Snapshot = TakeSnapshot(player),
+        };
+
+        if (insertAtStart)
+        {
+            player.Stats.MajorEvents.Insert(0, majorEvent);
+        }
+        else
+        {
+            player.Stats.MajorEvents.Add(majorEvent);
+        }
+
+        _canCoalesceLastMajorEvent[player] = false;
+    }
+
+    /// <summary>
+    /// Records a Life or Damage change — extending the previous MajorEvents entry in place (same
+    /// kind, same direction, streak still open) rather than adding a new one, so "-1, -1, -1" reads
+    /// as a single "Life decreased by 3" instead of three separate entries. A direction change, a
+    /// tap, a flip, or any other Major event closes the streak (see BreakCoalescingStreak and
+    /// RecordMajorEvent), so the next change always starts a fresh entry.
+    /// </summary>
+    private void RecordLifeOrDamageChange(Player player, MajorEventKind kind, string label, int delta)
+    {
+        if (_canCoalesceLastMajorEvent.GetValueOrDefault(player)
+            && player.Stats.MajorEvents.Count > 0
+            && player.Stats.MajorEvents[^1].Kind == kind
+            && Math.Sign(player.Stats.MajorEvents[^1].NetDelta) == Math.Sign(delta))
+        {
+            var last = player.Stats.MajorEvents[^1];
+            last.NetDelta += delta;
+            last.Description = FormatNetDelta(label, last.NetDelta);
+            last.Snapshot = TakeSnapshot(player);
+            return;
+        }
+
+        player.Stats.MajorEvents.Add(new MajorEvent
+        {
+            Description = FormatNetDelta(label, delta),
+            Kind = kind,
+            NetDelta = delta,
+            Turn = player.Stats.TurnCount,
+            Snapshot = TakeSnapshot(player),
+        });
+
+        _canCoalesceLastMajorEvent[player] = true;
+    }
+
+    private static string FormatNetDelta(string label, int netDelta)
+        => netDelta >= 0 ? $"{label} increased by {netDelta}." : $"{label} decreased by {-netDelta}.";
+
+    /// <summary>Closes any open Life/Damage coalescing streak without adding a MajorEvents entry
+    /// of its own — used by ToggleTapped/FlipCard, which are significant enough to separate combat
+    /// instances but not significant enough to show up in the log themselves.</summary>
+    private void BreakCoalescingStreak(Player player) => _canCoalesceLastMajorEvent[player] = false;
+
+    /// <summary>
+    /// A read-only copy of everything about the player's board worth showing in a historical Play
+    /// Log view — every zone except Tokens (a static catalog, not game state; see StartNewGame's
+    /// own reasoning for excluding it elsewhere).
+    /// </summary>
+    private GameSnapshot TakeSnapshot(Player player)
+    {
+        var cards = player.Zones.Values
+            .Where(zone => zone.Type != ZoneType.Tokens)
+            .SelectMany(zone => zone.Cards.Select(card => CardSnapshot.From(card, zone.Type)))
+            .ToList();
+
+        return new GameSnapshot(player.Life, player.Stats.DamageDealtCount, player.Stats.TurnCount, CurrentPhase, cards);
     }
 
     void SetPhase(TurnPhase phase, Player player)

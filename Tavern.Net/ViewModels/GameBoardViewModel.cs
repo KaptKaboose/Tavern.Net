@@ -70,6 +70,114 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     [ObservableProperty]
     private PeekedZoneInfo? _peekedZone;
 
+    /// <summary>The Major event currently being viewed (read-only) in the snapshot overlay, or
+    /// null when it's closed. Viewing never mutates the live game — see GameSession.TakeSnapshot's
+    /// own doc comment on why this is a display-only feature, not a rollback.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasViewedMemoryCards), nameof(HasViewedHandCards))]
+    private MajorEvent? _viewedMajorEvent;
+
+    /// <summary>Which zone's full contents are currently drilled into from the snapshot viewer's
+    /// pile boxes (Champion, Graveyard, Banishment, Material, Main — the same zones StackZoneView
+    /// renders as piles on the live board), or null when that secondary popup is closed.</summary>
+    [ObservableProperty]
+    private SnapshotZoneGroup? _viewedSnapshotPile;
+
+    /// <summary>The snapshot card currently shown full-size in its own zoom overlay (right-click,
+    /// via CardZoomBehavior), or null when it's closed. Parallel to <see cref="ZoomedCard"/> but
+    /// with no status/counter side panel — a snapshot is read-only, so there's nothing to edit.</summary>
+    [ObservableProperty]
+    private CardSnapshotViewModel? _zoomedSnapshotCard;
+
+    // Display order for the snapshot viewer's pile boxes — not the ZoneType enum's declaration
+    // order, which reads oddly here. Field/Hand/Memory aren't included: they're spread out
+    // directly (see ViewedFieldCards/ViewedHandCards/ViewedMemoryCards) rather than shown as
+    // click-to-open piles, matching how the live board renders them. Paired to match the
+    // UniformGrid's 2-per-row layout: Champion+Material, then Graveyard+Banishment, then Main
+    // alone.
+    private static readonly ZoneType[] SnapshotPileOrder =
+    {
+        ZoneType.Champion,
+        ZoneType.MaterialDeck,
+        ZoneType.Graveyard,
+        ZoneType.Banishment,
+        ZoneType.MainDeck,
+    };
+
+    /// <summary>The pile boxes shown in the snapshot viewer (empty ones omitted) — click one to
+    /// open ViewedSnapshotPile. Rebuilt whenever ViewedMajorEvent changes.</summary>
+    public ObservableCollection<SnapshotZoneGroup> ViewedSnapshotPiles { get; } = new();
+
+    /// <summary>Field cards for the snapshot viewer — flowed into a wrapping grid rather than each
+    /// CardSnapshot's own captured FieldX/FieldY, since reconstructing the live board's freeform
+    /// drag positions turned out to be more trouble than it was worth for a read-only view.</summary>
+    public ObservableCollection<CardSnapshotViewModel> ViewedFieldCards { get; } = new();
+
+    public ObservableCollection<CardSnapshotViewModel> ViewedHandCards { get; } = new();
+
+    public ObservableCollection<CardSnapshotViewModel> ViewedMemoryCards { get; } = new();
+
+    public bool HasViewedMemoryCards => ViewedMemoryCards.Count > 0;
+
+    public bool HasViewedHandCards => ViewedHandCards.Count > 0;
+
+    partial void OnViewedMajorEventChanged(MajorEvent? value)
+    {
+        ViewedSnapshotPiles.Clear();
+        ViewedFieldCards.Clear();
+        ViewedHandCards.Clear();
+        ViewedMemoryCards.Clear();
+        ViewedSnapshotPile = null;
+        ZoomedSnapshotCard = null;
+
+        if (value is null)
+        {
+            return;
+        }
+
+        foreach (var group in value.Snapshot.Cards.GroupBy(c => c.Zone))
+        {
+            var cards = group.Select(c => new CardSnapshotViewModel(c, _apiClient, this)).ToList();
+            switch (group.Key)
+            {
+                case ZoneType.Field:
+                    foreach (var card in cards)
+                    {
+                        ViewedFieldCards.Add(card);
+                    }
+
+                    break;
+                case ZoneType.Hand:
+                    foreach (var card in cards)
+                    {
+                        ViewedHandCards.Add(card);
+                    }
+
+                    break;
+                case ZoneType.Memory:
+                    foreach (var card in cards)
+                    {
+                        ViewedMemoryCards.Add(card);
+                    }
+
+                    break;
+                default:
+                    ViewedSnapshotPiles.Add(new SnapshotZoneGroup(group.Key, cards));
+                    break;
+            }
+        }
+
+        // Re-sort piles into SnapshotPileOrder — GroupBy above doesn't guarantee any particular
+        // zone order, and Tokens (excluded from TakeSnapshot already) is the only zone that could
+        // otherwise slip through the default case, so this also acts as a final filter.
+        var ordered = ViewedSnapshotPiles.OrderBy(g => Array.IndexOf(SnapshotPileOrder, g.Zone)).ToList();
+        ViewedSnapshotPiles.Clear();
+        foreach (var group in ordered)
+        {
+            ViewedSnapshotPiles.Add(group);
+        }
+    }
+
     /// <summary>Mirrors <see cref="GameSession.CurrentPhase"/> so the board can bind to it.</summary>
     [ObservableProperty]
     private TurnPhase _currentPhase;
@@ -422,8 +530,9 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     /// CardTemplate-rendered place a Champion card ever appears is inside its own Peek overlay
     /// (the pile itself renders through StackZoneView's custom art layer, not CardTemplate), and
     /// clicking a card there is for browsing the stack, not toggling play state. Champion's own
-    /// tap control lives in the Zoom overlay's side panel instead, wired as a direct binding that
-    /// bypasses this command entirely — see GameBoardView.xaml's "Tapped" ToggleButton.
+    /// tap control lives in the Zoom overlay's side panel instead — see ToggleZoomedCardTapped.
+    /// The actual mutation lives in GameSession.ToggleTapped now, not here, so it can log and
+    /// participate in Life/Damage coalescing (see GameSession's own doc comments).
     /// </summary>
     [RelayCommand]
     private void ToggleTapped(CardViewModel? card)
@@ -439,7 +548,7 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
             return;
         }
 
-        card.Instance.IsTapped = !card.Instance.IsTapped;
+        _session.ToggleTapped(Player, card.Instance);
     }
 
     /// <summary>
@@ -464,12 +573,34 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
             return;
         }
 
-        card.Instance.IsFlipped = !card.Instance.IsFlipped;
-        card.Instance.ResetCounterAndStatuses();
+        _session.FlipCard(Player, card.Instance);
     }
 
     [RelayCommand]
     private void ZoomCard(CardViewModel? card) => ZoomedCard = card;
+
+    /// <summary>Tap toggle for the Zoom overlay's side panel — bypasses ToggleTapped's Field-only
+    /// gate deliberately, since this panel is already only ever visible for a Field/Champion card
+    /// (see ShowCounterAndStatusPanel).</summary>
+    [RelayCommand]
+    private void ToggleZoomedCardTapped()
+    {
+        if (ZoomedCard is not null)
+        {
+            _session.ToggleTapped(Player, ZoomedCard.Instance);
+        }
+    }
+
+    /// <summary>Status toggle for the Zoom overlay's side panel — statusName matches one of the
+    /// six names CardInstance.ToggleStatus recognizes (e.g. "Ranged").</summary>
+    [RelayCommand]
+    private void ToggleZoomedCardStatus(string? statusName)
+    {
+        if (ZoomedCard is not null && statusName is not null)
+        {
+            _session.ToggleStatus(Player, ZoomedCard.Instance, statusName);
+        }
+    }
 
     /// <summary>+/- for the Zoom overlay's counter control — operates on whichever card is
     /// currently zoomed in on.</summary>
@@ -478,7 +609,7 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     {
         if (ZoomedCard is not null)
         {
-            ZoomedCard.Instance.Counter++;
+            _session.AdjustCounter(Player, ZoomedCard.Instance, 1);
         }
     }
 
@@ -487,12 +618,18 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     {
         if (ZoomedCard is not null)
         {
-            ZoomedCard.Instance.Counter--;
+            _session.AdjustCounter(Player, ZoomedCard.Instance, -1);
         }
     }
 
     [RelayCommand]
     private void CloseZoom() => ZoomedCard = null;
+
+    [RelayCommand]
+    private void ZoomSnapshotCard(CardSnapshotViewModel? card) => ZoomedSnapshotCard = card;
+
+    [RelayCommand]
+    private void CloseSnapshotZoom() => ZoomedSnapshotCard = null;
 
     /// <summary>Clicking the same pile again closes it; clicking a different one switches to it.</summary>
     [RelayCommand]
@@ -508,6 +645,22 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
 
     [RelayCommand]
     private void ClosePeek() => PeekedZone = null;
+
+    /// <summary>Opens the read-only snapshot viewer for a Major event — see GameSession.TakeSnapshot
+    /// and ViewedMajorEvent's own doc comments on why this never touches the live game.</summary>
+    [RelayCommand]
+    private void ViewMajorEvent(MajorEvent? majorEvent) => ViewedMajorEvent = majorEvent;
+
+    [RelayCommand]
+    private void CloseMajorEventView() => ViewedMajorEvent = null;
+
+    /// <summary>Opens the secondary popup showing a pile's full contents (Champion, Graveyard,
+    /// Banishment, Material, Main — see ViewedSnapshotPiles' own doc comment).</summary>
+    [RelayCommand]
+    private void ViewSnapshotPile(SnapshotZoneGroup? group) => ViewedSnapshotPile = group;
+
+    [RelayCommand]
+    private void CloseSnapshotPileView() => ViewedSnapshotPile = null;
 
     private void Move(CardViewModel? card, ZoneType destination, double? fieldX = null, double? fieldY = null)
     {
