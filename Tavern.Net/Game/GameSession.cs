@@ -108,7 +108,14 @@ public sealed class GameSession
             _canCoalesceLastMajorEvent[player] = false;
             player.Stats.TurnCount = 0;
             player.Life = 15;
+            player.Stats.CardsDrawnCount = 0;
             player.Stats.DamageDealtCount = 0;
+            player.Stats.LifeRecoveredCount = 0;
+            player.Stats.DeadTurnsCount = 0;
+            player.Stats.PlayedCardThisTurn = false;
+            player.Stats.CardsPlayedCount = 0;
+            player.Stats.CardsLostToMemoryDecayCount = 0;
+            player.Stats.ChampionLevelMilestones.Clear();
             _pendingFirstTurnFastForward.Add(player);
 
             // Tokens is excluded from both the sweep and the clear: it's a static, always-present
@@ -319,12 +326,17 @@ public sealed class GameSession
         if (championZoneAffected)
         {
             var newTop = championZone.Cards.FirstOrDefault();
+            if (newTop is not null && newTop.Card.Level is double newTopLevel)
+            {
+                RecordChampionLevelReached(player, newTopLevel);
+            }
+
             if (oldTop is not null && newTop is not null && oldTop != newTop)
             {
                 var delta = (int)((newTop.Card.Life ?? 0) - (oldTop.Card.Life ?? 0));
                 if (delta != 0)
                 {
-                    AdjustLife(player, delta);
+                    AdjustLife(player, delta, trackRecovery: false);
                 }
 
                 // The new top inherits the old top's counter/statuses — it's the same physical
@@ -354,11 +366,22 @@ public sealed class GameSession
         {
             case ZoneType.Field:
                 RecordMajorEvent(player, $"Played {card.Card.Name} to the Field.");
+                if (from == ZoneType.Hand)
+                {
+                    player.Stats.PlayedCardThisTurn = true;
+                    player.Stats.CardsPlayedCount++;
+                }
+
                 break;
             case ZoneType.Graveyard:
                 RecordMajorEvent(player, $"{card.Card.Name} went to the Graveyard.");
                 break;
             case ZoneType.Banishment:
+                if (from == ZoneType.Memory)
+                {
+                    player.Stats.CardsLostToMemoryDecayCount++;
+                }
+
                 RecordMajorEvent(player, $"Banished {card.Card.Name}.");
                 break;
             case ZoneType.Champion:
@@ -407,9 +430,17 @@ public sealed class GameSession
         card.FieldY = y;
     }
 
-    public void AdjustLife(Player player, int delta)
+    /// <param name="trackRecovery">Whether a positive delta counts toward LifeRecoveredCount —
+    /// true for the Life panel's own +/- buttons, false for a Champion level-up/down's automatic
+    /// life shift, which isn't the player "recovering" anything.</param>
+    public void AdjustLife(Player player, int delta, bool trackRecovery = true)
     {
         player.Life += delta;
+        if (trackRecovery && delta > 0)
+        {
+            player.Stats.LifeRecoveredCount += delta;
+        }
+
         player.Stats.Log($"Life changed by {delta:+0;-0} to {player.Life}.");
         RecordLifeOrDamageChange(player, MajorEventKind.LifeChanged, "Life", delta);
     }
@@ -426,6 +457,13 @@ public sealed class GameSession
 
     public void NextTurn(Player player)
     {
+        if (!player.Stats.PlayedCardThisTurn)
+        {
+            player.Stats.DeadTurnsCount++;
+        }
+
+        player.Stats.PlayedCardThisTurn = false;
+
         player.Stats.TurnCount++;
         player.Stats.Log("New turn.");
         RecordMajorEvent(player, $"Turn {player.Stats.TurnCount + 1} started.");
@@ -596,6 +634,20 @@ public sealed class GameSession
         }
 
         player.Stats.Log($"Glimpsed {top.Count + bottom.Count} card(s): {top.Count} to the top, {bottom.Count} to the bottom.");
+    }
+
+    /// <summary>Records the turn (1-based) a Champion level was first reached — a no-op if that
+    /// level has already been recorded, since only the first time matters for a goldfish run's
+    /// "how fast did I get there" purposes. Called for every Champion-zone top change, including
+    /// the base champion's initial materialization (level 0) at game start.</summary>
+    private static void RecordChampionLevelReached(Player player, double level)
+    {
+        if (player.Stats.ChampionLevelMilestones.Any(m => m.Level == level))
+        {
+            return;
+        }
+
+        player.Stats.ChampionLevelMilestones.Add(new ChampionLevelMilestone(level, player.Stats.TurnCount + 1));
     }
 
     /// <summary>

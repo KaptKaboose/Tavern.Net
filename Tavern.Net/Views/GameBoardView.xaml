@@ -286,10 +286,85 @@
         <Border Grid.Column="1" BorderBrush="#33FFFFFF" BorderThickness="1,0,0,0" Padding="10">
             <DockPanel>
                 <TextBlock DockPanel.Dock="Top" Text="Session stats" FontSize="16" FontWeight="Bold" Foreground="#F7FAFC" Margin="0,0,0,8"/>
-                <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
-                    <TextBlock Text="{Binding Stats.CardsDrawnCount, StringFormat='Cards drawn: {0}'}" Foreground="#F7FAFC"/>
-                    <TextBlock Text="{Binding Stats.DamageDealtCount, StringFormat='Damage dealt: {0}'}" Foreground="#F7FAFC"/>
-                </StackPanel>
+
+                <!-- Each stat is a label/value pair (muted label, bold value) inside a shared card
+                     background, rather than plain "Label: value" lines — same info, easier to scan. -->
+                <Border DockPanel.Dock="Top" Background="#2D3748" CornerRadius="8" Padding="12,10" Margin="0,0,0,12">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,5">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Cards drawn" Foreground="#A0AEC0"/>
+                            <TextBlock Grid.Column="1" Text="{Binding Stats.CardsDrawnCount}" Foreground="#F7FAFC" FontWeight="Bold"/>
+                        </Grid>
+                        <Grid Margin="0,0,0,5">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Avg. cards/turn" Foreground="#A0AEC0"/>
+                            <TextBlock Grid.Column="1" Text="{Binding Stats.AverageCardsPlayedPerTurn, StringFormat={}{0:0.0}}" Foreground="#F7FAFC" FontWeight="Bold"/>
+                        </Grid>
+                        <Grid Margin="0,0,0,5">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Damage dealt" Foreground="#A0AEC0"/>
+                            <TextBlock Grid.Column="1" Text="{Binding Stats.DamageDealtCount}" Foreground="#F7FAFC" FontWeight="Bold"/>
+                        </Grid>
+                        <Grid Margin="0,0,0,5">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Life recovered" Foreground="#A0AEC0"/>
+                            <TextBlock Grid.Column="1" Text="{Binding Stats.LifeRecoveredCount}" Foreground="#F7FAFC" FontWeight="Bold"/>
+                        </Grid>
+                        <Grid Margin="0,0,0,5">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Dead turns" Foreground="#A0AEC0"/>
+                            <TextBlock Grid.Column="1" Text="{Binding Stats.DeadTurnsCount}" Foreground="#F7FAFC" FontWeight="Bold"/>
+                        </Grid>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Lost to Memory decay" Foreground="#A0AEC0"/>
+                            <TextBlock Grid.Column="1" Text="{Binding Stats.CardsLostToMemoryDecayCount}" Foreground="#F7FAFC" FontWeight="Bold"/>
+                        </Grid>
+
+                        <!-- Champion level milestones as small pills rather than one-per-line —
+                             there are rarely more than 2-3, so a wrapping row reads better than a
+                             list. -->
+                        <TextBlock Text="Champion levels" Foreground="#A0AEC0" Margin="0,10,0,4"/>
+                        <ItemsControl ItemsSource="{Binding Stats.ChampionLevelMilestones}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Background="#4A5568" CornerRadius="10" Padding="8,3" Margin="0,0,6,6">
+                                        <TextBlock Foreground="#F7FAFC" FontSize="12">
+                                            <TextBlock.Text>
+                                                <MultiBinding StringFormat="Lv {0} · T{1}">
+                                                    <Binding Path="Level"/>
+                                                    <Binding Path="Turn"/>
+                                                </MultiBinding>
+                                            </TextBlock.Text>
+                                        </TextBlock>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
 
                 <!-- Curated, always-visible log — GameStats.PlayLog still records literally every
                      action underneath, but is no longer shown directly here (see GameSession's
