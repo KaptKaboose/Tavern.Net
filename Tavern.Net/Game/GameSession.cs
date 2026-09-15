@@ -328,6 +328,12 @@ public sealed class GameSession
                 newTop.IsRooted = oldTopIsRooted;
                 newTop.IsWarded = oldTopIsWarded;
                 oldTop.ResetCounterAndStatuses();
+
+                // The old top's tapped state is specific to it having been the active face —
+                // once it's no longer on top (buried, or having left Champion entirely), that
+                // no longer applies. Unlike counter/statuses this isn't transferred to newTop,
+                // just cleared.
+                oldTop.IsTapped = false;
             }
         }
 

@@ -319,7 +319,15 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         }
     }
 
-    /// <summary>Tap state only means something on the Field, so a click anywhere else is a no-op.</summary>
+    /// <summary>
+    /// Tap state only means something on the Field, so a click anywhere else is a no-op — this
+    /// deliberately excludes Champion too, even though tapping is meaningful there: the only
+    /// CardTemplate-rendered place a Champion card ever appears is inside its own Peek overlay
+    /// (the pile itself renders through StackZoneView's custom art layer, not CardTemplate), and
+    /// clicking a card there is for browsing the stack, not toggling play state. Champion's own
+    /// tap control lives in the Zoom overlay's side panel instead, wired as a direct binding that
+    /// bypasses this command entirely — see GameBoardView.xaml's "Tapped" ToggleButton.
+    /// </summary>
     [RelayCommand]
     private void ToggleTapped(CardViewModel? card)
     {
@@ -337,13 +345,24 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         card.Instance.IsTapped = !card.Instance.IsTapped;
     }
 
-    /// <summary>Double-click target. Unlike tap, flipping isn't Field-only — it's meaningful
-    /// wherever you'd want to check what a double-faced card becomes. Also resets the counter/
-    /// statuses, per the same rule GameSession.MoveCard applies on every zone change.</summary>
+    /// <summary>
+    /// Double-click target. Unlike tap, flipping isn't Field-only in general — it's meaningful
+    /// wherever you'd want to check what a double-faced card becomes — but it's specifically
+    /// excluded for Champion: a champion's Peek overlay is the only CardTemplate context it ever
+    /// appears in (see ToggleTapped's own comment), and flipping there would also wipe the
+    /// ResetCounterAndStatuses side effect onto a card that might be a buried, still-relevant
+    /// champion holding stats transferred from a prior level-up (GameSession.MoveCard).
+    /// </summary>
     [RelayCommand]
     private void FlipCard(CardViewModel? card)
     {
         if (card is null)
+        {
+            return;
+        }
+
+        var zone = Player.Zones.FirstOrDefault(kv => kv.Value.Cards.Contains(card.Instance)).Value?.Type;
+        if (zone == ZoneType.Champion)
         {
             return;
         }

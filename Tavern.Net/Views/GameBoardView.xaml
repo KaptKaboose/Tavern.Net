@@ -307,7 +307,22 @@
                                Foreground="White" FontSize="20" FontWeight="Bold" Margin="0,0,0,12"/>
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                                   behaviors:AutoScrollOnDragBehavior.IsEnabled="True">
-                        <ItemsControl ItemsSource="{Binding PeekedZone.Zone.Cards}" ItemTemplate="{StaticResource CardTemplate}">
+                        <!-- Champion's own peek uses ChampionPeekCardTemplate instead of the plain
+                             CardTemplate — same visual, but never shows the tapped rotation (tap/
+                             flip are themselves already no-ops for a Champion card here; see
+                             GameBoardViewModel.ToggleTapped/FlipCard). Every other zone's peek is
+                             unaffected. -->
+                        <ItemsControl ItemsSource="{Binding PeekedZone.Zone.Cards}">
+                            <ItemsControl.Style>
+                                <Style TargetType="ItemsControl">
+                                    <Setter Property="ItemTemplate" Value="{StaticResource CardTemplate}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding PeekedZone.Zone.Type}" Value="Champion">
+                                            <Setter Property="ItemTemplate" Value="{StaticResource ChampionPeekCardTemplate}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </ItemsControl.Style>
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
                                     <WrapPanel/>
@@ -464,6 +479,17 @@
                                        Width="44" TextAlignment="Center" VerticalAlignment="Center"/>
                             <Button Style="{StaticResource CounterButtonStyle}" Content="+" Command="{Binding IncreaseCounterCommand}"/>
                         </StackPanel>
+
+                        <!-- Tap/untap: a direct two-way binding (not ToggleTappedCommand) is safe
+                             here specifically because this whole panel is already gated on the
+                             card being in Field or Champion — the same precondition
+                             ToggleTappedCommand itself checks for its other caller, a plain click
+                             on a Field card. -->
+                        <TextBlock Text="Tapped" Foreground="#F7FAFC" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,16,0,8"/>
+                        <ToggleButton Style="{StaticResource StatusToggleStyle}" HorizontalAlignment="Center"
+                                      IsChecked="{Binding ZoomedCard.Instance.IsTapped, Mode=TwoWay}">
+                            <TextBlock Text="Tap" Foreground="#F7FAFC" FontWeight="Bold" FontSize="14"/>
+                        </ToggleButton>
                     </StackPanel>
                 </Border>
             </StackPanel>

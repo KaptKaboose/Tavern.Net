@@ -35,7 +35,27 @@
              keeps the white count legible over whatever's showing through. Click to peek at (and
              drag/right-click) the actual cards. -->
         <Grid Style="{StaticResource PileSizeStyle}">
-            <Border CornerRadius="4" ClipToBounds="True">
+            <!-- Rotates the top card's art (+ its badges) in place when tapped — same mechanism
+                 as CardTemplate's own Border (RenderTransform, not LayoutTransform, so it spins
+                 around its center without affecting this Grid's fixed footprint). Only Champion
+                 currently ever sets IsTapped on a card sitting in a StackZoneView pile (Material/
+                 Main/Graveyard/Banishment cards get untapped by MoveCard the moment they land in
+                 a non-Field/Champion zone), so this is a no-op everywhere else. -->
+            <Border CornerRadius="4" ClipToBounds="True" RenderTransformOrigin="0.5,0.5">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="RenderTransform">
+                            <Setter.Value><RotateTransform Angle="0"/></Setter.Value>
+                        </Setter>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding Zone.Cards[0].Instance.IsTapped, ElementName=Root}" Value="True">
+                                <Setter Property="RenderTransform">
+                                    <Setter.Value><RotateTransform Angle="90"/></Setter.Value>
+                                </Setter>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
                 <Grid>
                     <!-- Generic face-down back for Material/Main — a bundled asset (not fetched
                          from the API: it's per-card via other_orientations, which is only ever

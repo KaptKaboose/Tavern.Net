@@ -293,6 +293,7 @@ public class GameSessionTests
         baseForm.Counter = 3;
         baseForm.IsImbued = true;
         baseForm.IsRanged = true;
+        baseForm.IsTapped = true;
         var leveledForm = MakeChampion("Leveled", life: 12);
         player.GetZone(ZoneType.Champion).Cards.Add(baseForm);
         player.GetZone(ZoneType.Hand).Cards.Add(leveledForm);
@@ -305,6 +306,7 @@ public class GameSessionTests
         Assert.Equal(0, baseForm.Counter);
         Assert.False(baseForm.IsImbued);
         Assert.False(baseForm.IsRanged);
+        Assert.False(baseForm.IsTapped);
     }
 
     [Fact]
@@ -313,6 +315,7 @@ public class GameSessionTests
         var session = new GameSession();
         var player = session.AddPlayer("Solo");
         var buried = MakeChampion("Buried", life: 8);
+        buried.IsTapped = true;
         var dying = MakeChampion("Dying", life: 12);
         dying.Counter = 5;
         dying.IsWarded = true;
@@ -323,6 +326,8 @@ public class GameSessionTests
 
         Assert.Equal(5, buried.Counter);
         Assert.True(buried.IsWarded);
+        // Only the old top's tapped state resets — the newly-exposed top's own is left alone.
+        Assert.True(buried.IsTapped);
         // The card that actually left is also cleared — same as any card leaving Champion.
         Assert.Equal(0, dying.Counter);
         Assert.False(dying.IsWarded);
