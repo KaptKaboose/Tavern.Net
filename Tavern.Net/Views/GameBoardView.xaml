@@ -17,6 +17,7 @@
         <conv:TurnPhaseToFontWeightConverter x:Key="PhaseToFontWeight"/>
         <conv:TurnCountDisplayConverter x:Key="TurnCountDisplay"/>
         <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+        <conv:DieFaceToImageConverter x:Key="DieFaceToImage"/>
 
         <!-- Zoom overlay's status buttons: dim/plain when off, gold-bordered when on — no other
              visual state (hover/pressed) is styled since these are checked/unchecked toggles, not
@@ -43,6 +44,23 @@
             <Setter Property="Width" Value="32"/>
             <Setter Property="Height" Value="32"/>
             <Setter Property="FontSize" Value="16"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="#F7FAFC"/>
+            <Setter Property="Background" Value="#1A202C"/>
+            <Setter Property="BorderBrush" Value="#4A5568"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#4A5568"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Text-label action buttons (Roll, ...) needing the same dark palette as
+             CounterButtonStyle but sized to their content instead of a fixed 32x32 box. -->
+        <Style x:Key="ActionButtonStyle" TargetType="Button">
+            <Setter Property="Padding" Value="16,8"/>
             <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="Foreground" Value="#F7FAFC"/>
             <Setter Property="Background" Value="#1A202C"/>
@@ -116,6 +134,8 @@
                 </StackPanel>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Style="{StaticResource ActionButtonStyle}" Content="Roll" Margin="0,0,16,0" Command="{Binding OpenDicePanelCommand}"/>
+
                     <Button Style="{StaticResource CounterButtonStyle}" Content="-" Command="{Binding DecreaseDamageDealtCommand}"/>
                     <TextBlock Text="{Binding Stats.DamageDealtCount, StringFormat='Damage: {0}'}" FontSize="18" FontWeight="Bold"
                                Foreground="#F7FAFC" VerticalAlignment="Center" Margin="8,0"/>
@@ -403,6 +423,64 @@
                         </StackPanel>
                     </ScrollViewer>
                 </DockPanel>
+            </Border>
+        </Grid>
+
+        <!-- Roll Dice overlay: click Roll in the header to open, set a count with the +/- pair,
+             then click Roll inside the panel to actually roll — each die cycles random faces on a
+             shared clock (GameBoardViewModel.RollDice/OnDiceAnimationTick) before settling on its
+             real, already-decided result and picking up a gold highlight border. -->
+        <Grid Grid.Column="0" Grid.ColumnSpan="2"
+              Visibility="{Binding IsRollingDice, Converter={StaticResource BoolToVisibility}}"
+              d:IsHidden="True">
+            <Button Command="{Binding CloseDicePanelCommand}" Focusable="False" Cursor="Arrow">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="#CC000000"/>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+
+            <Border MaxWidth="700" MinWidth="360" Padding="20"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Background="#2D3748" BorderBrush="White" BorderThickness="2" CornerRadius="10">
+                <StackPanel>
+                    <TextBlock Text="Roll Dice" Foreground="White" FontSize="20" FontWeight="Bold" Margin="0,0,0,12"/>
+
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,16">
+                        <Button Style="{StaticResource CounterButtonStyle}" Content="-" Command="{Binding DecreaseDiceToRollCommand}"/>
+                        <TextBlock Text="{Binding DiceToRoll, StringFormat='Dice: {0}'}" FontSize="18" FontWeight="Bold"
+                                   Foreground="#F7FAFC" VerticalAlignment="Center" Margin="8,0"/>
+                        <Button Style="{StaticResource CounterButtonStyle}" Content="+" Command="{Binding IncreaseDiceToRollCommand}"/>
+
+                        <Button Style="{StaticResource ActionButtonStyle}" Content="Roll" Margin="24,0,0,0" Command="{Binding RollDiceCommand}"/>
+                    </StackPanel>
+
+                    <ItemsControl ItemsSource="{Binding Dice}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel HorizontalAlignment="Center"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:DieViewModel}">
+                                <Border Width="64" Height="64" Margin="6" CornerRadius="6" BorderThickness="3">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="BorderBrush" Value="Transparent"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsSettled}" Value="True">
+                                                    <Setter Property="BorderBrush" Value="#F6E05E"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <Image Source="{Binding FaceValue, Converter={StaticResource DieFaceToImage}}" Stretch="Uniform"/>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
             </Border>
         </Grid>
 

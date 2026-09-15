@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Windows.Input;
+using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Tavern.Net.Game;
@@ -11,11 +12,18 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
 {
     private readonly GameSession _session;
     private readonly GrandArchiveApiClient _apiClient;
+    private readonly Random _diceRandom = new();
 
     // Set by the 'N' handler when StartNewGame hands back cards to glimpse instead of a normal
     // opening hand; consumed in MoveGlimpseCard the instant that glimpse finishes, drawing the
     // hand StartNewGame skipped in favor of the glimpse.
     private bool _drawAfterGlimpsing;
+
+    // Drives the face-cycling animation for every die in Dice at once — a single shared clock
+    // rather than one timer per die, since they all just need "how much time has elapsed" to know
+    // whether they've reached their own (independently randomized) StopAt yet.
+    private DispatcherTimer? _diceAnimationTimer;
+    private TimeSpan _diceAnimationElapsed;
 
     public Player Player { get; }
 
@@ -78,6 +86,19 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     public ObservableCollection<CardViewModel> GlimpseStaging { get; } = new();
     public ObservableCollection<CardViewModel> GlimpseTop { get; } = new();
     public ObservableCollection<CardViewModel> GlimpseBottom { get; } = new();
+
+    /// <summary>Whether the Roll Dice panel is open. Not tied to whether an animation is
+    /// currently running — closing the panel mid-roll just hides it; the timer keeps going and
+    /// settles the dice regardless, so reopening later shows the finished result.</summary>
+    [ObservableProperty]
+    private bool _isRollingDice;
+
+    /// <summary>How many dice the next Roll will create — set via the panel's +/- pair, clamped
+    /// to a sane [1, 20] range.</summary>
+    [ObservableProperty]
+    private int _diceToRoll = 1;
+
+    public ObservableCollection<DieViewModel> Dice { get; } = new();
 
     public GameBoardViewModel(GameSession session, Player player, GrandArchiveApiClient apiClient)
     {
@@ -314,6 +335,76 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
 
     [RelayCommand]
     private void DecreaseDamageDealt() => _session.AdjustDamageDealt(Player, -1);
+
+    [RelayCommand]
+    private void OpenDicePanel() => IsRollingDice = true;
+
+    [RelayCommand]
+    private void CloseDicePanel() => IsRollingDice = false;
+
+    [RelayCommand]
+    private void IncreaseDiceToRoll() => DiceToRoll = Math.Min(20, DiceToRoll + 1);
+
+    [RelayCommand]
+    private void DecreaseDiceToRoll() => DiceToRoll = Math.Max(1, DiceToRoll - 1);
+
+    /// <summary>
+    /// Rolls DiceToRoll dice: each one's real result is picked right here, fairly, once — the
+    /// cycling animation that follows is cosmetic suspense on top of an already-decided outcome,
+    /// not what determines it. Each die gets its own randomized StopAt so they don't all freeze in
+    /// lockstep; a single shared DispatcherTimer then just advances the clock and checks each
+    /// still-rolling die against its own StopAt every tick.
+    /// </summary>
+    [RelayCommand]
+    private void RollDice()
+    {
+        _diceAnimationTimer?.Stop();
+        Dice.Clear();
+        _diceAnimationElapsed = TimeSpan.Zero;
+
+        for (var i = 0; i < DiceToRoll; i++)
+        {
+            var finalValue = _diceRandom.Next(1, 7);
+            var stopAt = TimeSpan.FromMilliseconds(800 + _diceRandom.Next(0, 701));
+            Dice.Add(new DieViewModel(finalValue, stopAt));
+        }
+
+        _diceAnimationTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(80) };
+        _diceAnimationTimer.Tick += OnDiceAnimationTick;
+        _diceAnimationTimer.Start();
+    }
+
+    private void OnDiceAnimationTick(object? sender, EventArgs e)
+    {
+        _diceAnimationElapsed += TimeSpan.FromMilliseconds(80);
+        var anyStillRolling = false;
+
+        foreach (var die in Dice)
+        {
+            if (die.IsSettled)
+            {
+                continue;
+            }
+
+            if (_diceAnimationElapsed >= die.StopAt)
+            {
+                die.FaceValue = die.FinalValue;
+                die.IsSettled = true;
+            }
+            else
+            {
+                die.FaceValue = _diceRandom.Next(1, 7);
+                anyStillRolling = true;
+            }
+        }
+
+        if (!anyStillRolling)
+        {
+            _diceAnimationTimer!.Stop();
+            _diceAnimationTimer.Tick -= OnDiceAnimationTick;
+            _diceAnimationTimer = null;
+        }
+    }
 
     /// <summary>Single entry point for drag-and-drop moves, which carry their destination (and, for the Field, a drop position) as data rather than a fixed command per destination.</summary>
     [RelayCommand]

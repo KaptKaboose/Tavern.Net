@@ -18,6 +18,7 @@
          regardless of the app's working directory, unlike the runtime-downloaded card art. -->
     <Resource Include="GameData\Images\Grand Archive Back.jpg" />
     <Resource Include="GameData\Images\Tokens\*.png" />
+    <Resource Include="GameData\Images\Dice\*.png" />
   </ItemGroup>
 
 </Project>
