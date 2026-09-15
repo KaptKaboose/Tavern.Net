@@ -33,7 +33,30 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
 
     /// <summary>The card currently shown full-size in the zoom overlay, or null when it's closed.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowCounterAndStatusPanel))]
     private CardViewModel? _zoomedCard;
+
+    /// <summary>
+    /// Whether the Zoom overlay's status/counter side panel should show for the currently-zoomed
+    /// card — Counter/statuses are only ever meaningful in play (Field or Champion; see
+    /// GameSession.MoveCard's reset rule), so the panel is irrelevant everywhere else (Hand, a
+    /// deck peek, Glimpse, ...). A card being zoomed from Glimpse isn't in any Player.Zones entry
+    /// at all (GlimpseStaging/Top/Bottom are ViewModel-only lists, not domain zones — see their
+    /// own doc comment below), hence the null-safe FirstOrDefault rather than First.
+    /// </summary>
+    public bool ShowCounterAndStatusPanel
+    {
+        get
+        {
+            if (ZoomedCard is null)
+            {
+                return false;
+            }
+
+            var zone = Player.Zones.FirstOrDefault(kv => kv.Value.Cards.Contains(ZoomedCard.Instance)).Value?.Type;
+            return zone == ZoneType.Field || zone == ZoneType.Champion;
+        }
+    }
 
     /// <summary>The pile currently fanned out in the peek overlay, or null when it's closed.</summary>
     [ObservableProperty]
@@ -315,7 +338,8 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     }
 
     /// <summary>Double-click target. Unlike tap, flipping isn't Field-only — it's meaningful
-    /// wherever you'd want to check what a double-faced card becomes.</summary>
+    /// wherever you'd want to check what a double-faced card becomes. Also resets the counter/
+    /// statuses, per the same rule GameSession.MoveCard applies on every zone change.</summary>
     [RelayCommand]
     private void FlipCard(CardViewModel? card)
     {
@@ -325,10 +349,31 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         }
 
         card.Instance.IsFlipped = !card.Instance.IsFlipped;
+        card.Instance.ResetCounterAndStatuses();
     }
 
     [RelayCommand]
     private void ZoomCard(CardViewModel? card) => ZoomedCard = card;
+
+    /// <summary>+/- for the Zoom overlay's counter control — operates on whichever card is
+    /// currently zoomed in on.</summary>
+    [RelayCommand]
+    private void IncreaseCounter()
+    {
+        if (ZoomedCard is not null)
+        {
+            ZoomedCard.Instance.Counter++;
+        }
+    }
+
+    [RelayCommand]
+    private void DecreaseCounter()
+    {
+        if (ZoomedCard is not null)
+        {
+            ZoomedCard.Instance.Counter--;
+        }
+    }
 
     [RelayCommand]
     private void CloseZoom() => ZoomedCard = null;

@@ -5,6 +5,8 @@
                     xmlns:behaviors="clr-namespace:Tavern.Net.Behaviors">
 
     <conv:NullToVisibilityConverter x:Key="NullToVisibility"/>
+    <conv:IntToVisibilityConverter x:Key="IntToVisibility"/>
+    <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
 
     <!-- Implicit (no x:Key, so TargetType alone matches) — every ListBox/TextBox in the app picks
          these up automatically, matching the app's dark (#1A202C) background instead of the
@@ -55,6 +57,31 @@
                 <TextBlock Text="{Binding Name}" TextWrapping="Wrap" TextAlignment="Center"
                            VerticalAlignment="Center" Foreground="White" Margin="4" FontSize="14"
                            Visibility="{Binding Artwork, Converter={StaticResource NullToVisibility}, ConverterParameter=Invert}"/>
+
+                <!-- Status/counter badges: tiny and non-interactive (IsHitTestVisible=False) — only
+                     ever populated on a Field/Champion card, since GameSession.MoveCard clears
+                     both the instant a card goes anywhere else (CardInstance.ResetCounterAndStatuses). -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Top" HorizontalAlignment="Left"
+                            Margin="3" IsHitTestVisible="False">
+                    <Image Width="16" Height="16" Margin="0,0,1,0" Source="/GameData/Images/Tokens/ephemeral.png"
+                           Visibility="{Binding Instance.IsEphemeral, Converter={StaticResource BoolToVisibility}}"/>
+                    <Image Width="16" Height="16" Margin="0,0,1,0" Source="/GameData/Images/Tokens/ignited.png"
+                           Visibility="{Binding Instance.IsIgnited, Converter={StaticResource BoolToVisibility}}"/>
+                    <Image Width="16" Height="16" Margin="0,0,1,0" Source="/GameData/Images/Tokens/imbued.png"
+                           Visibility="{Binding Instance.IsImbued, Converter={StaticResource BoolToVisibility}}"/>
+                    <Image Width="16" Height="16" Margin="0,0,1,0" Source="/GameData/Images/Tokens/ranged.png"
+                           Visibility="{Binding Instance.IsRanged, Converter={StaticResource BoolToVisibility}}"/>
+                    <Image Width="16" Height="16" Margin="0,0,1,0" Source="/GameData/Images/Tokens/rooted.png"
+                           Visibility="{Binding Instance.IsRooted, Converter={StaticResource BoolToVisibility}}"/>
+                    <Image Width="16" Height="16" Source="/GameData/Images/Tokens/warded.png"
+                           Visibility="{Binding Instance.IsWarded, Converter={StaticResource BoolToVisibility}}"/>
+                </StackPanel>
+
+                <Border Background="#CC000000" CornerRadius="8" Padding="5,1" HorizontalAlignment="Right" VerticalAlignment="Top"
+                        Margin="3" IsHitTestVisible="False"
+                        Visibility="{Binding Instance.Counter, Converter={StaticResource IntToVisibility}}">
+                    <TextBlock Text="{Binding Instance.Counter}" Foreground="White" FontSize="11" FontWeight="Bold"/>
+                </Border>
             </Grid>
         </Border>
     </DataTemplate>

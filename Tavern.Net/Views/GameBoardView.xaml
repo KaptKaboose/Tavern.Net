@@ -17,6 +17,44 @@
         <conv:TurnPhaseToFontWeightConverter x:Key="PhaseToFontWeight"/>
         <conv:TurnCountDisplayConverter x:Key="TurnCountDisplay"/>
         <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+
+        <!-- Zoom overlay's status buttons: dim/plain when off, gold-bordered when on — no other
+             visual state (hover/pressed) is styled since these are checked/unchecked toggles, not
+             momentary actions. -->
+        <Style x:Key="StatusToggleStyle" TargetType="ToggleButton">
+            <Setter Property="Width" Value="56"/>
+            <Setter Property="Height" Value="56"/>
+            <Setter Property="Margin" Value="3"/>
+            <Setter Property="Padding" Value="6"/>
+            <Setter Property="Background" Value="#1A202C"/>
+            <Setter Property="BorderBrush" Value="#4A5568"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Style.Triggers>
+                <Trigger Property="IsChecked" Value="True">
+                    <Setter Property="BorderBrush" Value="#F6E05E"/>
+                    <Setter Property="Background" Value="#4A5568"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Zoom overlay's counter +/- buttons: match the panel's dark palette instead of the
+             OS-default button chrome. -->
+        <Style x:Key="CounterButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="32"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="#F7FAFC"/>
+            <Setter Property="Background" Value="#1A202C"/>
+            <Setter Property="BorderBrush" Value="#4A5568"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#4A5568"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
     </UserControl.Resources>
     <Grid>
         <Grid.ColumnDefinitions>
@@ -104,7 +142,7 @@
                      ShowOverlay=False: no count/scrim, just the top champion's own art. -->
                 <views:StackZoneView Grid.Row="0" Grid.RowSpan="3" Grid.Column="0" HorizontalAlignment="Left" VerticalAlignment="Top"
                                      Margin="0,20,0,0"
-                                     Zone="{Binding Champion}" HeaderText="Champion" ShowBorder="True" ShowOverlay="False"
+                                     Zone="{Binding Champion}" HeaderText="Champion" ShowBorder="True" ShowOverlay="False" IsZoomable="True"
                                      TargetZone="Champion" MoveCommand="{Binding MoveCardToCommand}"
                                      PeekCommand="{Binding PeekZoneCommand}"/>
 
@@ -354,30 +392,81 @@
             </Border>
         </Grid>
 
-        <!-- Zoom overlay: right-click any card (CardZoomBehavior) opens it here full-size over
-             everything else; clicking anywhere — scrim or card — closes it again. -->
-        <Button Grid.Column="0" Grid.ColumnSpan="2"
-                Visibility="{Binding ZoomedCard, Converter={StaticResource NullToVisibility}}"
-                Command="{Binding CloseZoomCommand}"
-                Focusable="False" Cursor="Arrow"
-                d:IsHidden="True">
-            <Button.Template>
-                <ControlTemplate TargetType="Button">
-                    <Border Background="#CC000000">
-                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
-                </ControlTemplate>
-            </Button.Template>
-            <Border Width="420" Height="588" CornerRadius="10" ClipToBounds="True"
-                    Background="#333" BorderBrush="Black" BorderThickness="2">
-                <Grid>
-                    <Image Source="{Binding ZoomedCard.Artwork}" Stretch="Uniform"
-                           Visibility="{Binding ZoomedCard.Artwork, Converter={StaticResource NullToVisibility}}"/>
-                    <TextBlock Text="{Binding ZoomedCard.Name}" TextWrapping="Wrap" TextAlignment="Center"
-                               VerticalAlignment="Center" Foreground="White" FontSize="28" Margin="16"
-                               Visibility="{Binding ZoomedCard.Artwork, Converter={StaticResource NullToVisibility}, ConverterParameter=Invert}"/>
-                </Grid>
-            </Border>
-        </Button>
+        <!-- Zoom overlay: right-click any card (CardZoomBehavior) opens it here full-size, with a
+             side panel for its status/counter. The scrim and the card art are each their own
+             click-to-close Button (matching the old "click anywhere on the card closes it"
+             behavior); the side panel is deliberately NOT inside either of those, since its own
+             toggle/+-/- clicks need to change this card's state instead of closing the overlay. -->
+        <Grid Grid.Column="0" Grid.ColumnSpan="2"
+              Visibility="{Binding ZoomedCard, Converter={StaticResource NullToVisibility}}"
+              d:IsHidden="True">
+            <Button Command="{Binding CloseZoomCommand}" Focusable="False" Cursor="Arrow">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="#CC000000"/>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Button Command="{Binding CloseZoomCommand}" Focusable="False" Cursor="Arrow">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border Width="420" Height="588" CornerRadius="10" ClipToBounds="True"
+                                    Background="#333" BorderBrush="Black" BorderThickness="2">
+                                <Grid>
+                                    <Image Source="{Binding ZoomedCard.Artwork}" Stretch="Uniform"
+                                           Visibility="{Binding ZoomedCard.Artwork, Converter={StaticResource NullToVisibility}}"/>
+                                    <TextBlock Text="{Binding ZoomedCard.Name}" TextWrapping="Wrap" TextAlignment="Center"
+                                               VerticalAlignment="Center" Foreground="White" FontSize="28" Margin="16"
+                                               Visibility="{Binding ZoomedCard.Artwork, Converter={StaticResource NullToVisibility}, ConverterParameter=Invert}"/>
+                                </Grid>
+                            </Border>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+
+                <!-- Status/counter side panel — only relevant in play (Field/Champion; see
+                     GameBoardViewModel.ShowCounterAndStatusPanel), hidden everywhere else (Hand,
+                     a deck peek, Glimpse, ...). Status buttons two-way bind straight to the
+                     CardInstance's own IsXxx properties (no command/parameter plumbing needed);
+                     highlighted (gold border) when checked via the StatusToggleStyle below. -->
+                <Border Width="170" Margin="16,0,0,0" Padding="14" VerticalAlignment="Center"
+                        Background="#2D3748" BorderBrush="White" BorderThickness="2" CornerRadius="10"
+                        Visibility="{Binding ShowCounterAndStatusPanel, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel>
+                        <TextBlock Text="Status" Foreground="#F7FAFC" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                        <UniformGrid Columns="2" Margin="0,0,0,16">
+                            <ToggleButton Style="{StaticResource StatusToggleStyle}" IsChecked="{Binding ZoomedCard.Instance.IsEphemeral, Mode=TwoWay}">
+                                <Image Source="/GameData/Images/Tokens/ephemeral.png" Stretch="Uniform"/>
+                            </ToggleButton>
+                            <ToggleButton Style="{StaticResource StatusToggleStyle}" IsChecked="{Binding ZoomedCard.Instance.IsIgnited, Mode=TwoWay}">
+                                <Image Source="/GameData/Images/Tokens/ignited.png" Stretch="Uniform"/>
+                            </ToggleButton>
+                            <ToggleButton Style="{StaticResource StatusToggleStyle}" IsChecked="{Binding ZoomedCard.Instance.IsImbued, Mode=TwoWay}">
+                                <Image Source="/GameData/Images/Tokens/imbued.png" Stretch="Uniform"/>
+                            </ToggleButton>
+                            <ToggleButton Style="{StaticResource StatusToggleStyle}" IsChecked="{Binding ZoomedCard.Instance.IsRanged, Mode=TwoWay}">
+                                <Image Source="/GameData/Images/Tokens/ranged.png" Stretch="Uniform"/>
+                            </ToggleButton>
+                            <ToggleButton Style="{StaticResource StatusToggleStyle}" IsChecked="{Binding ZoomedCard.Instance.IsRooted, Mode=TwoWay}">
+                                <Image Source="/GameData/Images/Tokens/rooted.png" Stretch="Uniform"/>
+                            </ToggleButton>
+                            <ToggleButton Style="{StaticResource StatusToggleStyle}" IsChecked="{Binding ZoomedCard.Instance.IsWarded, Mode=TwoWay}">
+                                <Image Source="/GameData/Images/Tokens/warded.png" Stretch="Uniform"/>
+                            </ToggleButton>
+                        </UniformGrid>
+
+                        <TextBlock Text="Counter" Foreground="#F7FAFC" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <Button Style="{StaticResource CounterButtonStyle}" Content="-" Command="{Binding DecreaseCounterCommand}"/>
+                            <TextBlock Text="{Binding ZoomedCard.Instance.Counter}" FontSize="20" FontWeight="Bold" Foreground="#F7FAFC"
+                                       Width="44" TextAlignment="Center" VerticalAlignment="Center"/>
+                            <Button Style="{StaticResource CounterButtonStyle}" Content="+" Command="{Binding IncreaseCounterCommand}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Grid>
     </Grid>
 </UserControl>

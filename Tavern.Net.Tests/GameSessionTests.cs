@@ -145,6 +145,60 @@ public class GameSessionTests
     }
 
     [Fact]
+    public void MoveCard_ToField_PreservesCounterAndStatuses()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        var card = MakeCard();
+        card.Counter = 2;
+        card.IsRanged = true;
+        player.GetZone(ZoneType.Hand).Cards.Add(card);
+
+        session.MoveCard(player, card, ZoneType.Hand, ZoneType.Field);
+
+        Assert.Equal(2, card.Counter);
+        Assert.True(card.IsRanged);
+    }
+
+    [Fact]
+    public void MoveCard_ToChampion_PreservesCounterAndStatuses()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        var champion = MakeChampion("Base", life: 8);
+        champion.Counter = 3;
+        champion.IsWarded = true;
+        player.GetZone(ZoneType.Hand).Cards.Add(champion);
+
+        session.MoveCard(player, champion, ZoneType.Hand, ZoneType.Champion);
+
+        Assert.Equal(3, champion.Counter);
+        Assert.True(champion.IsWarded);
+    }
+
+    [Theory]
+    [InlineData(ZoneType.Graveyard)]
+    [InlineData(ZoneType.Hand)]
+    [InlineData(ZoneType.Banishment)]
+    [InlineData(ZoneType.Memory)]
+    public void MoveCard_AwayFromFieldToAnyOtherZone_ResetsCounterAndStatuses(ZoneType destination)
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        var card = MakeCard();
+        card.Counter = 5;
+        card.IsImbued = true;
+        card.IsRooted = true;
+        player.GetZone(ZoneType.Field).Cards.Add(card);
+
+        session.MoveCard(player, card, ZoneType.Field, destination);
+
+        Assert.Equal(0, card.Counter);
+        Assert.False(card.IsImbued);
+        Assert.False(card.IsRooted);
+    }
+
+    [Fact]
     public void MoveCard_NonChampionCardToChampionZone_IsIgnored()
     {
         var session = new GameSession();
@@ -228,6 +282,50 @@ public class GameSessionTests
         session.MoveCard(player, baseForm, ZoneType.Hand, ZoneType.Champion);
 
         Assert.Equal(11, player.Life);
+    }
+
+    [Fact]
+    public void MoveCard_ChampionLevelsUp_TransfersCounterAndStatusesToNewTopAndClearsOldTop()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        var baseForm = MakeChampion("Base", life: 8);
+        baseForm.Counter = 3;
+        baseForm.IsImbued = true;
+        baseForm.IsRanged = true;
+        var leveledForm = MakeChampion("Leveled", life: 12);
+        player.GetZone(ZoneType.Champion).Cards.Add(baseForm);
+        player.GetZone(ZoneType.Hand).Cards.Add(leveledForm);
+
+        session.MoveCard(player, leveledForm, ZoneType.Hand, ZoneType.Champion);
+
+        Assert.Equal(3, leveledForm.Counter);
+        Assert.True(leveledForm.IsImbued);
+        Assert.True(leveledForm.IsRanged);
+        Assert.Equal(0, baseForm.Counter);
+        Assert.False(baseForm.IsImbued);
+        Assert.False(baseForm.IsRanged);
+    }
+
+    [Fact]
+    public void MoveCard_ChampionLeavesChampionZoneToGraveyard_TransfersCounterAndStatusesToExposedCard()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        var buried = MakeChampion("Buried", life: 8);
+        var dying = MakeChampion("Dying", life: 12);
+        dying.Counter = 5;
+        dying.IsWarded = true;
+        player.GetZone(ZoneType.Champion).Cards.Add(dying);
+        player.GetZone(ZoneType.Champion).Cards.Add(buried);
+
+        session.MoveCard(player, dying, ZoneType.Champion, ZoneType.Graveyard);
+
+        Assert.Equal(5, buried.Counter);
+        Assert.True(buried.IsWarded);
+        // The card that actually left is also cleared — same as any card leaving Champion.
+        Assert.Equal(0, dying.Counter);
+        Assert.False(dying.IsWarded);
     }
 
     [Fact]
@@ -485,6 +583,24 @@ public class GameSessionTests
         Assert.Equal(TurnPhase.Draw, session.CurrentPhase);
         Assert.Single(player.GetZone(ZoneType.Hand).Cards);
         Assert.Equal(4, player.GetZone(ZoneType.MainDeck).Cards.Count);
+    }
+
+    [Fact]
+    public void StartNewGame_ResetsCounterAndStatusesOnEveryCard()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        var baseChampion = MakeBaseChampion();
+        player.GetZone(ZoneType.MaterialDeck).Cards.Add(baseChampion);
+        var scattered = MakeCard("Scattered");
+        scattered.Counter = 4;
+        scattered.IsIgnited = true;
+        player.GetZone(ZoneType.Field).Cards.Add(scattered);
+
+        session.StartNewGame();
+
+        Assert.Equal(0, scattered.Counter);
+        Assert.False(scattered.IsIgnited);
     }
 
     [Fact]

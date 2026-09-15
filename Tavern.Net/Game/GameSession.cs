@@ -123,6 +123,7 @@ public sealed class GameSession
                 card.IsFlipped = false;
                 card.FieldX = 0;
                 card.FieldY = 0;
+                card.ResetCounterAndStatuses();
             }
 
             var materialDeck = player.GetZone(ZoneType.MaterialDeck);
@@ -257,6 +258,18 @@ public sealed class GameSession
         var championZone = player.GetZone(ZoneType.Champion);
         var oldTop = championZoneAffected ? championZone.Cards.FirstOrDefault() : null;
 
+        // Snapshot the old top's counter/statuses now, before the general reset below can
+        // clobber them — that happens when oldTop *is* the card being moved out to a non-Field/
+        // Champion zone (e.g. it died to the Graveyard), which is exactly the case the transfer
+        // further down needs these original values for.
+        var oldTopCounter = oldTop?.Counter ?? 0;
+        var oldTopIsEphemeral = oldTop?.IsEphemeral ?? false;
+        var oldTopIsIgnited = oldTop?.IsIgnited ?? false;
+        var oldTopIsImbued = oldTop?.IsImbued ?? false;
+        var oldTopIsRanged = oldTop?.IsRanged ?? false;
+        var oldTopIsRooted = oldTop?.IsRooted ?? false;
+        var oldTopIsWarded = oldTop?.IsWarded ?? false;
+
         var source = player.GetZone(from);
         if (!source.Cards.Remove(card))
         {
@@ -265,6 +278,14 @@ public sealed class GameSession
 
         card.IsTapped = false;
         card.IsFlipped = false;
+
+        // Counter/statuses are only meaningful in play (Field or Champion) — clear them the
+        // instant a card goes anywhere else, same reasoning as IsTapped/IsFlipped resetting above.
+        if (to != ZoneType.Field && to != ZoneType.Champion)
+        {
+            card.ResetCounterAndStatuses();
+        }
+
         var destination = player.GetZone(to);
         if (StackZones.Contains(to))
         {
@@ -294,6 +315,19 @@ public sealed class GameSession
                 {
                     AdjustLife(player, delta);
                 }
+
+                // The new top inherits the old top's counter/statuses — it's the same physical
+                // champion leveling up or down, not a different card — then the old one is
+                // cleared, since whatever's left of it (buried in the stack, or having left
+                // Champion entirely) is no longer the active face.
+                newTop.Counter = oldTopCounter;
+                newTop.IsEphemeral = oldTopIsEphemeral;
+                newTop.IsIgnited = oldTopIsIgnited;
+                newTop.IsImbued = oldTopIsImbued;
+                newTop.IsRanged = oldTopIsRanged;
+                newTop.IsRooted = oldTopIsRooted;
+                newTop.IsWarded = oldTopIsWarded;
+                oldTop.ResetCounterAndStatuses();
             }
         }
 

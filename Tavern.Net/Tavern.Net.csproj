@@ -17,6 +17,7 @@
          embedded WPF Resource, so it ships in the assembly and loads via a relative pack URI
          regardless of the app's working directory, unlike the runtime-downloaded card art. -->
     <Resource Include="GameData\Images\Grand Archive Back.jpg" />
+    <Resource Include="GameData\Images\Tokens\*.png" />
   </ItemGroup>
 
 </Project>

@@ -73,6 +73,19 @@ public partial class StackZoneView : UserControl
         set => SetValue(ShowOverlayProperty, value);
     }
 
+    /// <summary>True lets right-click on the pile zoom its top card — meaningful only for a pile
+    /// that shows a real live card (Champion, ShowOverlay=False), not a generic deck/discard pile
+    /// you'd browse via PeekCommand instead. Off by default so Material/Main/Graveyard/Banishment
+    /// are unaffected.</summary>
+    public static readonly DependencyProperty IsZoomableProperty =
+        DependencyProperty.Register(nameof(IsZoomable), typeof(bool), typeof(StackZoneView), new PropertyMetadata(false));
+
+    public bool IsZoomable
+    {
+        get => (bool)GetValue(IsZoomableProperty);
+        set => SetValue(IsZoomableProperty, value);
+    }
+
     public static readonly DependencyProperty TargetZoneProperty =
         DependencyProperty.Register(nameof(TargetZone), typeof(ZoneType?), typeof(StackZoneView));
 
@@ -116,6 +129,27 @@ public partial class StackZoneView : UserControl
         if (PeekCommand is not null && PeekCommand.CanExecute(request))
         {
             PeekCommand.Execute(request);
+        }
+    }
+
+    /// <summary>
+    /// The pile's own visual isn't templated from CardViewModel (it's a plain Image bound via
+    /// ElementName, not a DataContext-bound card), so CardZoomBehavior's normal DataContext-based
+    /// right-click hookup never applies here — invoke the top card's ZoomCardCommand directly
+    /// instead, same command CardZoomBehavior would have used.
+    /// </summary>
+    private void OnPileRightClicked(object sender, MouseButtonEventArgs e)
+    {
+        if (!IsZoomable || Zone is null || Zone.Cards.Count == 0)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        var top = Zone.Cards[0];
+        if (top.Board.ZoomCardCommand.CanExecute(top))
+        {
+            top.Board.ZoomCardCommand.Execute(top);
         }
     }
 }
