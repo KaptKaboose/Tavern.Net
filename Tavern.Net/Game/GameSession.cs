@@ -100,6 +100,7 @@ public sealed class GameSession
             player.Stats.PlayLog.Clear();
             player.Stats.TurnCount = 0;
             player.Life = 15;
+            player.Stats.DamageDealtCount = 0;
             _pendingFirstTurnFastForward.Add(player);
 
             // Tokens is excluded from both the sweep and the clear: it's a static, always-present
@@ -381,8 +382,16 @@ public sealed class GameSession
     public void AdjustLife(Player player, int delta)
     {
         player.Life += delta;
-        player.Stats.RecordLife(player.Life);
         player.Stats.Log($"Life changed by {delta:+0;-0} to {player.Life}.");
+    }
+
+    /// <summary>Adjusts the running damage-dealt tally (a manual count, since goldfishing has no
+    /// opponent board to compute it from) — clamped at 0 so an over-eager decrease can't go
+    /// negative.</summary>
+    public void AdjustDamageDealt(Player player, int delta)
+    {
+        player.Stats.DamageDealtCount = Math.Max(0, player.Stats.DamageDealtCount + delta);
+        player.Stats.Log($"Damage dealt changed by {delta:+0;-0} to {player.Stats.DamageDealtCount}.");
     }
 
     public void NextTurn(Player player)

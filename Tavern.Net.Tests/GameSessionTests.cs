@@ -411,7 +411,7 @@ public class GameSessionTests
     }
 
     [Fact]
-    public void AdjustLife_UpdatesLifeAndRecordsHistory()
+    public void AdjustLife_UpdatesLife()
     {
         var session = new GameSession();
         var player = session.AddPlayer("Solo", startingLife: 15);
@@ -419,7 +419,30 @@ public class GameSessionTests
         session.AdjustLife(player, -3);
 
         Assert.Equal(12, player.Life);
-        Assert.Equal(new LifeHistoryEntry(0, 12), Assert.Single(player.Stats.LifeHistory));
+    }
+
+    [Fact]
+    public void AdjustDamageDealt_UpdatesRunningTotal()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+
+        session.AdjustDamageDealt(player, 5);
+        session.AdjustDamageDealt(player, 3);
+
+        Assert.Equal(8, player.Stats.DamageDealtCount);
+    }
+
+    [Fact]
+    public void AdjustDamageDealt_ClampsAtZero()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        session.AdjustDamageDealt(player, 2);
+
+        session.AdjustDamageDealt(player, -5);
+
+        Assert.Equal(0, player.Stats.DamageDealtCount);
     }
 
     [Fact]

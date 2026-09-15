@@ -309,6 +309,12 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     [RelayCommand]
     private void DecreaseLife() => _session.AdjustLife(Player, -1);
 
+    [RelayCommand]
+    private void IncreaseDamageDealt() => _session.AdjustDamageDealt(Player, 1);
+
+    [RelayCommand]
+    private void DecreaseDamageDealt() => _session.AdjustDamageDealt(Player, -1);
+
     /// <summary>Single entry point for drag-and-drop moves, which carry their destination (and, for the Field, a drop position) as data rather than a fixed command per destination.</summary>
     [RelayCommand]
     private void MoveCardTo(MoveCardRequest? request)

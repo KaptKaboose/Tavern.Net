@@ -77,10 +77,10 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Grid.Column="0" Orientation="Horizontal">
-                    <Button Content="-" Width="28" Command="{Binding DecreaseLifeCommand}"/>
+                    <Button Style="{StaticResource CounterButtonStyle}" Content="-" Command="{Binding DecreaseLifeCommand}"/>
                     <TextBlock Text="{Binding Player.Life, StringFormat='Life: {0}'}" FontSize="18" FontWeight="Bold"
                                Foreground="#F7FAFC" VerticalAlignment="Center" Margin="8,0"/>
-                    <Button Content="+" Width="28" Command="{Binding IncreaseLifeCommand}"/>
+                    <Button Style="{StaticResource CounterButtonStyle}" Content="+" Command="{Binding IncreaseLifeCommand}"/>
 
                     <TextBlock Text="{Binding Stats.TurnCount, Converter={StaticResource TurnCountDisplay}, StringFormat='   Turn {0}'}" FontSize="18"
                                Foreground="#F7FAFC" VerticalAlignment="Center" Margin="16,0,0,0"/>
@@ -113,6 +113,13 @@
                     <TextBlock Text="End" FontSize="14" VerticalAlignment="Center"
                                Foreground="{Binding CurrentPhase, Converter={StaticResource PhaseToBrush}, ConverterParameter=End}"
                                FontWeight="{Binding CurrentPhase, Converter={StaticResource PhaseToFontWeight}, ConverterParameter=End}"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Style="{StaticResource CounterButtonStyle}" Content="-" Command="{Binding DecreaseDamageDealtCommand}"/>
+                    <TextBlock Text="{Binding Stats.DamageDealtCount, StringFormat='Damage: {0}'}" FontSize="18" FontWeight="Bold"
+                               Foreground="#F7FAFC" VerticalAlignment="Center" Margin="8,0"/>
+                    <Button Style="{StaticResource CounterButtonStyle}" Content="+" Command="{Binding IncreaseDamageDealtCommand}"/>
                 </StackPanel>
             </Grid>
 
@@ -261,16 +268,8 @@
                 <TextBlock DockPanel.Dock="Top" Text="Session stats" FontSize="16" FontWeight="Bold" Foreground="#F7FAFC" Margin="0,0,0,8"/>
                 <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
                     <TextBlock Text="{Binding Stats.CardsDrawnCount, StringFormat='Cards drawn: {0}'}" Foreground="#F7FAFC"/>
+                    <TextBlock Text="{Binding Stats.DamageDealtCount, StringFormat='Damage dealt: {0}'}" Foreground="#F7FAFC"/>
                 </StackPanel>
-
-                <TextBlock DockPanel.Dock="Top" Text="Life history" FontWeight="Bold" Foreground="#F7FAFC" Margin="0,4,0,4"/>
-                <ListBox DockPanel.Dock="Top" Height="100" ItemsSource="{Binding Stats.LifeHistory}" Margin="0,0,0,8">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding}"/>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
 
                 <TextBlock DockPanel.Dock="Top" Text="Play log" FontWeight="Bold" Foreground="#F7FAFC" Margin="0,4,0,4"/>
                 <ListBox ItemsSource="{Binding Stats.PlayLog}" ScrollViewer.VerticalScrollBarVisibility="Auto">
