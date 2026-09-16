@@ -98,6 +98,23 @@ public sealed class GrandArchiveApiClient
         return response.Data;
     }
 
+    /// <summary>
+    /// Writes a card straight into the by-slug cache <see cref="GetCardBySlugAsync"/> reads from,
+    /// without a network call — used when a card resolved via <see cref="SearchCardsAsync"/> (a
+    /// different cache key) is about to be referenced by slug later, e.g. DeckImportViewModel.SaveDeck
+    /// caching each saved deck's cards so the very first reload doesn't re-fetch them one by one.
+    /// </summary>
+    public void CacheCard(CardDto card)
+    {
+        if (string.IsNullOrEmpty(card.Slug))
+        {
+            return;
+        }
+
+        var cacheFile = GetCardCacheFilePath($"card|{card.Slug}");
+        File.WriteAllText(cacheFile, JsonSerializer.Serialize(card, JsonOptions));
+    }
+
     private string GetCardCacheFilePath(string cacheKey)
     {
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(cacheKey)));

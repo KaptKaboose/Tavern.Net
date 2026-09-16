@@ -1,0 +1,50 @@
+<UserControl x:Class="Tavern.Net.Views.StartMenuView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:Tavern.Net.ViewModels"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:StartMenuViewModel}"
+             d:DesignWidth="1600" d:DesignHeight="950">
+    <UserControl.Resources>
+        <!-- Same look as every other button in the app (ActionButtonStyle, from
+             SharedTemplates.xaml), just bigger — this is the main menu. -->
+        <Style x:Key="MenuButton" TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+            <Setter Property="Width" Value="260"/>
+            <Setter Property="Padding" Value="0,14"/>
+            <Setter Property="Margin" Value="0,0,0,16"/>
+            <Setter Property="FontSize" Value="18"/>
+        </Style>
+
+        <Style x:Key="SoloButton" TargetType="Button" BasedOn="{StaticResource MenuButton}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsStartingSolo}" Value="True">
+                    <Setter Property="IsEnabled" Value="False"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Background="#1A202C">
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+            <TextBlock Text="Tavern.Net" FontSize="42" FontWeight="Bold" Foreground="#F7FAFC"
+                       HorizontalAlignment="Center" Margin="0,0,0,8"/>
+            <TextBlock Text="{Binding ActiveDeckLabel}" FontSize="14" Foreground="#A0AEC0"
+                       HorizontalAlignment="Center" Margin="0,0,0,32"/>
+
+            <Button Content="Solo" Style="{StaticResource SoloButton}" Command="{Binding SoloCommand}"/>
+            <TextBlock Text="Starting..." Foreground="#A0AEC0" HorizontalAlignment="Center" Margin="0,0,0,16"
+                       Visibility="{Binding IsStartingSolo, Converter={StaticResource BoolToVisibility}}"/>
+            <Button Content="Online" Style="{StaticResource MenuButton}" Command="{Binding OnlineCommand}"
+                    ToolTip="Coming soon"/>
+            <Button Content="Change Deck" Style="{StaticResource MenuButton}" Command="{Binding ChangeDeckCommand}"/>
+            <Button Content="View Game" Style="{StaticResource MenuButton}" Command="{Binding ViewGameCommand}"
+                    ToolTip="Coming soon"/>
+
+            <TextBlock Text="{Binding ErrorMessage}" Foreground="IndianRed" Margin="0,16,0,0"
+                       MaxWidth="400" TextWrapping="Wrap" TextAlignment="Center"
+                       Visibility="{Binding ErrorMessage, Converter={StaticResource NullToVisibility}}"/>
+        </StackPanel>
+    </Grid>
+</UserControl>

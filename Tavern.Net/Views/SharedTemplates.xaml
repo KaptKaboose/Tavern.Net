@@ -25,6 +25,118 @@
         <Setter Property="SelectionBrush" Value="#4A5568"/>
     </Style>
 
+    <!-- Both the closed box and the open dropdown's rows come with their own hardcoded
+         system-highlight-blue/white chrome baked into the default ComboBox/ComboBoxItem
+         ControlTemplates — plain Background/Foreground setters don't reach the selected-row or
+         closed-box visuals, they only get bypassed by supplying our own templates outright. -->
+    <Style x:Key="ComboBoxItemStyle" TargetType="ComboBoxItem">
+        <Setter Property="Padding" Value="8,5"/>
+        <Setter Property="Background" Value="#2D3748"/>
+        <Setter Property="Foreground" Value="#F7FAFC"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBoxItem">
+                    <Border x:Name="Bd" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+                        <ContentPresenter/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsHighlighted" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="#4A5568"/>
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="#4A5568"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="ComboBox">
+        <Setter Property="Background" Value="#2D3748"/>
+        <Setter Property="Foreground" Value="#F7FAFC"/>
+        <Setter Property="BorderBrush" Value="#4A5568"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="8,5"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="ItemContainerStyle" Value="{StaticResource ComboBoxItemStyle}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBox">
+                    <Grid>
+                        <ToggleButton x:Name="ToggleButton" Focusable="False" ClickMode="Press"
+                                      Background="{TemplateBinding Background}"
+                                      BorderBrush="{TemplateBinding BorderBrush}"
+                                      BorderThickness="{TemplateBinding BorderThickness}"
+                                      IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                            <ToggleButton.Template>
+                                <ControlTemplate TargetType="ToggleButton">
+                                    <Border Background="{TemplateBinding Background}"
+                                            BorderBrush="{TemplateBinding BorderBrush}"
+                                            BorderThickness="{TemplateBinding BorderThickness}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="20"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="1" Text="&#9662;" Foreground="#F7FAFC"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="10"/>
+                                        </Grid>
+                                    </Border>
+                                </ControlTemplate>
+                            </ToggleButton.Template>
+                        </ToggleButton>
+
+                        <!-- SelectionBoxItem/SelectionBoxItemTemplate (not the raw selected item) is the
+                             documented way to show the closed box's content without an editable text
+                             box, and it's what makes TextElement.Foreground below actually apply. -->
+                        <ContentPresenter x:Name="ContentSite" IsHitTestVisible="False"
+                                           Content="{TemplateBinding SelectionBoxItem}"
+                                           ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                           ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
+                                           Margin="{TemplateBinding Padding}"
+                                           HorizontalAlignment="Left" VerticalAlignment="Center"
+                                           TextElement.Foreground="{TemplateBinding Foreground}"/>
+
+                        <Popup x:Name="PART_Popup" Placement="Bottom" IsOpen="{TemplateBinding IsDropDownOpen}"
+                               AllowsTransparency="True" Focusable="False" PopupAnimation="None" StaysOpen="False">
+                            <Border Background="#2D3748" BorderBrush="#4A5568" BorderThickness="1"
+                                    MinWidth="{TemplateBinding ActualWidth}"
+                                    MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                                <ScrollViewer SnapsToDevicePixels="True">
+                                    <ItemsPresenter/>
+                                </ScrollViewer>
+                            </Border>
+                        </Popup>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- The app's one button look: dark chrome, subtle border, lighter on hover. Every ordinary
+         button in the app (menu, deck import, board header actions) uses this explicitly rather
+         than an implicit TargetType="Button" style, since a few spots (CounterButtonStyle,
+         StatusToggleStyle in GameBoardView) need their own fixed-size variants instead. -->
+    <Style x:Key="ActionButtonStyle" TargetType="Button">
+        <Setter Property="Padding" Value="16,8"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="Foreground" Value="#F7FAFC"/>
+        <Setter Property="Background" Value="#1A202C"/>
+        <Setter Property="BorderBrush" Value="#4A5568"/>
+        <Setter Property="BorderThickness" Value="2"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="#4A5568"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Foreground" Value="#718096"/>
+                <Setter Property="Cursor" Value="Arrow"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
     <!-- One face-up card: art if loaded, name placeholder otherwise. Left-click taps/untaps it
          (only meaningful on the Field — see GameBoardViewModel.ToggleTapped), drag moves it
          between zones, and right-click immediately opens the full-size zoom overlay. -->

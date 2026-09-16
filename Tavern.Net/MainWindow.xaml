@@ -11,6 +11,9 @@
         Background="#1A202C"
         PreviewKeyDown="OnPreviewKeyDown">
     <Window.Resources>
+        <DataTemplate DataType="{x:Type vm:StartMenuViewModel}">
+            <views:StartMenuView/>
+        </DataTemplate>
         <DataTemplate DataType="{x:Type vm:DeckImportViewModel}">
             <views:DeckImportView/>
         </DataTemplate>

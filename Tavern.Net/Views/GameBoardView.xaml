@@ -57,22 +57,8 @@
             </Style.Triggers>
         </Style>
 
-        <!-- Text-label action buttons (Roll, ...) needing the same dark palette as
-             CounterButtonStyle but sized to their content instead of a fixed 32x32 box. -->
-        <Style x:Key="ActionButtonStyle" TargetType="Button">
-            <Setter Property="Padding" Value="16,8"/>
-            <Setter Property="FontWeight" Value="Bold"/>
-            <Setter Property="Foreground" Value="#F7FAFC"/>
-            <Setter Property="Background" Value="#1A202C"/>
-            <Setter Property="BorderBrush" Value="#4A5568"/>
-            <Setter Property="BorderThickness" Value="2"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#4A5568"/>
-                </Trigger>
-            </Style.Triggers>
-        </Style>
+        <!-- ActionButtonStyle (the app's shared button look) comes from SharedTemplates.xaml,
+             merged in App.xaml. -->
     </UserControl.Resources>
     <Grid>
         <Grid.ColumnDefinitions>
