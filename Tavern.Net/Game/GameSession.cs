@@ -69,6 +69,11 @@ public sealed class GameSession
         return player;
     }
 
+    /// <summary>Sets the current phase directly, without running WakeUp/Recollect/Draw's entry
+    /// actions the way SetPhase does — used only by GameSessionSerializer.RestoreAsync, where those
+    /// actions already happened and are already reflected in the restored zones/stats.</summary>
+    internal void SetPhaseForRestore(TurnPhase phase) => CurrentPhase = phase;
+
     public void Shuffle(Player player, ZoneType zoneType = ZoneType.MainDeck)
     {
         var zone = player.GetZone(zoneType);

@@ -64,6 +64,21 @@ public sealed class DeckStorageService
         }
     }
 
+    /// <summary>Deletes a saved deck, clearing ActiveDeckName too if it was the one deleted.</summary>
+    public void Delete(string name)
+    {
+        var file = Load();
+        if (file.Decks.RemoveAll(d => d.Name == name) > 0)
+        {
+            if (file.ActiveDeckName == name)
+            {
+                file.ActiveDeckName = null;
+            }
+
+            Persist(file);
+        }
+    }
+
     private StorageFile Load()
     {
         if (!File.Exists(_filePath))

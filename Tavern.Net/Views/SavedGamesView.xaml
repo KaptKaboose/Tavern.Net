@@ -1,0 +1,66 @@
+<UserControl x:Class="Tavern.Net.Views.SavedGamesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:Tavern.Net.ViewModels"
+             xmlns:game="clr-namespace:Tavern.Net.Game"
+             xmlns:conv="clr-namespace:Tavern.Net.Converters"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:SavedGamesViewModel}"
+             d:DesignWidth="1600" d:DesignHeight="950">
+    <UserControl.Resources>
+        <conv:NullToVisibilityConverter x:Key="NullToVisibility"/>
+        <conv:IntToVisibilityConverter x:Key="IntToVisibility"/>
+    </UserControl.Resources>
+
+    <Grid Background="#1A202C" Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <Button Grid.Row="0" Content="&lt; Back to Menu" Style="{StaticResource ActionButtonStyle}"
+                HorizontalAlignment="Left" Margin="0,0,0,16" Command="{Binding BackCommand}"/>
+
+        <TextBlock Grid.Row="1" Text="{Binding ErrorMessage}" Foreground="IndianRed" Margin="0,0,0,12"
+                   TextWrapping="Wrap"
+                   Visibility="{Binding ErrorMessage, Converter={StaticResource NullToVisibility}}"/>
+
+        <TextBlock Grid.Row="2" Text="No saved games yet — Save Game from the board while you play, then come back here to resume it."
+                   Foreground="#A0AEC0" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,32,0,0"
+                   Visibility="{Binding SavedGames.Count, Converter={StaticResource IntToVisibility}, ConverterParameter=Invert}"/>
+
+        <ListBox Grid.Row="2" ItemsSource="{Binding SavedGames}" BorderThickness="1"
+                 Visibility="{Binding SavedGames.Count, Converter={StaticResource IntToVisibility}}">
+            <ListBox.ItemTemplate>
+                <DataTemplate DataType="{x:Type game:SavedGame}">
+                    <Grid Margin="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="Bold" Foreground="#F7FAFC"/>
+                            <TextBlock Foreground="#A0AEC0" FontSize="12">
+                                <Run Text="{Binding Summary, Mode=OneWay}"/>
+                                <Run Text=" · "/>
+                                <Run Text="{Binding SavedAtUtc, Mode=OneWay, StringFormat='{}{0:g}'}"/>
+                            </TextBlock>
+                        </StackPanel>
+
+                        <Button Grid.Column="1" Content="Load" Style="{StaticResource ActionButtonStyle}" Margin="8,0,0,0"
+                                Command="{Binding DataContext.LoadCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                CommandParameter="{Binding}"/>
+                        <Button Grid.Column="2" Content="Delete" Style="{StaticResource ActionButtonStyle}" Margin="8,0,0,0"
+                                Command="{Binding DataContext.DeleteCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                CommandParameter="{Binding}"/>
+                    </Grid>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </Grid>
+</UserControl>

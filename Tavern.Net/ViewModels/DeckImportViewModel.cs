@@ -153,6 +153,24 @@ public sealed partial class DeckImportViewModel : ObservableObject
         }
     }
 
+    [RelayCommand]
+    private void DeleteDeck(SavedDeck? deck)
+    {
+        if (deck is null)
+        {
+            return;
+        }
+
+        _deckStorage.Delete(deck.Name);
+        RefreshSavedDecks();
+        if (SelectedSavedDeck?.Name == deck.Name)
+        {
+            SelectedSavedDeck = null;
+        }
+
+        SaveStatusMessage = $"Deleted \"{deck.Name}\".";
+    }
+
     [RelayCommand(CanExecute = nameof(CanSaveDeck))]
     private void SaveDeck()
     {

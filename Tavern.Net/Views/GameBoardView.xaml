@@ -59,6 +59,15 @@
 
         <!-- ActionButtonStyle (the app's shared button look) comes from SharedTemplates.xaml,
              merged in App.xaml. -->
+
+        <!-- Meta-action bar (Menu, Save Game): a separate, deliberately small row above the
+             gameplay header, so those rarely-used actions don't compete with Life/phase/Roll/Damage
+             for space — see GameBoardView's own note on why this used to be one crowded row. -->
+        <Style x:Key="CompactButtonStyle" TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+            <Setter Property="Padding" Value="10,3"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="Normal"/>
+        </Style>
     </UserControl.Resources>
     <Grid>
         <Grid.ColumnDefinitions>
@@ -69,11 +78,19 @@
         <Grid Grid.Column="0" Margin="12">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
-            <!-- Header: life + turn (left), the turn-phase tracker (centered), global actions (right). -->
-            <Grid Grid.Row="0" Margin="0,0,0,10">
+            <!-- Meta-action bar: Menu and Save Game, kept small (CompactButtonStyle) and separate
+                 from the gameplay header below so the phase tracker keeps its room. -->
+            <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,6">
+                <Button Style="{StaticResource CompactButtonStyle}" Content="Menu" Margin="0,0,8,0" Command="{Binding BackToMenuCommand}"/>
+                <Button Style="{StaticResource CompactButtonStyle}" Content="Save Game" Command="{Binding OpenSaveGamePanelCommand}"/>
+            </StackPanel>
+
+            <!-- Header: life + turn (left), the turn-phase tracker (centered), Roll/Damage (right). -->
+            <Grid Grid.Row="1" Margin="0,0,0,10">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
@@ -132,7 +149,7 @@
             <!-- The board: Field, Memory, and Hand are stacked as distinct, non-overlapping regions
                  (not layered on top of each other) — Material sits to their left, Banishment/Main/
                  Graveyard to their right. -->
-            <Grid Grid.Row="1">
+            <Grid Grid.Row="2">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
@@ -356,7 +373,7 @@
                      action underneath, but is no longer shown directly here (see GameSession's
                      RecordMajorEvent/RecordLifeOrDamageChange). Click an entry to open a read-only
                      view of the board exactly as it was at that moment. -->
-                <TextBlock DockPanel.Dock="Top" Text="Major events" FontWeight="Bold" Foreground="#F7FAFC" Margin="0,4,0,4"/>
+                <TextBlock DockPanel.Dock="Top" Text="Play log" FontWeight="Bold" Foreground="#F7FAFC" Margin="0,4,0,4"/>
                 <ListBox ItemsSource="{Binding Stats.MajorEvents}" ScrollViewer.VerticalScrollBarVisibility="Auto">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
@@ -658,6 +675,37 @@
                         </StackPanel>
                     </ScrollViewer>
                 </DockPanel>
+            </Border>
+        </Grid>
+
+        <!-- Save Game overlay: click Save Game in the header to open, name it, and Save — the board
+             has no persistent "management" screen of its own, so this is a modal panel rather than
+             DeckImportView's inline Save Deck row. Stays open after a successful save so the
+             confirmation is visible; Close (or the scrim) dismisses it. -->
+        <Grid Grid.Column="0" Grid.ColumnSpan="2"
+              Visibility="{Binding IsSavingGame, Converter={StaticResource BoolToVisibility}}"
+              d:IsHidden="True">
+            <Button Command="{Binding CloseSaveGamePanelCommand}" Focusable="False" Cursor="Arrow">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="#CC000000"/>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+
+            <Border MaxWidth="420" MinWidth="360" Padding="20"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Background="#2D3748" BorderBrush="White" BorderThickness="2" CornerRadius="10">
+                <StackPanel>
+                    <TextBlock Text="Save Game" Foreground="White" FontSize="20" FontWeight="Bold" Margin="0,0,0,12"/>
+                    <TextBox Text="{Binding SaveGameName, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,12"/>
+                    <StackPanel Orientation="Horizontal">
+                        <Button Style="{StaticResource ActionButtonStyle}" Content="Save" Command="{Binding ConfirmSaveGameCommand}"/>
+                        <Button Style="{StaticResource ActionButtonStyle}" Content="Close" Margin="8,0,0,0" Command="{Binding CloseSaveGamePanelCommand}"/>
+                    </StackPanel>
+                    <TextBlock Text="{Binding SaveGameStatusMessage}" Foreground="#68D391" Margin="0,12,0,0" TextWrapping="Wrap"
+                               Visibility="{Binding SaveGameStatusMessage, Converter={StaticResource NullToVisibility}}"/>
+                </StackPanel>
             </Border>
         </Grid>
 

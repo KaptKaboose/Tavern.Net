@@ -12,6 +12,7 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
 {
     private readonly GameSession _session;
     private readonly GrandArchiveApiClient _apiClient;
+    private readonly GameStorageService _gameStorage;
     private readonly Random _diceRandom = new();
 
     // Set by the 'N' handler when StartNewGame hands back cards to glimpse instead of a normal
@@ -208,10 +209,26 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
 
     public ObservableCollection<DieViewModel> Dice { get; } = new();
 
-    public GameBoardViewModel(GameSession session, Player player, GrandArchiveApiClient apiClient)
+    /// <summary>Whether the Save Game panel is open.</summary>
+    [ObservableProperty]
+    private bool _isSavingGame;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ConfirmSaveGameCommand))]
+    private string _saveGameName = "";
+
+    [ObservableProperty]
+    private string? _saveGameStatusMessage;
+
+    /// <summary>Raised when the player wants to return to the start menu, leaving this game running
+    /// in the background (nothing is auto-saved — see Save Game).</summary>
+    public event Action? BackToMenuRequested;
+
+    public GameBoardViewModel(GameSession session, Player player, GrandArchiveApiClient apiClient, GameStorageService gameStorage)
     {
         _session = session;
         _apiClient = apiClient;
+        _gameStorage = gameStorage;
         Player = player;
         _currentPhase = session.CurrentPhase;
 
@@ -449,6 +466,30 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
 
     [RelayCommand]
     private void CloseDicePanel() => IsRollingDice = false;
+
+    [RelayCommand]
+    private void OpenSaveGamePanel()
+    {
+        SaveGameStatusMessage = null;
+        IsSavingGame = true;
+    }
+
+    [RelayCommand]
+    private void CloseSaveGamePanel() => IsSavingGame = false;
+
+    [RelayCommand(CanExecute = nameof(CanConfirmSaveGame))]
+    private void ConfirmSaveGame()
+    {
+        GameSessionSerializer.WarmCardCache(_session, _apiClient);
+        var saved = GameSessionSerializer.Capture(SaveGameName.Trim(), _session);
+        _gameStorage.Save(saved);
+        SaveGameStatusMessage = $"Saved \"{saved.Name}\".";
+    }
+
+    private bool CanConfirmSaveGame() => !string.IsNullOrWhiteSpace(SaveGameName);
+
+    [RelayCommand]
+    private void BackToMenu() => BackToMenuRequested?.Invoke();
 
     [RelayCommand]
     private void IncreaseDiceToRoll() => DiceToRoll = Math.Min(20, DiceToRoll + 1);

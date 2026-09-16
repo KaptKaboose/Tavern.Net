@@ -42,6 +42,8 @@
                                   DisplayMemberPath="Name"/>
                         <Button Content="Load" Style="{StaticResource ActionButtonStyle}" Margin="8,0,0,0"
                                 Command="{Binding LoadDeckCommand}" CommandParameter="{Binding SelectedSavedDeck}"/>
+                        <Button Content="Delete" Style="{StaticResource ActionButtonStyle}" Margin="8,0,0,0"
+                                Command="{Binding DeleteDeckCommand}" CommandParameter="{Binding SelectedSavedDeck}"/>
                     </StackPanel>
                 </StackPanel>
 

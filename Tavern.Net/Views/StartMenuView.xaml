@@ -39,8 +39,7 @@
             <Button Content="Online" Style="{StaticResource MenuButton}" Command="{Binding OnlineCommand}"
                     ToolTip="Coming soon"/>
             <Button Content="Change Deck" Style="{StaticResource MenuButton}" Command="{Binding ChangeDeckCommand}"/>
-            <Button Content="View Game" Style="{StaticResource MenuButton}" Command="{Binding ViewGameCommand}"
-                    ToolTip="Coming soon"/>
+            <Button Content="View Game" Style="{StaticResource MenuButton}" Command="{Binding ViewGameCommand}"/>
 
             <TextBlock Text="{Binding ErrorMessage}" Foreground="IndianRed" Margin="0,16,0,0"
                        MaxWidth="400" TextWrapping="Wrap" TextAlignment="Center"
