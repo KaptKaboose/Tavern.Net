@@ -28,10 +28,24 @@
 
     <Grid Background="#1A202C">
         <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-            <TextBlock Text="Tavern.Net" FontSize="42" FontWeight="Bold" Foreground="#F7FAFC"
-                       HorizontalAlignment="Center" Margin="0,0,0,8"/>
-            <TextBlock Text="{Binding ActiveDeckLabel}" FontSize="14" Foreground="#A0AEC0"
-                       HorizontalAlignment="Center" Margin="0,0,0,32"/>
+            <Image Source="/GameData/Images/Logo.png" Stretch="Uniform" MaxWidth="400" MaxHeight="400"
+                   HorizontalAlignment="Center" Margin="0,0,0,8"/>
+
+            <!-- Prominent, since which deck is active is easy to forget between sessions and
+                 directly determines what Solo/Online actually start you with. -->
+            <Border Visibility="{Binding HasActiveDeck, Converter={StaticResource BoolToVisibility}}"
+                    Background="#2D3748" BorderBrush="#F6E05E" BorderThickness="2" CornerRadius="10"
+                    Padding="24,10" Margin="0,0,0,32">
+                <StackPanel HorizontalAlignment="Center">
+                    <TextBlock Text="ACTIVE DECK" FontSize="11" FontWeight="Bold" Foreground="#F6E05E"
+                               HorizontalAlignment="Center" Margin="0,0,0,2"/>
+                    <TextBlock Text="{Binding ActiveDeckName}" FontSize="20" FontWeight="Bold" Foreground="#F7FAFC"
+                               HorizontalAlignment="Center"/>
+                </StackPanel>
+            </Border>
+            <TextBlock Text="No deck selected yet" FontSize="14" Foreground="#A0AEC0"
+                       HorizontalAlignment="Center" Margin="0,0,0,32"
+                       Visibility="{Binding HasNoActiveDeck, Converter={StaticResource BoolToVisibility}}"/>
 
             <Button Content="Solo" Style="{StaticResource SoloButton}" Command="{Binding SoloCommand}"/>
             <TextBlock Text="Starting..." Foreground="#A0AEC0" HorizontalAlignment="Center" Margin="0,0,0,16"

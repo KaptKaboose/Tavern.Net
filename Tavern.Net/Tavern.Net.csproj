@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <ApplicationIcon>Icon.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -16,7 +17,9 @@
     <!-- Not auto-included by the SDK's default globbing (that only covers .xaml as Page) — an
          embedded WPF Resource, so it ships in the assembly and loads via a relative pack URI
          regardless of the app's working directory, unlike the runtime-downloaded card art. -->
+    <Resource Include="Icon.ico" />
     <Resource Include="GameData\Images\Grand Archive Back.jpg" />
+    <Resource Include="GameData\Images\Logo.png" />
     <Resource Include="GameData\Images\Tokens\*.png" />
     <Resource Include="GameData\Images\Dice\*.png" />
   </ItemGroup>

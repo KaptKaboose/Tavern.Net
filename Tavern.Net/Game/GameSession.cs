@@ -317,10 +317,15 @@ public sealed class GameSession
                     glimpsedCards = drawn;
                 }
             }
-            else
-            {
-                DrawStartingHand(player);
-            }
+        }
+
+        // A normal opening hand, unless the base champion's effect triggered a glimpse instead —
+        // covers "no glimpse keyword at all" and "champion has no effect text" the same way, rather
+        // than the two falling out of the branching above differently and one of them (a null-
+        // Effect champion, in particular) silently leaving Hand empty at game start.
+        if (glimpsedCards.Count == 0)
+        {
+            DrawStartingHand(player);
         }
 
         RecordMajorEvent(player, "Game started.", insertAtStart: true);

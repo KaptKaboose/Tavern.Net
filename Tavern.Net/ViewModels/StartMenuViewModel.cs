@@ -17,8 +17,16 @@ public sealed partial class StartMenuViewModel : ObservableObject
     private readonly GrandArchiveApiClient _apiClient;
     private readonly DeckStorageService _deckStorage;
 
+    /// <summary>Null when there's no active deck yet — see HasActiveDeck/HasNoActiveDeck, which
+    /// drive the start menu's two different treatments (a prominent highlighted badge vs. a plain
+    /// "no deck selected" notice).</summary>
     [ObservableProperty]
-    private string _activeDeckLabel = "No deck selected yet";
+    [NotifyPropertyChangedFor(nameof(HasActiveDeck), nameof(HasNoActiveDeck))]
+    private string? _activeDeckName;
+
+    public bool HasActiveDeck => ActiveDeckName is not null;
+
+    public bool HasNoActiveDeck => ActiveDeckName is null;
 
     [ObservableProperty]
     private bool _isStartingSolo;
@@ -55,7 +63,7 @@ public sealed partial class StartMenuViewModel : ObservableObject
     public void RefreshActiveDeck()
     {
         var deck = _deckStorage.GetActiveDeck();
-        ActiveDeckLabel = deck is null ? "No deck selected yet" : $"Active deck: {deck.Name}";
+        ActiveDeckName = deck?.Name;
     }
 
     [RelayCommand]

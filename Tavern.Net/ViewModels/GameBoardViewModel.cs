@@ -1131,6 +1131,18 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
             case OnlineMessageKind.UndoNotice:
                 ShowToast(message.UndoActionLabel is { } label ? $"Opponent used Undo ({label})." : "Opponent used Undo.");
                 break;
+            case OnlineMessageKind.NewGameRequest:
+                OpenNewGameReadyUp();
+                break;
+            case OnlineMessageKind.NewGameReady:
+                IsOpponentNewGameReady = message.Ready;
+                break;
+            case OnlineMessageKind.NewGameStart:
+                PerformOnlineNewGame(message.FirstPlayerNumber);
+                break;
+            case OnlineMessageKind.NewGameCancel:
+                CloseNewGameReadyUp();
+                break;
         }
     }
 
@@ -1628,9 +1640,149 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
             detailMessage: "Added to the bottom of the deck — not shuffled in.");
     }
 
-    /// <summary>Resets the board for a fresh game — the 'N' key, and also called directly from the
-    /// constructor for a brand-new solo game (see isFreshSoloGame) so the player doesn't have to
-    /// remember to press it themselves.</summary>
+    // --- New Game online: pressing 'N' with an opponent needs both sides to agree first — solo's
+    // immediate reset would otherwise blow away one side's board mid-turn without any warning to
+    // the other. Same "both players ready, host commits" shape as OnlineLobbyViewModel's own
+    // Ready/StartGame handshake (see ReadyMarkStyle, shared with that view), just reached from 'N'
+    // instead of the lobby screen. Host convention matches the lobby's own: PlayerNumber 0 is
+    // always the host (see OnlineLobbyViewModel.TryBuildAndStartAsync's AddPlayer ordering).
+
+    public bool IsHost => Player.PlayerNumber == 0;
+
+    public bool IsGuest => !IsHost;
+
+    [ObservableProperty]
+    private bool _isNewGameReadyUpOpen;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(StartNewGameOnlineCommand))]
+    private bool _isNewGameReady;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(StartNewGameOnlineCommand))]
+    private bool _isOpponentNewGameReady;
+
+    /// <summary>Host's own choice of who goes first afterward — only the host's copy of this is
+    /// ever actually used (see StartNewGameOnline); the guest sees no picker at all (IsHost gates
+    /// its visibility in XAML), so their own copy is just along for the ride, unused.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsMeChosenFirstForNewGame))]
+    private int _newGameFirstPlayerNumber;
+
+    public bool IsMeChosenFirstForNewGame => NewGameFirstPlayerNumber == Player.PlayerNumber;
+
+    partial void OnIsNewGameReadyUpOpenChanged(bool value)
+    {
+        if (value)
+        {
+            CloseActionsMenu();
+        }
+    }
+
+    /// <summary>Opens the ready-up prompt locally — called both for the player who pressed 'N'
+    /// (see RequestNewGameOnline) and for the other side on receiving their NewGameRequest, so
+    /// either player can be the one to initiate. Defaults to the host going first — PlayerNumber 0
+    /// is always the host (see IsHost) — until the host picks otherwise.</summary>
+    private void OpenNewGameReadyUp()
+    {
+        IsNewGameReady = false;
+        IsOpponentNewGameReady = false;
+        NewGameFirstPlayerNumber = 0;
+        IsNewGameReadyUpOpen = true;
+    }
+
+    [RelayCommand]
+    private void ChooseSelfFirstForNewGame() => NewGameFirstPlayerNumber = Player.PlayerNumber;
+
+    [RelayCommand]
+    private void ChooseOpponentFirstForNewGame() => NewGameFirstPlayerNumber = OpponentPlayer!.PlayerNumber;
+
+    private void RequestNewGameOnline()
+    {
+        OpenNewGameReadyUp();
+        _ = _connection!.SendAsync(new OnlineMessage { Kind = OnlineMessageKind.NewGameRequest });
+    }
+
+    [RelayCommand]
+    private void ToggleNewGameReady()
+    {
+        IsNewGameReady = !IsNewGameReady;
+        _ = _connection!.SendAsync(new OnlineMessage { Kind = OnlineMessageKind.NewGameReady, Ready = IsNewGameReady });
+    }
+
+    private void CloseNewGameReadyUp()
+    {
+        IsNewGameReadyUpOpen = false;
+        IsNewGameReady = false;
+        IsOpponentNewGameReady = false;
+    }
+
+    [RelayCommand]
+    private void CancelNewGameReadyUp()
+    {
+        CloseNewGameReadyUp();
+        _ = _connection!.SendAsync(new OnlineMessage { Kind = OnlineMessageKind.NewGameCancel });
+    }
+
+    private bool CanStartNewGameOnline() => IsHost && IsNewGameReady && IsOpponentNewGameReady;
+
+    /// <summary>Host-only: commits the reset both sides just agreed to, using whichever first
+    /// player the host picked (ChooseSelfFirstForNewGame/ChooseOpponentFirstForNewGame — defaults
+    /// to the host, but doesn't have to stay that way; there's no dice-roll step for a mid-game
+    /// reset the way the initial lobby has one, so the host just decides directly).</summary>
+    [RelayCommand(CanExecute = nameof(CanStartNewGameOnline))]
+    private void StartNewGameOnline()
+    {
+        if (!IsHost)
+        {
+            return;
+        }
+
+        var firstPlayerNumber = NewGameFirstPlayerNumber;
+        _ = _connection!.SendAsync(new OnlineMessage { Kind = OnlineMessageKind.NewGameStart, FirstPlayerNumber = firstPlayerNumber });
+        PerformOnlineNewGame(firstPlayerNumber);
+    }
+
+    /// <summary>The actual reset, run independently by both sides once the host's Start fires (once
+    /// locally, once via the incoming NewGameStart) — StartNewGameForPlayer is the same per-player
+    /// primitive OnlineLobbyViewModel.TryBuildAndStartAsync uses for the very first game, deliberately
+    /// scoped to just this player's own Zones/Stats (GameSession.StartNewGame's unscoped, both-
+    /// players version isn't safe to call online — it would also reset this session's local mirror
+    /// of the opponent, which their own client owns and broadcasts, not this one).</summary>
+    private void PerformOnlineNewGame(int firstPlayerNumber)
+    {
+        DiscardUndo();
+        CloseNewGameReadyUp();
+
+        // The match clock resets too — a whole new game shouldn't keep counting up from the
+        // previous one's elapsed time. Each side zeroes their own local copy; the timer itself
+        // keeps ticking (it's never stopped mid-game, only frozen by Save Game), it just resumes
+        // counting up from zero.
+        ElapsedTime = TimeSpan.Zero;
+
+        var glimpsedOnNewGame = _session.StartNewGameForPlayer(Player);
+
+        var firstPlayer = firstPlayerNumber == Player.PlayerNumber ? Player : OpponentPlayer!;
+        _session.ApplyRemoteGameState(TurnPhase.Materialization, firstPlayer);
+        _session.SetFirstTurnTarget(Player, firstPlayer == Player ? TurnPhase.Main : TurnPhase.Draw);
+        CurrentPhase = _session.CurrentPhase;
+        UpdateIsMyTurn();
+
+        if (glimpsedOnNewGame.Count > 0)
+        {
+            _drawAfterGlimpsing = true;
+            IsGlimpsing = true;
+            foreach (var card in glimpsedOnNewGame)
+            {
+                GlimpseStaging.Add(new CardViewModel(card, _apiClient, this));
+            }
+        }
+    }
+
+    /// <summary>Resets the board for a fresh game — solo's 'N' key (see HandleKey, which routes
+    /// online instead to RequestNewGameOnline), and also called directly from the constructor for a
+    /// brand-new solo game (see isFreshSoloGame) so the player doesn't have to remember to press it
+    /// themselves.</summary>
     private void TriggerNewGame()
     {
         // A pending Undo (Bottom/Mill/Shuffle/Glimpse) references cards/zones from the game that's
@@ -1775,7 +1927,15 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
                 }
                 return true;
             case Key.N:
-                TriggerNewGame();
+                if (IsOnline)
+                {
+                    RequestNewGameOnline();
+                }
+                else
+                {
+                    TriggerNewGame();
+                }
+
                 return true;
             default:
                 return false;
@@ -1788,7 +1948,7 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     /// half-configured action can't go stale if some other overlay opens first).</summary>
     private bool IsAnyOverlayOpen() =>
         IsOpponentPanelOpen || IsRollingDice || IsSavingGame || IsSealedPanelOpen || IsGiveTargetPickerOpen || IsActionsMenuOpen ||
-        IsGenerateSearchOpen || IsGenerateCountOpen ||
+        IsGenerateSearchOpen || IsGenerateCountOpen || IsNewGameReadyUpOpen ||
         ZoomedCard is not null || PeekedZone is not null || ViewedMajorEvent is not null ||
         ViewedSnapshotPile is not null || ZoomedSnapshotCard is not null || ActiveReveal is not null;
 

@@ -1543,6 +1543,96 @@
             </StackPanel>
         </Grid>
 
+        <!-- New Game ready-up (online only): pressing 'N' opens this for both players instead of
+             solo's immediate reset — same "both ready, host commits" shape as the online lobby's
+             own Ready/Start handshake (ReadyMarkStyle/BoolToCheckMark are shared with it). Placed
+             last of all so an incoming request always surfaces on top, even over whatever overlay
+             the other player happened to have open locally. No scrim-click-to-close — Cancel is the
+             only way out, since closing it silently would leave the other side stuck waiting. -->
+        <Grid Grid.Column="0" Grid.ColumnSpan="2"
+              Visibility="{Binding IsNewGameReadyUpOpen, Converter={StaticResource BoolToVisibility}}"
+              d:IsHidden="True">
+            <Border Background="#CC000000"/>
+
+            <Border MinWidth="320" Padding="24" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Background="#2D3748" BorderBrush="White" BorderThickness="2" CornerRadius="10">
+                <StackPanel>
+                    <TextBlock Text="Start a new game?" FontSize="18" FontWeight="Bold" Foreground="White" Margin="0,0,0,4"/>
+                    <TextBlock Text="Both players' boards will fully reset — decks reshuffled, new hands drawn, logs cleared."
+                               Foreground="#A0AEC0" TextWrapping="Wrap" MaxWidth="280" Margin="0,0,0,16"/>
+
+                    <Border Background="#1A202C" CornerRadius="8" Padding="16,12" Margin="0,0,0,16">
+                        <StackPanel Orientation="Horizontal">
+                            <Button Style="{StaticResource ActionButtonStyle}" Command="{Binding ToggleNewGameReadyCommand}">
+                                <TextBlock>
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Text" Value="Ready Up"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsNewGameReady}" Value="True">
+                                                    <Setter Property="Text" Value="Not Ready"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Button>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
+                                <TextBlock Text="You:" Foreground="#A0AEC0" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                <TextBlock DataContext="{Binding IsNewGameReady}" Text="{Binding Converter={StaticResource BoolToCheckMark}}"
+                                           Style="{StaticResource ReadyMarkStyle}"/>
+                                <TextBlock Text="Opponent:" Foreground="#A0AEC0" VerticalAlignment="Center" Margin="16,0,6,0"/>
+                                <TextBlock DataContext="{Binding IsOpponentNewGameReady}" Text="{Binding Converter={StaticResource BoolToCheckMark}}"
+                                           Style="{StaticResource ReadyMarkStyle}"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Host only — no dice-roll step for a mid-game reset, so the host just picks
+                         directly rather than the lobby's roll-then-choose flow. Defaults to the
+                         host (see GameBoardViewModel.OpenNewGameReadyUp). -->
+                    <StackPanel Visibility="{Binding IsHost, Converter={StaticResource BoolToVisibility}}" Margin="0,0,0,16">
+                        <TextBlock Text="Who goes first?" Foreground="#A0AEC0" Margin="0,0,0,6"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <Button Content="You" Margin="0,0,8,0" Command="{Binding ChooseSelfFirstForNewGameCommand}">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsMeChosenFirstForNewGame}" Value="True">
+                                                <Setter Property="BorderBrush" Value="#F6E05E"/>
+                                                <Setter Property="BorderThickness" Value="3"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+                            <Button Content="Opponent" Command="{Binding ChooseOpponentFirstForNewGameCommand}">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsMeChosenFirstForNewGame}" Value="False">
+                                                <Setter Property="BorderBrush" Value="#F6E05E"/>
+                                                <Setter Property="BorderThickness" Value="3"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <Button Style="{StaticResource ActionButtonStyle}" Content="Start New Game" Margin="0,0,0,8"
+                            Command="{Binding StartNewGameOnlineCommand}"
+                            Visibility="{Binding IsHost, Converter={StaticResource BoolToVisibility}}"/>
+                    <TextBlock Text="Waiting for the host to start..." Foreground="#A0AEC0" HorizontalAlignment="Center" Margin="0,0,0,8"
+                               Visibility="{Binding IsGuest, Converter={StaticResource BoolToVisibility}}"/>
+
+                    <Button Style="{StaticResource ActionButtonStyle}" Content="Cancel" HorizontalAlignment="Center"
+                            Command="{Binding CancelNewGameReadyUpCommand}"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+
         <!-- Undo — shown toast-style (bottom-center, same visual language as the opponent notice
              below) rather than a small header button, so it's easy to spot and click in time. Real
              Button, not just a notice: clicking anywhere on it fires Undo. Non-modal (excluded from

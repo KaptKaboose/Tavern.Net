@@ -14,6 +14,14 @@ public enum OnlineMessageKind
     RevealCards,
     TransferCard,
     UndoNotice,
+
+    /// <summary>Mid-game "New Game" ready-up handshake — same "both players agree, host commits"
+    /// shape as Ready/StartGame in the pre-game lobby, just reached from the 'N' key instead. See
+    /// GameBoardViewModel's own New Game region.</summary>
+    NewGameRequest,
+    NewGameReady,
+    NewGameStart,
+    NewGameCancel,
 }
 
 /// <summary>One revealed card in a RevealCards message — just enough to resolve and display it on
