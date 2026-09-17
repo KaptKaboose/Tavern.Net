@@ -1,8 +1,8 @@
 namespace Tavern.Net.ViewModels;
 
-/// <summary>Which of the arm-then-digit keyboard chords (Banish, Reveal, Give, Mill, Glimpse) is
-/// currently waiting on its count digit — see GameBoardViewModel.HandleKey. Replaces what used to
-/// be a single-purpose _banishArmed bool now that there's more than one of these.</summary>
+/// <summary>The actions offered by GameBoardViewModel's Actions menu. Shuffle needs no count — it
+/// runs the instant it's picked (see GameBoardViewModel.SelectAction) — every other entry moves on
+/// to the menu's count-entry view first.</summary>
 public enum ArmedChord
 {
     None,
@@ -11,4 +11,5 @@ public enum ArmedChord
     Give,
     Mill,
     Glimpse,
+    Shuffle,
 }

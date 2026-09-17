@@ -25,6 +25,17 @@
         <Setter Property="SelectionBrush" Value="#4A5568"/>
     </Style>
 
+    <!-- The default ScrollViewer template paints the small square where the vertical/horizontal
+         scrollbars meet from SystemColors.ControlBrushKey — an unstyled light-gray square that
+         stands out against this app's dark theme. It isn't exposed as a directly stylable named
+         part, so it's recolored the standard WPF way: redefining that DynamicResource key within
+         this Style's own Resources, which every ScrollViewer's template resolves it from. -->
+    <Style TargetType="ScrollViewer">
+        <Style.Resources>
+            <SolidColorBrush x:Key="{x:Static SystemColors.ControlBrushKey}" Color="#1A202C"/>
+        </Style.Resources>
+    </Style>
+
     <!-- Both the closed box and the open dropdown's rows come with their own hardcoded
          system-highlight-blue/white chrome baked into the default ComboBox/ComboBoxItem
          ControlTemplates — plain Background/Foreground setters don't reach the selected-row or

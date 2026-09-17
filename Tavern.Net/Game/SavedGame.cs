@@ -5,7 +5,8 @@ namespace Tavern.Net.Game;
 /// GameSessionSerializer.Capture) with all of its live state intact. <see cref="Zone"/> is where the
 /// card currently is; <see cref="HomeZone"/>/<see cref="HomeOrder"/> are where it started, same as
 /// CardInstance's own fields, needed so a "New Game" restart after loading still rebuilds the deck
-/// correctly.</summary>
+/// correctly. <see cref="IsSessionGenerated"/> defaults to false so saves made before this field
+/// existed still deserialize.</summary>
 public sealed record SavedCardInstance(
     string Slug,
     ZoneType Zone,
@@ -21,7 +22,8 @@ public sealed record SavedCardInstance(
     bool IsImbued,
     bool IsRanged,
     bool IsRooted,
-    bool IsWarded);
+    bool IsWarded,
+    bool IsSessionGenerated = false);
 
 /// <summary>The by-slug equivalent of <see cref="CardSnapshot"/> — a MajorEvent's board snapshot,
 /// serialized without embedding the full CardDto.</summary>

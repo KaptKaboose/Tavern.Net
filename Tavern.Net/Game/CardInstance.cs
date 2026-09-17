@@ -24,6 +24,17 @@ public sealed partial class CardInstance : ObservableObject
 
     public int HomeOrder { get; }
 
+    /// <summary>
+    /// True for a copy created mid-game by GameSession.GenerateCard (a card effect that produces
+    /// extra copies of a card already in the deck) rather than imported at deck-build time. HomeZone
+    /// is still set to MainDeck for this card — it behaves exactly like a real deck card in every
+    /// other respect (drawn, played, subject to the same MaterialDeck zone barriers, ...) — but
+    /// StartNewGame's rebuild sweep checks this flag to leave it out, since it isn't part of the
+    /// original decklist and shouldn't reappear in a future game the effect that made it isn't
+    /// happening again.
+    /// </summary>
+    public bool IsSessionGenerated { get; }
+
     [ObservableProperty]
     private bool _isTapped;
 
@@ -71,11 +82,12 @@ public sealed partial class CardInstance : ObservableObject
     [ObservableProperty]
     private bool _isWarded;
 
-    public CardInstance(CardDto card, ZoneType homeZone = ZoneType.MainDeck, int homeOrder = 0)
+    public CardInstance(CardDto card, ZoneType homeZone = ZoneType.MainDeck, int homeOrder = 0, bool isSessionGenerated = false)
     {
         Card = card;
         HomeZone = homeZone;
         HomeOrder = homeOrder;
+        IsSessionGenerated = isSessionGenerated;
     }
 
     /// <summary>Clears the counter and every status — called whenever a card leaves the Field/

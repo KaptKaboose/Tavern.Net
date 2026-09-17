@@ -35,7 +35,10 @@ public sealed partial class MainViewModel : ObservableObject
         startMenuViewModel.ChangeDeckRequested += () => CurrentView = CreateImportViewModel(allowStartGame: false);
         startMenuViewModel.ViewGameRequested += () => CurrentView = CreateSavedGamesViewModel();
         startMenuViewModel.OnlineRequested += () => CurrentView = CreateOnlineLobbyViewModel();
-        startMenuViewModel.GameReady += (session, player) => CurrentView = CreateGameBoardViewModel(session, player);
+        // The common Solo path — an active deck already exists, so this is the one most solo games
+        // actually take (CreateImportViewModel's own DeckReady only fires when there's no active
+        // deck yet, or via Change Deck's Start Game). Same auto-start as that path.
+        startMenuViewModel.GameReady += (session, player) => CurrentView = CreateGameBoardViewModel(session, player, isFreshSoloGame: true);
         _startMenuViewModel = startMenuViewModel;
         return startMenuViewModel;
     }
@@ -43,7 +46,9 @@ public sealed partial class MainViewModel : ObservableObject
     private DeckImportViewModel CreateImportViewModel(bool allowStartGame)
     {
         var importViewModel = new DeckImportViewModel(_apiClient, _deckStorage, allowStartGame);
-        importViewModel.DeckReady += (session, player) => CurrentView = CreateGameBoardViewModel(session, player);
+        // A brand-new solo game — auto-starts on load rather than making the player press 'N'
+        // themselves (see GameBoardViewModel's own isFreshSoloGame param).
+        importViewModel.DeckReady += (session, player) => CurrentView = CreateGameBoardViewModel(session, player, isFreshSoloGame: true);
         importViewModel.BackRequested += () => CurrentView = ReturnToStartMenu();
         return importViewModel;
     }
@@ -66,11 +71,11 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     private GameBoardViewModel CreateGameBoardViewModel(
-        GameSession session, Player player, GameConnection? connection = null, TimeSpan? loadedElapsedTime = null)
+        GameSession session, Player player, GameConnection? connection = null, TimeSpan? loadedElapsedTime = null, bool isFreshSoloGame = false)
     {
         var opponentPlayer = connection is not null ? session.Players.First(p => p != player) : null;
         var gameBoardViewModel = new GameBoardViewModel(
-            session, player, _apiClient, _gameStorage, connection, opponentPlayer, loadedElapsedTime);
+            session, player, _apiClient, _gameStorage, connection, opponentPlayer, loadedElapsedTime, isFreshSoloGame);
         gameBoardViewModel.BackToMenuRequested += () => CurrentView = ReturnToStartMenu();
         return gameBoardViewModel;
     }

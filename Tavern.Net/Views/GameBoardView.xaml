@@ -590,7 +590,8 @@
                      view of the board exactly as it was at that moment. -->
                 <TextBlock DockPanel.Dock="Top" Text="Play log" FontWeight="Bold" Foreground="#F7FAFC" Margin="0,4,0,4"/>
                 <ListBox ItemsSource="{Binding Stats.MajorEvents}" ScrollViewer.VerticalScrollBarVisibility="Auto"
-                         Visibility="{Binding IsSolo, Converter={StaticResource BoolToVisibility}}">
+                         Visibility="{Binding IsSolo, Converter={StaticResource BoolToVisibility}}"
+                         behaviors:AutoScrollToBottomBehavior.IsEnabled="True">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <Button Command="{Binding DataContext.ViewMajorEventCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
@@ -616,7 +617,8 @@
                      happened. Reuses ViewMajorEventCommand as-is (CommandParameter is just the
                      underlying MajorEvent). -->
                 <ListBox ItemsSource="{Binding MergedLog}" ScrollViewer.VerticalScrollBarVisibility="Auto"
-                         Visibility="{Binding IsOnline, Converter={StaticResource BoolToVisibility}}">
+                         Visibility="{Binding IsOnline, Converter={StaticResource BoolToVisibility}}"
+                         behaviors:AutoScrollToBottomBehavior.IsEnabled="True">
                     <ListBox.ItemTemplate>
                         <DataTemplate DataType="{x:Type vm:MergedLogEntry}">
                             <Button Command="{Binding DataContext.ViewMajorEventCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
@@ -1208,9 +1210,15 @@
                                 Command="{Binding SelectActionCommand}" CommandParameter="{x:Static vm:ArmedChord.Glimpse}"/>
                         <Button Style="{StaticResource ActionButtonStyle}" Content="Mill" Margin="0,0,0,8" HorizontalContentAlignment="Left"
                                 Command="{Binding SelectActionCommand}" CommandParameter="{x:Static vm:ArmedChord.Mill}"/>
-                        <Button Style="{StaticResource ActionButtonStyle}" Content="Give" HorizontalContentAlignment="Left"
+                        <Button Style="{StaticResource ActionButtonStyle}" Content="Give" Margin="0,0,0,8" HorizontalContentAlignment="Left"
                                 Command="{Binding SelectActionCommand}" CommandParameter="{x:Static vm:ArmedChord.Give}"
                                 Visibility="{Binding CanUseOnlineAction, Converter={StaticResource BoolToVisibility}}"/>
+                        <Button Style="{StaticResource ActionButtonStyle}" Content="Shuffle" Margin="0,0,0,8" HorizontalContentAlignment="Left"
+                                Command="{Binding SelectActionCommand}" CommandParameter="{x:Static vm:ArmedChord.Shuffle}"/>
+                        <!-- Generate has its own two-step flow (search, then count) rather than the
+                             generic count entry below — see GameBoardViewModel's Generate region. -->
+                        <Button Style="{StaticResource ActionButtonStyle}" Content="Generate" HorizontalContentAlignment="Left"
+                                Command="{Binding OpenGenerateSearchCommand}"/>
                     </StackPanel>
 
                     <!-- Count entry view — digits/Backspace type directly into it too (see
@@ -1228,6 +1236,82 @@
                             <Button Style="{StaticResource ActionButtonStyle}" Content="Back" Margin="0,0,8,0" Command="{Binding BackToActionsListCommand}"/>
                             <Button Style="{StaticResource ActionButtonStyle}" Content="Go" Command="{Binding ConfirmActionCommand}"/>
                         </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- Generate's card search: the source card might not be reachable anywhere on the board to
+             zoom (every remaining copy buried in Main, or the player started with zero copies) — a
+             name search against the full card catalog instead. Picking a result moves on to the
+             count picker below; nothing is created until that's confirmed. -->
+        <Grid Grid.Column="0" Grid.ColumnSpan="2"
+              Visibility="{Binding IsGenerateSearchOpen, Converter={StaticResource BoolToVisibility}}"
+              d:IsHidden="True">
+            <Button Command="{Binding CancelGenerateSearchCommand}" Focusable="False" Cursor="Arrow">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="#CC000000"/>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+
+            <Border MaxWidth="420" MaxHeight="600" Padding="20" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Background="#2D3748" BorderBrush="White" BorderThickness="2" CornerRadius="10">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="Generate a copy of..." FontSize="18" FontWeight="Bold" Foreground="White" Margin="0,0,0,12"/>
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,12">
+                        <TextBox Width="240" Text="{Binding GenerateSearchQuery, UpdateSourceTrigger=PropertyChanged}"/>
+                        <Button Style="{StaticResource ActionButtonStyle}" Content="Search" Margin="8,0,0,0"
+                                Command="{Binding SearchGenerateCardsCommand}"/>
+                    </StackPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="Searching..." Foreground="#A0AEC0" Margin="0,0,0,8"
+                               Visibility="{Binding IsGenerateSearching, Converter={StaticResource BoolToVisibility}}"/>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="360">
+                        <ItemsControl ItemsSource="{Binding GenerateSearchResults}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button HorizontalContentAlignment="Left" Padding="6,4" Margin="0,0,0,2"
+                                            Background="Transparent" BorderThickness="0" Foreground="#F7FAFC" Cursor="Hand"
+                                            Command="{Binding DataContext.SelectGenerateCardCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                            CommandParameter="{Binding}">
+                                        <TextBlock Text="{Binding Name}" TextWrapping="Wrap"/>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Grid>
+
+        <!-- Generate's count picker: how many fresh copies of the card picked above to create at
+             Main's bottom (GameSession.GenerateCard, looped) — same count-entry mechanics as the
+             Actions menu (+/-, digit typing via HandleKey's IsGenerateCountOpen branch). -->
+        <Grid Grid.Column="0" Grid.ColumnSpan="2"
+              Visibility="{Binding IsGenerateCountOpen, Converter={StaticResource BoolToVisibility}}"
+              d:IsHidden="True">
+            <Button Command="{Binding CancelGenerateCountCommand}" Focusable="False" Cursor="Arrow">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="#CC000000"/>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+
+            <Border MinWidth="280" Padding="20" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Background="#2D3748" BorderBrush="White" BorderThickness="2" CornerRadius="10">
+                <StackPanel>
+                    <TextBlock Text="Generate how many?" FontSize="18" FontWeight="Bold" Foreground="White" Margin="0,0,0,12"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,16">
+                        <Button Style="{StaticResource CounterButtonStyle}" Content="-" Command="{Binding DecreaseGenerateCountCommand}"/>
+                        <TextBlock Text="{Binding GenerateCount}" FontSize="20" FontWeight="Bold" Foreground="#F7FAFC"
+                                   Width="44" TextAlignment="Center" VerticalAlignment="Center"/>
+                        <Button Style="{StaticResource CounterButtonStyle}" Content="+" Command="{Binding IncreaseGenerateCountCommand}"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <Button Style="{StaticResource ActionButtonStyle}" Content="Cancel" Margin="0,0,8,0" Command="{Binding CancelGenerateCountCommand}"/>
+                        <Button Style="{StaticResource ActionButtonStyle}" Content="Go" Command="{Binding ConfirmGenerateCountCommand}"/>
                     </StackPanel>
                 </StackPanel>
             </Border>
@@ -1472,10 +1556,17 @@
                     <Border Background="#2D3748" BorderBrush="#F6E05E" BorderThickness="2" CornerRadius="8" Padding="16,8">
                         <StackPanel Orientation="Horizontal">
                             <views:CountdownRingView RemainingFraction="{Binding UndoRemainingFraction}" Diameter="28" Thickness="4" Margin="0,0,10,0"/>
-                            <TextBlock VerticalAlignment="Center" Foreground="White" FontWeight="Bold">
-                                <Run Text="Undo"/>
-                                <Run Text="{Binding UndoActionLabel, StringFormat=' {0}'}"/>
-                            </TextBlock>
+                            <StackPanel VerticalAlignment="Center">
+                                <TextBlock Foreground="White" FontWeight="Bold">
+                                    <Run Text="Undo"/>
+                                    <Run Text="{Binding UndoActionLabel, StringFormat=' {0}'}"/>
+                                </TextBlock>
+                                <!-- Optional second line for context a short action label can't
+                                     convey on its own — e.g. Generate clarifying the new cards went
+                                     to the bottom rather than being shuffled in. -->
+                                <TextBlock Text="{Binding UndoDetailMessage}" Foreground="#CBD5E0" FontSize="11"
+                                           Visibility="{Binding UndoDetailMessage, Converter={StaticResource NullToVisibility}}"/>
+                            </StackPanel>
                         </StackPanel>
                     </Border>
                 </ControlTemplate>

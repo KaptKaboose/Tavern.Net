@@ -92,7 +92,8 @@ public static class GameSessionSerializer
         card.IsImbued,
         card.IsRanged,
         card.IsRooted,
-        card.IsWarded);
+        card.IsWarded,
+        card.IsSessionGenerated);
 
     private static SavedMajorEvent CaptureMajorEvent(MajorEvent majorEvent)
     {
@@ -160,7 +161,7 @@ public static class GameSessionSerializer
         foreach (var savedCard in saved.Cards)
         {
             var cardDto = await ResolveCardAsync(savedCard.Slug, apiClient, cardCache);
-            var instance = new CardInstance(cardDto, savedCard.HomeZone, savedCard.HomeOrder)
+            var instance = new CardInstance(cardDto, savedCard.HomeZone, savedCard.HomeOrder, savedCard.IsSessionGenerated)
             {
                 IsTapped = savedCard.IsTapped,
                 IsFlipped = savedCard.IsFlipped,

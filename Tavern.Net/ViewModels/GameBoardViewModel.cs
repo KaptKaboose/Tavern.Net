@@ -149,7 +149,20 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     /// directly.</summary>
     public bool ShowZoomSidePanel => ShowCounterAndStatusPanel || CanBottomZoomedCard || CanRevealZoomedCard || CanGiveZoomedCard;
 
-    public bool CanBottomZoomedCard => ZoomedCard is not null && ZoneOfZoomedCard() != ZoneType.MainDeck;
+    /// <summary>
+    /// Excludes a card already in Main, and — keyed off HomeZone rather than the card's *current*
+    /// zone — any card that originated from the Material deck, no matter where it's wandered off
+    /// to since (Champion, or Graveyard/Banishment after dying): none of those have a "back to the
+    /// bottom of the deck" mechanic. (ZoneBarriers already silently blocks the actual move for a
+    /// Material-origin card, so this is purely about not offering a button that would do nothing.)
+    /// Tokens are excluded outright — a token isn't a real deck card, it can only be summoned to
+    /// the Field or discarded (see GameSession.MoveToken), never enter Main at all.
+    /// </summary>
+    public bool CanBottomZoomedCard =>
+        ZoomedCard is not null &&
+        ZoneOfZoomedCard() != ZoneType.MainDeck &&
+        ZoomedCard.Instance.HomeZone != ZoneType.MaterialDeck &&
+        !ZoomedCard.Instance.Card.IsToken;
 
     [RelayCommand(CanExecute = nameof(CanBottomZoomedCard))]
     private void BottomZoomedCard()
@@ -450,6 +463,12 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     [ObservableProperty]
     private string? _undoActionLabel;
 
+    /// <summary>Optional second line under the action label — for context a short label can't
+    /// convey on its own (e.g. Generate's cards landing at the bottom rather than being shuffled
+    /// in, which a player might otherwise assume happened automatically).</summary>
+    [ObservableProperty]
+    private string? _undoDetailMessage;
+
     [ObservableProperty]
     private double _undoRemainingFraction = 1.0;
 
@@ -457,10 +476,11 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     private DispatcherTimer? _undoTimer;
     private DateTime _undoStartedAt;
 
-    private void ArmUndo(string actionLabel, Action undo)
+    private void ArmUndo(string actionLabel, Action undo, string? detailMessage = null)
     {
         _pendingUndo = undo;
         UndoActionLabel = actionLabel;
+        UndoDetailMessage = detailMessage;
         IsUndoAvailable = true;
         UndoRemainingFraction = 1.0;
         _undoStartedAt = DateTime.UtcNow;
@@ -489,6 +509,7 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         IsUndoAvailable = false;
         _pendingUndo = null;
         UndoActionLabel = null;
+        UndoDetailMessage = null;
     }
 
     [RelayCommand(CanExecute = nameof(IsUndoAvailable))]
@@ -500,7 +521,19 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         }
 
         var actionLabel = UndoActionLabel;
-        _pendingUndo();
+        try
+        {
+            _pendingUndo();
+        }
+        catch (InvalidOperationException)
+        {
+            // Belt-and-suspenders: some unforeseen board change since this was armed left the
+            // closure's card/zone assumptions stale (the known case — a New Game reset — is
+            // guarded against directly above in HandleKey's 'N' case). Better to silently drop an
+            // unusable Undo than crash the whole app over what's just a convenience feature.
+            DiscardUndo();
+            return;
+        }
 
         // The opponent may have already reasoned about now-stale deck-order information (e.g. what
         // a Reveal just showed them, or what they know got milled) — a courtesy notice, not
@@ -537,11 +570,18 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
 
     partial void OnZoomedCardChanged(CardViewModel? value)
     {
+        _hasTypedZoomCounterDigit = false;
+
         if (value is not null)
         {
             CloseActionsMenu();
         }
     }
+
+    // Mirrors _hasTypedActionCount for the Zoom overlay's own Counter box: whether the player has
+    // typed a digit yet for the currently-zoomed card, deciding whether the next one replaces the
+    // counter's value or appends to it. Reset whenever ZoomedCard changes (see above).
+    private bool _hasTypedZoomCounterDigit;
 
     /// <summary>The pile currently fanned out in the peek overlay, or null when it's closed.</summary>
     [ObservableProperty]
@@ -971,7 +1011,8 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         GameStorageService gameStorage,
         GameConnection? connection = null,
         Player? opponentPlayer = null,
-        TimeSpan? loadedElapsedTime = null)
+        TimeSpan? loadedElapsedTime = null,
+        bool isFreshSoloGame = false)
     {
         _session = session;
         _apiClient = apiClient;
@@ -1028,6 +1069,15 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         if (player.GetZone(ZoneType.Tokens).Cards.Count == 0)
         {
             _ = LoadTokenCatalogAsync();
+        }
+
+        // A brand-new solo game (fresh from deck import, not a loaded save) — start it right away
+        // rather than leaving the player staring at an empty board until they remember to press
+        // 'N' themselves. Loaded saves and online games (which start via their own lobby/session
+        // flow) don't pass this.
+        if (isFreshSoloGame)
+        {
+            TriggerNewGame();
         }
     }
 
@@ -1338,6 +1388,7 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         ArmedChord.Give => "Give",
         ArmedChord.Mill => "Mill",
         ArmedChord.Glimpse => "Glimpse",
+        ArmedChord.Shuffle => "Shuffle",
         _ => "",
     };
 
@@ -1355,6 +1406,15 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     [RelayCommand]
     private void SelectAction(ArmedChord action)
     {
+        // Shuffle takes no count — run it immediately rather than sending the player through the
+        // count-entry view for nothing.
+        if (action == ArmedChord.Shuffle)
+        {
+            CloseActionsMenu();
+            RunAction(action, 0);
+            return;
+        }
+
         SelectedAction = action;
         ActionCount = 1;
         _hasTypedActionCount = false;
@@ -1420,6 +1480,178 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
             case ArmedChord.Give:
                 ArmGiveBlind(count);
                 break;
+            case ArmedChord.Shuffle:
+                var beforeShuffle = Player.GetZone(ZoneType.MainDeck).Cards.ToList();
+                _session.Shuffle(Player);
+                ArmUndo("Shuffle", () => _session.RestoreMainDeckOrder(Player, beforeShuffle));
+                break;
+        }
+    }
+
+    // --- Generate: a card effect that produces extra copies of a card already in the deck. Unlike
+    // every other Actions-menu entry, the source card might not be reachable anywhere on the board
+    // to zoom (every remaining copy buried in Main, or the player started with zero copies), so
+    // this doesn't reuse the generic ArmedChord/count flow — it's its own two-step chain: search
+    // the card catalog by name, pick a result, then a count (GameSession.GenerateCard, looped).
+
+    [ObservableProperty]
+    private bool _isGenerateSearchOpen;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SearchGenerateCardsCommand))]
+    private string _generateSearchQuery = "";
+
+    [ObservableProperty]
+    private bool _isGenerateSearching;
+
+    public ObservableCollection<CardDto> GenerateSearchResults { get; } = new();
+
+    private CardDto? _generateCandidateCard;
+
+    [ObservableProperty]
+    private bool _isGenerateCountOpen;
+
+    [ObservableProperty]
+    private int _generateCount = 1;
+
+    private bool _hasTypedGenerateCount;
+
+    partial void OnIsGenerateSearchOpenChanged(bool value)
+    {
+        if (value)
+        {
+            CloseActionsMenu();
+        }
+    }
+
+    partial void OnIsGenerateCountOpenChanged(bool value)
+    {
+        if (value)
+        {
+            CloseActionsMenu();
+        }
+    }
+
+    [RelayCommand]
+    private void OpenGenerateSearch()
+    {
+        CloseActionsMenu();
+        GenerateSearchQuery = "";
+        GenerateSearchResults.Clear();
+        IsGenerateSearchOpen = true;
+    }
+
+    private bool CanSearchGenerateCards() => !string.IsNullOrWhiteSpace(GenerateSearchQuery);
+
+    [RelayCommand(CanExecute = nameof(CanSearchGenerateCards))]
+    private async Task SearchGenerateCardsAsync()
+    {
+        var query = GenerateSearchQuery.Trim();
+        IsGenerateSearching = true;
+        try
+        {
+            var response = await _apiClient.SearchCardsAsync(query, pageSize: 20);
+            GenerateSearchResults.Clear();
+            foreach (var card in response.Data)
+            {
+                GenerateSearchResults.Add(card);
+            }
+        }
+        finally
+        {
+            IsGenerateSearching = false;
+        }
+    }
+
+    [RelayCommand]
+    private void SelectGenerateCard(CardDto? card)
+    {
+        if (card is null)
+        {
+            return;
+        }
+
+        _generateCandidateCard = card;
+        IsGenerateSearchOpen = false;
+        GenerateCount = 1;
+        _hasTypedGenerateCount = false;
+        IsGenerateCountOpen = true;
+    }
+
+    [RelayCommand]
+    private void CancelGenerateSearch() => IsGenerateSearchOpen = false;
+
+    [RelayCommand]
+    private void IncreaseGenerateCount() => GenerateCount = Math.Min(GenerateCount + 1, 99);
+
+    [RelayCommand]
+    private void DecreaseGenerateCount() => GenerateCount = Math.Max(GenerateCount - 1, 1);
+
+    [RelayCommand]
+    private void CancelGenerateCount()
+    {
+        IsGenerateCountOpen = false;
+        _generateCandidateCard = null;
+    }
+
+    [RelayCommand]
+    private void ConfirmGenerateCount()
+    {
+        IsGenerateCountOpen = false;
+
+        if (_generateCandidateCard is not { } cardDto)
+        {
+            return;
+        }
+
+        var count = GenerateCount;
+        _generateCandidateCard = null;
+
+        var generated = new List<CardInstance>(count);
+        for (var i = 0; i < count; i++)
+        {
+            generated.Add(_session.GenerateCard(Player, cardDto));
+        }
+
+        ArmUndo(
+            "Generate",
+            () =>
+            {
+                var deck = Player.GetZone(ZoneType.MainDeck);
+                foreach (var card in generated)
+                {
+                    deck.Cards.Remove(card);
+                }
+            },
+            // Nothing shuffles automatically — a player could reasonably assume otherwise, so this
+            // says exactly where the new cards landed rather than leaving them to guess.
+            detailMessage: "Added to the bottom of the deck — not shuffled in.");
+    }
+
+    /// <summary>Resets the board for a fresh game — the 'N' key, and also called directly from the
+    /// constructor for a brand-new solo game (see isFreshSoloGame) so the player doesn't have to
+    /// remember to press it themselves.</summary>
+    private void TriggerNewGame()
+    {
+        // A pending Undo (Bottom/Mill/Shuffle/Glimpse) references cards/zones from the game that's
+        // about to be wiped out — discard it now, or a still-visible toast clicked after the reset
+        // would try to move a card that no longer exists where it expects.
+        DiscardUndo();
+
+        // StartNewGame already draws the opening hand as part of setup — unless the base champion's
+        // effect calls for an opening glimpse instead, in which case it hands the already-drawn
+        // cards back here so they can actually be shown (it has no reference to GlimpseStaging/
+        // IsGlimpsing to do that itself).
+        var glimpsedOnNewGame = _session.StartNewGame();
+        CurrentPhase = _session.CurrentPhase;
+        if (glimpsedOnNewGame.Count > 0)
+        {
+            _drawAfterGlimpsing = true;
+            IsGlimpsing = true;
+            foreach (var card in glimpsedOnNewGame)
+            {
+                GlimpseStaging.Add(new CardViewModel(card, _apiClient, this));
+            }
         }
     }
 
@@ -1457,6 +1689,52 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
             }
 
             return true;
+        }
+
+        // Same count-entry mechanics as the Actions menu, for how many Generate copies to create.
+        if (IsGenerateCountOpen)
+        {
+            if (TryGetDigit(key, out var generateDigit))
+            {
+                GenerateCount = _hasTypedGenerateCount ? Math.Min(GenerateCount * 10 + generateDigit, 99) : generateDigit;
+                _hasTypedGenerateCount = true;
+                return true;
+            }
+
+            if (key == Key.Back)
+            {
+                GenerateCount = Math.Max(GenerateCount / 10, 1);
+                return true;
+            }
+
+            if (key == Key.Enter && ConfirmGenerateCountCommand.CanExecute(null))
+            {
+                ConfirmGenerateCountCommand.Execute(null);
+            }
+
+            return true;
+        }
+
+        // While the Zoom overlay shows a Counter box (Field/Champion only — see
+        // ShowCounterAndStatusPanel), digits/Backspace type directly into it, same as the Actions
+        // menu's own count entry.
+        if (ZoomedCard is not null && ShowCounterAndStatusPanel)
+        {
+            if (TryGetDigit(key, out var counterDigit))
+            {
+                var current = ZoomedCard.Instance.Counter;
+                var target = _hasTypedZoomCounterDigit ? current * 10 + counterDigit : counterDigit;
+                _session.AdjustCounter(Player, ZoomedCard.Instance, target - current);
+                _hasTypedZoomCounterDigit = true;
+                return true;
+            }
+
+            if (key == Key.Back)
+            {
+                var current = ZoomedCard.Instance.Counter;
+                _session.AdjustCounter(Player, ZoomedCard.Instance, current / 10 - current);
+                return true;
+            }
         }
 
         // Every other overlay (Zoom, Peek, Dice, Save Game, Opponent panel, the Actions menu's own
@@ -1497,21 +1775,7 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
                 }
                 return true;
             case Key.N:
-                // StartNewGame already draws the opening hand as part of setup — unless the base
-                // champion's effect calls for an opening glimpse instead, in which case it hands
-                // the already-drawn cards back here so they can actually be shown (it has no
-                // reference to GlimpseStaging/IsGlimpsing to do that itself).
-                var glimpsedOnNewGame = _session.StartNewGame();
-                CurrentPhase = _session.CurrentPhase;
-                if (glimpsedOnNewGame.Count > 0)
-                {
-                    _drawAfterGlimpsing = true;
-                    IsGlimpsing = true;
-                    foreach (var card in glimpsedOnNewGame)
-                    {
-                        GlimpseStaging.Add(new CardViewModel(card, _apiClient, this));
-                    }
-                }
+                TriggerNewGame();
                 return true;
             default:
                 return false;
@@ -1524,6 +1788,7 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     /// half-configured action can't go stale if some other overlay opens first).</summary>
     private bool IsAnyOverlayOpen() =>
         IsOpponentPanelOpen || IsRollingDice || IsSavingGame || IsSealedPanelOpen || IsGiveTargetPickerOpen || IsActionsMenuOpen ||
+        IsGenerateSearchOpen || IsGenerateCountOpen ||
         ZoomedCard is not null || PeekedZone is not null || ViewedMajorEvent is not null ||
         ViewedSnapshotPile is not null || ZoomedSnapshotCard is not null || ActiveReveal is not null;
 

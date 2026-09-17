@@ -140,6 +140,26 @@ public sealed class GameSession
     }
 
     /// <summary>
+    /// Creates a brand-new copy of <paramref name="cardDto"/> at Main's bottom — for card effects
+    /// that generate extra copies of a card already in the deck (drawn/played exactly like any
+    /// other Main card; unlike a Token, this is a real card, not a board marker). The source card
+    /// might not be reachable anywhere on the board to zoom (every remaining copy could be buried
+    /// in Main, or the player could have started with zero copies), hence a name search
+    /// (GameBoardViewModel's Generate flow) rather than requiring an existing instance to duplicate.
+    /// HomeZone is MainDeck like a real deck card (so it behaves identically for e.g. the
+    /// MaterialDeck zone barrier), but IsSessionGenerated keeps StartNewGame's rebuild sweep from
+    /// treating it as part of the original decklist.
+    /// </summary>
+    public CardInstance GenerateCard(Player player, CardDto cardDto)
+    {
+        var card = new CardInstance(cardDto, ZoneType.MainDeck, isSessionGenerated: true);
+        player.GetZone(ZoneType.MainDeck).Cards.Add(card);
+        player.Stats.Log($"Generated a copy of {cardDto.Name} into the Main Deck.");
+        RecordMajorEvent(player, $"Generated a copy of {cardDto.Name} into the Main Deck.");
+        return card;
+    }
+
+    /// <summary>
     /// Resets for a fresh game using the same imported deck: every card — wherever it's wandered
     /// off to since (Field, Graveyard, a materialized Material card, etc.) — goes back to its
     /// original deck (<see cref="CardInstance.HomeZone"/>), Material restored in its original
@@ -234,8 +254,11 @@ public sealed class GameSession
             materialDeck.Cards.Add(card);
         }
 
+        // IsSessionGenerated cards (GenerateCard) are excluded here — they're extra copies a card
+        // effect produced for this game only, not part of the original decklist, so a fresh game
+        // shouldn't have them reappear.
         var mainDeck = player.GetZone(ZoneType.MainDeck);
-        foreach (var card in allCards.Where(c => c.HomeZone == ZoneType.MainDeck).OrderBy(c => c.HomeOrder))
+        foreach (var card in allCards.Where(c => c.HomeZone == ZoneType.MainDeck && !c.IsSessionGenerated).OrderBy(c => c.HomeOrder))
         {
             mainDeck.Cards.Add(card);
         }

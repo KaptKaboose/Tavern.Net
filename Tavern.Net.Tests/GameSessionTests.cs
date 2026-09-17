@@ -155,6 +155,22 @@ public class GameSessionTests
     }
 
     [Fact]
+    public void GenerateCard_AddsANewInstanceAtMainsBottomFlaggedAsSessionGenerated()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        var existingTop = MakeCard("Existing Top");
+        player.GetZone(ZoneType.MainDeck).Cards.Add(existingTop);
+        var cardDto = new CardDto { Name = "Extra Copy" };
+
+        var generated = session.GenerateCard(player, cardDto);
+
+        Assert.Equal(new[] { existingTop, generated }, player.GetZone(ZoneType.MainDeck).Cards);
+        Assert.Equal(ZoneType.MainDeck, generated.HomeZone);
+        Assert.True(generated.IsSessionGenerated);
+    }
+
+    [Fact]
     public void MoveCard_ResetsFlippedState()
     {
         var session = new GameSession();
@@ -873,6 +889,24 @@ public class GameSessionTests
         var handAndDeck = player.GetZone(ZoneType.Hand).Cards.Concat(player.GetZone(ZoneType.MainDeck).Cards);
         Assert.Equal(mainCards.ToHashSet(), handAndDeck.ToHashSet());
         Assert.Equal(TurnPhase.Materialization, session.CurrentPhase);
+    }
+
+    [Fact]
+    public void StartNewGame_DiscardsSessionGeneratedCards()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        player.GetZone(ZoneType.MainDeck).Cards.Add(MakeCard("Original Card"));
+        var baseChampion = MakeBaseChampion();
+        player.GetZone(ZoneType.MaterialDeck).Cards.Add(baseChampion);
+
+        var generated = session.GenerateCard(player, new CardDto { Name = "Generated Extra" });
+        Assert.Contains(generated, player.GetZone(ZoneType.MainDeck).Cards);
+
+        session.StartNewGame();
+
+        var allMainAndHand = player.GetZone(ZoneType.MainDeck).Cards.Concat(player.GetZone(ZoneType.Hand).Cards);
+        Assert.DoesNotContain(generated, allMainAndHand);
     }
 
     [Fact]
