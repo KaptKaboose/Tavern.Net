@@ -745,6 +745,46 @@ public class GameSessionTests
     }
 
     [Fact]
+    public void AdvancePhase_FirstTurnFastForward_UsesExplicitTargetNotPlayerNumber()
+    {
+        var session = new GameSession();
+        var host = session.AddPlayer("Host");   // PlayerNumber 0
+        var guest = session.AddPlayer("Guest"); // PlayerNumber 1
+
+        host.GetZone(ZoneType.MainDeck).Cards.Add(MakeCard());
+        host.GetZone(ZoneType.MaterialDeck).Cards.Add(MakeBaseChampion());
+        guest.GetZone(ZoneType.MainDeck).Cards.Add(MakeCard());
+        guest.GetZone(ZoneType.MaterialDeck).Cards.Add(MakeBaseChampion());
+
+        // Both initialized independently, as each side of an online game does for just its own
+        // player — then the guest (PlayerNumber 1), not PlayerNumber 0, is the one who actually
+        // goes first, same as a dice roll could decide either way. Mirrors OnlineLobbyViewModel.
+        // TryBuildAndStartAsync's own call sequence.
+        session.StartNewGameForPlayer(host);
+        session.StartNewGameForPlayer(guest);
+        session.ApplyRemoteGameState(TurnPhase.Materialization, guest);
+        session.SetFirstTurnTarget(guest, TurnPhase.Main);
+        session.SetFirstTurnTarget(host, TurnPhase.Draw);
+
+        // Guest actually goes first — fast-forwards to Main despite being PlayerNumber 1.
+        session.AdvancePhase(guest);
+        Assert.Equal(TurnPhase.Main, session.CurrentPhase);
+        Assert.Equal(0, guest.Stats.TurnCount);
+
+        // Host receiving the handoff for their own first turn (GameBoardViewModel.
+        // ApplyRemoteGameState lands them on Materialization and deliberately does NOT call
+        // NextTurn — see its own comment) stays at TurnCount 0 too, so this whole turn still
+        // displays as "Turn 1".
+        Assert.Equal(0, host.Stats.TurnCount);
+
+        // Host's own first AdvancePhase call still fast-forwards (still pending), but to Draw —
+        // despite being PlayerNumber 0 — per the explicit target set above, not TurnCount.
+        session.AdvancePhase(host);
+        Assert.Equal(TurnPhase.Draw, session.CurrentPhase);
+        Assert.Equal(0, host.Stats.TurnCount);
+    }
+
+    [Fact]
     public void GlimpseNextCard_RemovesTopCardFromMainEntirely()
     {
         var session = new GameSession();

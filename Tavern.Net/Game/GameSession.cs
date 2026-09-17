@@ -36,14 +36,21 @@ public sealed class GameSession
         ZoneType.Champion,
     };
 
-    // Set (per player) by StartNewGame, consumed by that player's very first AdvancePhase call
-    // afterward. Deliberately NOT inferred from TurnCount == 0 — now that TurnCount also defaults
-    // to 0 for a plain session that never called StartNewGame (so the very first-ever game, which
-    // goes through DeckImportViewModel.StartGame instead, still shows "Turn 1" and gets the same
-    // fast-forward), TurnCount == 0 no longer uniquely means "StartNewGame just ran" — it's equally
-    // true partway through any ordinary player's first turn, which made the fast-forward re-fire
-    // there too instead of just once.
+    // Set (per player) by InitializePlayerForNewGame, consumed by that player's very first
+    // AdvancePhase call afterward, whenever it happens to come (immediately for whoever goes first;
+    // after their own first End-of-turn handoff arrives for whoever goes second, in an online game).
     private readonly HashSet<Player> _pendingFirstTurnFastForward = new();
+
+    // Which phase _pendingFirstTurnFastForward's consumption should jump straight to for a given
+    // player — Main (skip Recollection+Draw) for whoever is actually the game's first mover, Draw
+    // (skip only Recollection) for whoever's first turn arrives via a handoff from someone else's
+    // turn. Deliberately NOT inferred from TurnCount at consumption time: TurnCount must stay 0
+    // for a player's entire first turn (online or not) so it still displays as "Turn 1" rather than
+    // "Turn 2" — see GameBoardViewModel.ApplyRemoteGameState, which is why this can no longer double
+    // as the "have I gone before" signal the way it briefly did. Set explicitly by StartNewGame
+    // (solo) and by the online lobby (via SetFirstTurnTarget) once the agreed first player is known;
+    // removed the moment AdvancePhase consumes it.
+    private readonly Dictionary<Player, TurnPhase> _firstTurnTarget = new();
 
     // True while the most recent MajorEvent for this player is a Life/Damage change that hasn't
     // been closed yet — by a tap, a flip, or any other Major event — and so can still absorb the
@@ -90,6 +97,18 @@ public sealed class GameSession
         ActivePlayer = activePlayer;
     }
 
+    /// <summary>Whether <paramref name="player"/> hasn't taken their very first turn yet — true from
+    /// InitializePlayerForNewGame until their own first AdvancePhase call consumes it. Used online
+    /// (GameBoardViewModel.ApplyRemoteGameState) to tell whether becoming newly active is genuinely
+    /// a player's first-ever turn (land on Materialization, don't bump TurnCount) or an ordinary
+    /// later one (land on WakeUp for real, with its untap effect, and bump TurnCount as usual).</summary>
+    public bool IsAwaitingFirstTurn(Player player) => _pendingFirstTurnFastForward.Contains(player);
+
+    /// <summary>Registers which phase <paramref name="player"/>'s own first AdvancePhase call should
+    /// jump straight to — see _firstTurnTarget's own comment. Used by the online lobby once the
+    /// agreed first player is known; StartNewGame (solo) sets this for itself directly.</summary>
+    public void SetFirstTurnTarget(Player player, TurnPhase target) => _firstTurnTarget[player] = target;
+
     public void Shuffle(Player player, ZoneType zoneType = ZoneType.MainDeck)
     {
         var zone = player.GetZone(zoneType);
@@ -124,7 +143,7 @@ public sealed class GameSession
 
         foreach (var player in Players)
         {
-            var glimpsed = InitializePlayerForNewGame(player, enableFirstTurnFastForward: true);
+            var glimpsed = InitializePlayerForNewGame(player);
             if (player == Players[0])
             {
                 glimpsedForFirstPlayer = glimpsed;
@@ -132,6 +151,7 @@ public sealed class GameSession
         }
 
         SetPhase(TurnPhase.Materialization, Players[0]);
+        _firstTurnTarget[Players[0]] = TurnPhase.Main;
 
         return glimpsedForFirstPlayer;
     }
@@ -143,14 +163,12 @@ public sealed class GameSession
     /// own client runs this same initialization on their own side and broadcasts the result. Doesn't
     /// set the shared CurrentPhase/ActivePlayer either — the caller (the online lobby, once both
     /// sides are ready) sets that once via ApplyRemoteGameState using the agreed first player, not
-    /// per-player like solo's own Materialization kickoff. Also skips the first-turn fast-forward:
-    /// that logic assumes PlayerNumber 0 always goes first, which isn't true once who goes first is
-    /// decided by a dice roll — both players just draw normally on their first turn instead.
+    /// per-player like solo's own Materialization kickoff.
     /// </summary>
     public IReadOnlyList<CardInstance> StartNewGameForPlayer(Player player)
-        => InitializePlayerForNewGame(player, enableFirstTurnFastForward: false);
+        => InitializePlayerForNewGame(player);
 
-    private IReadOnlyList<CardInstance> InitializePlayerForNewGame(Player player, bool enableFirstTurnFastForward)
+    private IReadOnlyList<CardInstance> InitializePlayerForNewGame(Player player)
     {
         var glimpsedCards = (IReadOnlyList<CardInstance>)Array.Empty<CardInstance>();
 
@@ -167,11 +185,7 @@ public sealed class GameSession
         player.Stats.CardsPlayedCount = 0;
         player.Stats.CardsLostToMemoryDecayCount = 0;
         player.Stats.ChampionLevelMilestones.Clear();
-
-        if (enableFirstTurnFastForward)
-        {
-            _pendingFirstTurnFastForward.Add(player);
-        }
+        _pendingFirstTurnFastForward.Add(player);
 
         // Tokens is excluded from both the sweep and the clear: it's a static, always-present
         // catalog (one CardInstance per token type, loaded once by GameBoardViewModel), not
@@ -577,18 +591,16 @@ public sealed class GameSession
     /// </summary>
     public void AdvancePhase(Player player)
     {
-        // Fires exactly once per StartNewGame, on that player's first AdvancePhase call afterward
-        // — see _pendingFirstTurnFastForward's own comment for why this can't just be inferred
-        // from TurnCount == 0 anymore.
+        // Fires exactly once per player, on their first AdvancePhase call after being initialized
+        // for a new game — see _pendingFirstTurnFastForward's own comment. Which phase it jumps to
+        // is looked up from _firstTurnTarget, set explicitly back when this player was landed on
+        // Materialization in the first place (StartNewGame for solo, the online lobby via
+        // SetFirstTurnTarget for online) rather than inferred here — TurnCount can't be used for
+        // that anymore now that it's kept at 0 for a player's *entire* first turn, online included.
         if (_pendingFirstTurnFastForward.Remove(player))
         {
-            if (player.PlayerNumber == 0)
-            {
-                SetPhase(TurnPhase.Main, player);
-                return;
-            }
-
-            SetPhase(TurnPhase.Draw, player);
+            var target = _firstTurnTarget.Remove(player, out var explicitTarget) ? explicitTarget : TurnPhase.Main;
+            SetPhase(target, player);
             return;
         }
 

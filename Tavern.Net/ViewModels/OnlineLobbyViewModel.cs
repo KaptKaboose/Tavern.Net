@@ -363,6 +363,7 @@ public sealed partial class OnlineLobbyViewModel : ObservableObject
 
         var firstPlayer = firstPlayerNumber == me.PlayerNumber ? me : opponent;
         session.ApplyRemoteGameState(TurnPhase.Materialization, firstPlayer);
+        session.SetFirstTurnTarget(me, firstPlayer == me ? TurnPhase.Main : TurnPhase.Draw);
 
         _connection!.MessageReceived -= OnMessageReceived;
         _connection.Disconnected -= OnDisconnected;

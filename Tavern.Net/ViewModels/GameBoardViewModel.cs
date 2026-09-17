@@ -517,16 +517,40 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         RefreshOpponentPanel();
     }
 
-    /// <summary>Applies a GameState update from the active side of the handoff — see
-    /// GameSession.ApplyRemoteGameState's own doc comment on why this never re-runs WakeUp/
-    /// Recollect/Draw locally; that already happened on their end and is reflected in whatever
-    /// PlayerState they broadcast alongside this.</summary>
+    /// <summary>Applies a GameState update from the active side of the handoff. The sender always
+    /// broadcasts WakeUp as the landing phase (its own mirror of me never tracks whether this is
+    /// genuinely my first turn — only my own authoritative session does), so when this makes ME
+    /// newly active, MY session's own first-turn bookkeeping decides what actually happens here —
+    /// see the two branches below.</summary>
     private void ApplyRemoteGameState(TurnPhase phase, int activePlayerNumber)
     {
         var activePlayer = activePlayerNumber == Player.PlayerNumber ? Player : OpponentPlayer;
         if (activePlayer is null)
         {
             return;
+        }
+
+        if (activePlayer == Player && _session.ActivePlayer != Player)
+        {
+            if (_session.IsAwaitingFirstTurn(Player))
+            {
+                // Genuinely my first turn ever — land on Materialization instead of the sender's
+                // broadcast WakeUp, and don't bump TurnCount, so this whole turn still displays as
+                // "Turn 1" rather than "Turn 2". My own next AdvancePhase call (GameSession's own
+                // fast-forward branch) handles skipping straight to Draw from here.
+                phase = TurnPhase.Materialization;
+            }
+            else
+            {
+                // The handoff's own NextTurn call (inside GameSession.AdvancePhase, on the departing
+                // side) only ever runs against that side's own mirror of me — inert, since my own
+                // broadcasts overwrite it anyway. So this is the one place MY OWN TurnCount/
+                // DeadTurnsCount/"Turn X started" log — and WakeUp's untap, which the departing
+                // side's own SetPhase call likewise only ever ran against that same inert mirror —
+                // actually happens for my own authoritative Player.
+                _session.NextTurn(Player);
+                _session.WakeUp(Player);
+            }
         }
 
         _session.ApplyRemoteGameState(phase, activePlayer);
