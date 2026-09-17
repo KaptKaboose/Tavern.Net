@@ -73,6 +73,22 @@ public class GameSessionTests
     }
 
     [Fact]
+    public void MoveCard_ToAndFromSealed_NeedsNoSpecialCasing()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        var card = MakeCard("Hidden Away");
+        player.GetZone(ZoneType.Hand).Cards.Add(card);
+
+        session.MoveCard(player, card, ZoneType.Hand, ZoneType.Sealed);
+        Assert.Same(card, Assert.Single(player.GetZone(ZoneType.Sealed).Cards));
+
+        session.MoveCard(player, card, ZoneType.Sealed, ZoneType.Field);
+        Assert.Empty(player.GetZone(ZoneType.Sealed).Cards);
+        Assert.Same(card, Assert.Single(player.GetZone(ZoneType.Field).Cards));
+    }
+
+    [Fact]
     public void MoveCard_ToStackZone_InsertsAtFront()
     {
         var session = new GameSession();
@@ -100,6 +116,42 @@ public class GameSessionTests
         session.MoveCard(player, newer, ZoneType.Field, ZoneType.Hand);
 
         Assert.Equal(new[] { older, newer }, player.GetZone(ZoneType.Hand).Cards);
+    }
+
+    [Fact]
+    public void MoveCard_ToBottom_AppendsRatherThanInserts()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        var existingTop = MakeCard("Existing Top");
+        var incoming = MakeCard("Incoming");
+        player.GetZone(ZoneType.MainDeck).Cards.Add(existingTop);
+        player.GetZone(ZoneType.Hand).Cards.Add(incoming);
+
+        session.MoveCard(player, incoming, ZoneType.Hand, ZoneType.MainDeck, toBottom: true);
+
+        Assert.Equal(new[] { existingTop, incoming }, player.GetZone(ZoneType.MainDeck).Cards);
+    }
+
+    [Fact]
+    public void RestoreMainDeckOrder_ResetsToExactSnapshotOrder()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        var first = MakeCard("First");
+        var second = MakeCard("Second");
+        var third = MakeCard("Third");
+        player.GetZone(ZoneType.MainDeck).Cards.Add(first);
+        player.GetZone(ZoneType.MainDeck).Cards.Add(second);
+        player.GetZone(ZoneType.MainDeck).Cards.Add(third);
+        var snapshot = player.GetZone(ZoneType.MainDeck).Cards.ToList();
+
+        session.Mill(player, 2);
+        Assert.Equal(new[] { third }, player.GetZone(ZoneType.MainDeck).Cards);
+
+        session.RestoreMainDeckOrder(player, snapshot);
+
+        Assert.Equal(snapshot, player.GetZone(ZoneType.MainDeck).Cards);
     }
 
     [Fact]
@@ -521,6 +573,110 @@ public class GameSessionTests
     }
 
     [Fact]
+    public void RemoveCardForGive_RemovesFromNamedZone()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        var card = MakeCard();
+        player.GetZone(ZoneType.Hand).Cards.Add(card);
+
+        session.RemoveCardForGive(player, card, ZoneType.Hand);
+
+        Assert.Empty(player.GetZone(ZoneType.Hand).Cards);
+    }
+
+    [Fact]
+    public void TakeTopCardsForGive_RemovesExactlyTopN()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        var top = MakeCard("Top");
+        var second = MakeCard("Second");
+        var third = MakeCard("Third");
+        player.GetZone(ZoneType.MainDeck).Cards.Add(top);
+        player.GetZone(ZoneType.MainDeck).Cards.Add(second);
+        player.GetZone(ZoneType.MainDeck).Cards.Add(third);
+
+        var taken = session.TakeTopCardsForGive(player, 2);
+
+        Assert.Equal(new[] { top, second }, taken);
+        Assert.Equal(new[] { third }, player.GetZone(ZoneType.MainDeck).Cards);
+    }
+
+    [Fact]
+    public void ReceiveGivenCard_ToField_AddsAndRecordsMajorEvent()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        var cardDto = new CardDto { Name = "Curse" };
+
+        var instance = session.ReceiveGivenCard(player, cardDto, ZoneType.Field, "Hand");
+
+        Assert.Same(instance, Assert.Single(player.GetZone(ZoneType.Field).Cards));
+        Assert.Contains(player.Stats.MajorEvents, e => e.Description.Contains("Curse"));
+    }
+
+    [Fact]
+    public void ReceiveGivenCard_ToSealed_AddsWithoutRecordingMajorEvent()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        var cardDto = new CardDto { Name = "Secret" };
+
+        var instance = session.ReceiveGivenCard(player, cardDto, ZoneType.Sealed, "Main Deck (blind)");
+
+        Assert.Same(instance, Assert.Single(player.GetZone(ZoneType.Sealed).Cards));
+        Assert.Empty(player.Stats.MajorEvents);
+    }
+
+    [Fact]
+    public void ReceiveGivenCard_HomeZoneIsDestination_SoNewGameDiscardsIt()
+    {
+        var player = MakePlayerWithDeck(deckSize: 10);
+        var session = new GameSession();
+        session.Players.Add(player);
+        player.GetZone(ZoneType.MaterialDeck).Cards.Add(MakeBaseChampion());
+
+        session.ReceiveGivenCard(player, new CardDto { Name = "Given" }, ZoneType.Field, "Hand");
+        Assert.Single(player.GetZone(ZoneType.Field).Cards);
+
+        session.StartNewGame();
+
+        Assert.DoesNotContain(player.Zones.Values.SelectMany(z => z.Cards), c => c.Card.Name == "Given");
+    }
+
+    [Fact]
+    public void Mill_MovesTopNCardsToGraveyard_InOrder()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        var top = MakeCard("Top");
+        var second = MakeCard("Second");
+        var third = MakeCard("Third");
+        player.GetZone(ZoneType.MainDeck).Cards.Add(top);
+        player.GetZone(ZoneType.MainDeck).Cards.Add(second);
+        player.GetZone(ZoneType.MainDeck).Cards.Add(third);
+
+        session.Mill(player, 2);
+
+        Assert.Equal(new[] { third }, player.GetZone(ZoneType.MainDeck).Cards);
+        Assert.Equal(new[] { second, top }, player.GetZone(ZoneType.Graveyard).Cards);
+    }
+
+    [Fact]
+    public void Mill_CountExceedingDeckSize_MillsWhateverIsThere()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        player.GetZone(ZoneType.MainDeck).Cards.Add(MakeCard());
+
+        session.Mill(player, 5);
+
+        Assert.Empty(player.GetZone(ZoneType.MainDeck).Cards);
+        Assert.Single(player.GetZone(ZoneType.Graveyard).Cards);
+    }
+
+    [Fact]
     public void AdvancePhase_StepsThroughPhasesInOrder()
     {
         var session = new GameSession();
@@ -807,6 +963,38 @@ public class GameSessionTests
         var player = session.AddPlayer("Solo");
 
         Assert.Null(session.GlimpseNextCard(player));
+    }
+
+    [Fact]
+    public void GlimpseCards_PullsExactlyCount_InOrder()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        var top = MakeCard("Top");
+        var second = MakeCard("Second");
+        var third = MakeCard("Third");
+        player.GetZone(ZoneType.MainDeck).Cards.Add(top);
+        player.GetZone(ZoneType.MainDeck).Cards.Add(second);
+        player.GetZone(ZoneType.MainDeck).Cards.Add(third);
+
+        var glimpsed = session.GlimpseCards(player, 2);
+
+        Assert.Equal(new[] { top, second }, glimpsed);
+        Assert.Equal(new[] { third }, player.GetZone(ZoneType.MainDeck).Cards);
+    }
+
+    [Fact]
+    public void GlimpseCards_FewerThanCountInDeck_StopsEarly()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        var only = MakeCard();
+        player.GetZone(ZoneType.MainDeck).Cards.Add(only);
+
+        var glimpsed = session.GlimpseCards(player, 5);
+
+        Assert.Equal(new[] { only }, glimpsed);
+        Assert.Empty(player.GetZone(ZoneType.MainDeck).Cards);
     }
 
     [Fact]

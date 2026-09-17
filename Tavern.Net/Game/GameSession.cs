@@ -1,3 +1,5 @@
+using Tavern.Net.GameData.Models;
+
 namespace Tavern.Net.Game;
 
 /// <summary>
@@ -120,6 +122,21 @@ public sealed class GameSession
         }
 
         player.Stats.Log($"Shuffled {zoneType}.");
+    }
+
+    /// <summary>Restores Main's exact card order from a pre-action snapshot — GameBoardViewModel's
+    /// single-level Undo for blind Main Deck actions (Mill/Bottom/the R-P-M-G chords). Same Clear +
+    /// re-Add idiom as Shuffle.</summary>
+    public void RestoreMainDeckOrder(Player player, IReadOnlyList<CardInstance> order)
+    {
+        var deck = player.GetZone(ZoneType.MainDeck);
+        deck.Cards.Clear();
+        foreach (var card in order)
+        {
+            deck.Cards.Add(card);
+        }
+
+        player.Stats.Log("Undid the last blind Main Deck action.");
     }
 
     /// <summary>
@@ -311,7 +328,9 @@ public sealed class GameSession
         return true;
     }
 
-    public void MoveCard(Player player, CardInstance card, ZoneType from, ZoneType to, double? fieldX = null, double? fieldY = null)
+    /// <param name="toBottom">For a stack zone (Insert(0, ...) by default, i.e. the top), append to
+    /// the end instead — the Zoom overlay's "Bottom of Main" action.</param>
+    public void MoveCard(Player player, CardInstance card, ZoneType from, ZoneType to, double? fieldX = null, double? fieldY = null, bool toBottom = false)
     {
         // Tokens follow entirely different rules from every other card — see MoveToken.
         if (card.Card.IsToken)
@@ -368,7 +387,7 @@ public sealed class GameSession
         }
 
         var destination = player.GetZone(to);
-        if (StackZones.Contains(to))
+        if (StackZones.Contains(to) && !toBottom)
         {
             destination.Cards.Insert(0, card);
         }
@@ -678,6 +697,72 @@ public sealed class GameSession
         }
     }
 
+    /// <summary>Removes <paramref name="card"/> from <paramref name="from"/> entirely, for Give —
+    /// unlike MoveCard there's no local destination: the card is headed to the opponent's own board
+    /// via a TransferCard message, which their own client applies against their own authoritative
+    /// Player (see ReceiveGivenCard). A no-op if it's already gone (e.g. a stale reference).</summary>
+    public void RemoveCardForGive(Player player, CardInstance card, ZoneType from)
+    {
+        if (!player.GetZone(from).Cards.Remove(card))
+        {
+            return;
+        }
+
+        player.Stats.Log($"Gave {card.Card.Name} from {from} to the opponent.");
+    }
+
+    /// <summary>Blind top-N removal from Main for Give's 'P' chord — the cards are unknown to the
+    /// player choosing to send them, same reasoning as Mill's own blind top-N.</summary>
+    public List<CardInstance> TakeTopCardsForGive(Player player, int count)
+    {
+        var taken = player.GetZone(ZoneType.MainDeck).Cards.Take(count).ToList();
+        foreach (var card in taken)
+        {
+            RemoveCardForGive(player, card, ZoneType.MainDeck);
+        }
+
+        return taken;
+    }
+
+    /// <summary>Receiver side of Give: materializes a card the opponent sent directly into this
+    /// player's own Field or Sealed zone. HomeZone is set to <paramref name="destination"/> itself
+    /// (not MainDeck/MaterialDeck) — deliberate: this card has no home in the receiver's own deck,
+    /// so StartNewGame's reset sweep (which only rebuilds Main/Material from HomeZone) naturally
+    /// discards it on the next New Game, with no special-case cleanup needed here.</summary>
+    public CardInstance ReceiveGivenCard(Player player, CardDto cardDto, ZoneType destination, string? sourceLabel)
+    {
+        var instance = new CardInstance(cardDto, destination);
+        player.GetZone(destination).Cards.Add(instance);
+        player.Stats.Log($"Received {cardDto.Name} from the opponent ({sourceLabel ?? "?"}) into {destination}.");
+
+        if (destination == ZoneType.Field)
+        {
+            RecordMajorEvent(player, $"{cardDto.Name} arrived on the Field via Give.");
+        }
+
+        return instance;
+    }
+
+    /// <summary>Moves up to <paramref name="count"/> cards off the top of Main straight to the
+    /// Graveyard — the Mill action's blind top-N mill. Purely local: Graveyard is already public/
+    /// synced, so this needs no online message of its own, just the normal PlayerState broadcast
+    /// tick reflecting the result.</summary>
+    /// <returns>The exact cards milled, in the order they left Main — GameBoardViewModel's own Undo
+    /// needs these specific instances back to correctly reverse a mill (pull them back out of
+    /// Graveyard, not just restore Main's own card list, which would otherwise leave the same
+    /// CardInstance sitting in both zones at once).</returns>
+    public List<CardInstance> Mill(Player player, int count)
+    {
+        var deck = player.GetZone(ZoneType.MainDeck);
+        var milled = deck.Cards.Take(count).ToList();
+        foreach (var card in milled)
+        {
+            MoveCard(player, card, ZoneType.MainDeck, ZoneType.Graveyard);
+        }
+
+        return milled;
+    }
+
     /// <summary>
     /// Pulls the next card off the top of Main for glimpsing. The card leaves Main entirely —
     /// not tracked in any zone — until <see cref="FinishGlimpse"/> puts every glimpsed card back.
@@ -694,6 +779,27 @@ public sealed class GameSession
         var card = deck.Cards[0];
         deck.Cards.RemoveAt(0);
         return card;
+    }
+
+    /// <summary>Pulls up to <paramref name="count"/> cards off the top of Main in one batch — the
+    /// 'G' chord's up-front count, replacing the old one-at-a-time repeated-G flow. Stops early if
+    /// Main runs dry; loops GlimpseNextCard rather than duplicating it, so StartNewGame's own
+    /// base-champion-glimpse path (which calls GlimpseNextCard directly) is unaffected.</summary>
+    public List<CardInstance> GlimpseCards(Player player, int count)
+    {
+        var drawn = new List<CardInstance>();
+        for (var i = 0; i < count; i++)
+        {
+            var card = GlimpseNextCard(player);
+            if (card is null)
+            {
+                break;
+            }
+
+            drawn.Add(card);
+        }
+
+        return drawn;
     }
 
     /// <summary>

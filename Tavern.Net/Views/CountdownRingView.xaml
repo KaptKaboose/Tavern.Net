@@ -1,0 +1,25 @@
+<UserControl x:Class="Tavern.Net.Views.CountdownRingView"
+             x:Name="Root"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d" d:DesignWidth="48" d:DesignHeight="48">
+    <!-- A depleting countdown ring: a static background ring plus a foreground ring whose
+         StrokeDashArray shrinks as RemainingFraction falls — see the code-behind, which recomputes
+         it directly (rather than via an XAML converter binding) since the dash array's units are
+         relative to Thickness, and Diameter/Thickness can each change independently. -->
+    <Grid Width="{Binding Diameter, ElementName=Root}" Height="{Binding Diameter, ElementName=Root}">
+        <!-- Margin=2: a small fixed inset so the stroke (centered on the ellipse's own boundary,
+             so it bleeds StrokeThickness/2 past it on every side) doesn't clip against this
+             control's own outer edge — the small, fixed Diameter/Thickness combos this is actually
+             used at (18-56px) make a flat inset simpler than computing one per instance. -->
+        <Ellipse Margin="2" Stroke="#4A5568" StrokeThickness="{Binding Thickness, ElementName=Root}"/>
+        <Ellipse x:Name="ProgressRing" Margin="2" Stroke="#F6E05E" StrokeThickness="{Binding Thickness, ElementName=Root}"
+                 RenderTransformOrigin="0.5,0.5">
+            <Ellipse.RenderTransform>
+                <RotateTransform Angle="-90"/>
+            </Ellipse.RenderTransform>
+        </Ellipse>
+    </Grid>
+</UserControl>

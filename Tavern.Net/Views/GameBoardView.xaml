@@ -156,6 +156,7 @@
                 <StackPanel Grid.Column="0" Orientation="Horizontal">
                     <Button Style="{StaticResource CompactButtonStyle}" Content="Menu" Margin="0,0,8,0" Command="{Binding BackToMenuCommand}"/>
                     <Button Style="{StaticResource CompactButtonStyle}" Content="Save Game" Margin="0,0,8,0" Command="{Binding OpenSaveGamePanelCommand}"/>
+
                     <TextBlock Text="{Binding ConnectionLostMessage}" Foreground="IndianRed" VerticalAlignment="Center"
                                Visibility="{Binding ConnectionLostMessage, Converter={StaticResource NullToVisibility}}"/>
                 </StackPanel>
@@ -286,6 +287,26 @@
                     <Button Style="{StaticResource OpponentButtonStyle}" Content="Opponent" Margin="0,0,16,0"
                             Command="{Binding ToggleOpponentPanelCommand}"
                             Visibility="{Binding IsOnline, Converter={StaticResource BoolToVisibility}}"/>
+
+                    <!-- Always visible, unlike Opponent — Sealed is a private zone of your own, usable
+                         solo too, not an online-only concept. Also a drop target in its own right
+                         (not just the panel's internal one): the panel is a full-board modal like
+                         every other overlay here, so it hides Hand/Field/etc. while open — there'd
+                         be no way to drag INTO Sealed from elsewhere without this, since you can't
+                         see both at once. -->
+                    <Button Style="{StaticResource ActionButtonStyle}" Margin="0,0,16,0" Command="{Binding ToggleSealedPanelCommand}"
+                            behaviors:CardDropBehavior.TargetZone="Sealed" behaviors:CardDropBehavior.MoveCommand="{Binding MoveCardToCommand}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Sealed" VerticalAlignment="Center"/>
+                            <Border Background="#1A202C" CornerRadius="8" Padding="6,1" Margin="6,0,0,0">
+                                <TextBlock Text="{Binding Sealed.Cards.Count}" FontWeight="Bold"/>
+                            </Border>
+                        </StackPanel>
+                    </Button>
+
+                    <!-- Banish/Reveal/Glimpse/Mill/Give — click to open a menu instead of the old
+                         invisible keyboard chords, per GameBoardViewModel's own ArmedChord family. -->
+                    <Button Style="{StaticResource ActionButtonStyle}" Content="Actions" Margin="0,0,16,0" Command="{Binding OpenActionsMenuCommand}"/>
 
                     <Button Style="{StaticResource ActionButtonStyle}" Content="Roll" Margin="0,0,16,0" Command="{Binding OpenDicePanelCommand}"/>
 
@@ -1004,6 +1025,17 @@
                                 <ContentControl Content="{Binding OpponentGraveyardPile}" ContentTemplate="{StaticResource PileBoxTemplate}"/>
                                 <ContentControl Content="{Binding OpponentBanishmentPile}" ContentTemplate="{StaticResource PileBoxTemplate}"/>
 
+                                <StackPanel Margin="0,0,0,8" HorizontalAlignment="Center"
+                                            Visibility="{Binding OpponentSealedCount, Converter={StaticResource IntToVisibility}}">
+                                    <TextBlock Text="Sealed" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                                    <Grid Width="125" Height="175">
+                                        <Image Source="pack://application:,,,/GameData/Images/Grand%20Archive%20Back.jpg" Stretch="UniformToFill"/>
+                                        <Border Background="#CC000000" CornerRadius="8" Padding="6,2" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,6">
+                                            <TextBlock Foreground="White" FontWeight="Bold" Text="{Binding OpponentSealedCount}"/>
+                                        </Border>
+                                    </Grid>
+                                </StackPanel>
+
                                 <StackPanel Margin="0,0,0,8" HorizontalAlignment="Center">
                                     <TextBlock Text="Main" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,4"/>
                                     <Grid Width="125" Height="175">
@@ -1048,6 +1080,41 @@
                                 <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
                             </ItemsControl.ItemsPanel>
                         </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Grid>
+
+        <!-- Sealed panel: a private, fully interactive zone (drag in/out, zoomable — same CardTemplate
+             as Hand/Field) — unlike the Opponent panel, usable solo too. Header button/badge shows
+             your own count; the opponent only ever sees a count-only box in their own panel (see
+             OpponentSealedCount), never these actual cards. -->
+        <Grid Grid.Column="0" Grid.ColumnSpan="2"
+              Visibility="{Binding IsSealedPanelOpen, Converter={StaticResource BoolToVisibility}}"
+              d:IsHidden="True">
+            <Button Command="{Binding ToggleSealedPanelCommand}" Focusable="False" Cursor="Arrow">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="#CC000000"/>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+
+            <Border MaxWidth="1200" MinHeight="320" Margin="40" Padding="16"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Background="#2D3748" BorderBrush="White" BorderThickness="2" CornerRadius="10">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="Sealed" Foreground="White" FontSize="20" FontWeight="Bold" Margin="0,0,0,12"/>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <Border Background="Transparent" MinHeight="200"
+                                behaviors:CardDropBehavior.TargetZone="Sealed"
+                                behaviors:CardDropBehavior.MoveCommand="{Binding MoveCardToCommand}">
+                            <ItemsControl ItemsSource="{Binding Sealed.Cards}" ItemTemplate="{StaticResource CardTemplate}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                        </Border>
                     </ScrollViewer>
                 </DockPanel>
             </Border>
@@ -1111,6 +1178,87 @@
             </Border>
         </Grid>
 
+        <!-- Actions menu: click the header's Actions button to pick Banish/Reveal/Glimpse/Mill/Give,
+             then set a count. Two views in the same panel, switched by GameBoardViewModel.
+             SelectedAction — the top-level list (IsShowingActionsList) or the count entry
+             (IsEnteringActionCount); Back returns to the list, the scrim/Cancel closes outright. -->
+        <Grid Grid.Column="0" Grid.ColumnSpan="2"
+              Visibility="{Binding IsActionsMenuOpen, Converter={StaticResource BoolToVisibility}}"
+              d:IsHidden="True">
+            <Button Command="{Binding CloseActionsMenuCommand}" Focusable="False" Cursor="Arrow">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="#CC000000"/>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+
+            <Border MinWidth="280" Padding="20" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Background="#2D3748" BorderBrush="White" BorderThickness="2" CornerRadius="10">
+                <StackPanel>
+                    <!-- List view. -->
+                    <StackPanel Visibility="{Binding IsShowingActionsList, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="Actions" FontSize="18" FontWeight="Bold" Foreground="White" Margin="0,0,0,12"/>
+                        <Button Style="{StaticResource ActionButtonStyle}" Content="Banish" Margin="0,0,0,8" HorizontalContentAlignment="Left"
+                                Command="{Binding SelectActionCommand}" CommandParameter="{x:Static vm:ArmedChord.Banish}"/>
+                        <Button Style="{StaticResource ActionButtonStyle}" Content="Reveal" Margin="0,0,0,8" HorizontalContentAlignment="Left"
+                                Command="{Binding SelectActionCommand}" CommandParameter="{x:Static vm:ArmedChord.Reveal}"
+                                Visibility="{Binding CanUseOnlineAction, Converter={StaticResource BoolToVisibility}}"/>
+                        <Button Style="{StaticResource ActionButtonStyle}" Content="Glimpse" Margin="0,0,0,8" HorizontalContentAlignment="Left"
+                                Command="{Binding SelectActionCommand}" CommandParameter="{x:Static vm:ArmedChord.Glimpse}"/>
+                        <Button Style="{StaticResource ActionButtonStyle}" Content="Mill" Margin="0,0,0,8" HorizontalContentAlignment="Left"
+                                Command="{Binding SelectActionCommand}" CommandParameter="{x:Static vm:ArmedChord.Mill}"/>
+                        <Button Style="{StaticResource ActionButtonStyle}" Content="Give" HorizontalContentAlignment="Left"
+                                Command="{Binding SelectActionCommand}" CommandParameter="{x:Static vm:ArmedChord.Give}"
+                                Visibility="{Binding CanUseOnlineAction, Converter={StaticResource BoolToVisibility}}"/>
+                    </StackPanel>
+
+                    <!-- Count entry view — digits/Backspace type directly into it too (see
+                         GameBoardViewModel.HandleKey's IsEnteringActionCount branch), for double-digit
+                         counts (e.g. glimpsing 10+) without needing to click + repeatedly. -->
+                    <StackPanel Visibility="{Binding IsEnteringActionCount, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="{Binding SelectedActionLabel}" FontSize="18" FontWeight="Bold" Foreground="White" Margin="0,0,0,12"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,16">
+                            <Button Style="{StaticResource CounterButtonStyle}" Content="-" Command="{Binding DecreaseActionCountCommand}"/>
+                            <TextBlock Text="{Binding ActionCount}" FontSize="20" FontWeight="Bold" Foreground="#F7FAFC"
+                                       Width="44" TextAlignment="Center" VerticalAlignment="Center"/>
+                            <Button Style="{StaticResource CounterButtonStyle}" Content="+" Command="{Binding IncreaseActionCountCommand}"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <Button Style="{StaticResource ActionButtonStyle}" Content="Back" Margin="0,0,8,0" Command="{Binding BackToActionsListCommand}"/>
+                            <Button Style="{StaticResource ActionButtonStyle}" Content="Go" Command="{Binding ConfirmActionCommand}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- Give's target picker: shared by both entry points (a specific card via the Zoom overlay's
+             own Give button, or a blind top-N via Main Deck's 'P' chord) — see GameBoardViewModel.
+             ConfirmGive. Nothing has actually moved yet; Cancel (or the scrim) just closes this. -->
+        <Grid Grid.Column="0" Grid.ColumnSpan="2"
+              Visibility="{Binding IsGiveTargetPickerOpen, Converter={StaticResource BoolToVisibility}}"
+              d:IsHidden="True">
+            <Button Command="{Binding CancelGiveCommand}" Focusable="False" Cursor="Arrow">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="#CC000000"/>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+
+            <Border MaxWidth="360" Padding="20" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Background="#2D3748" BorderBrush="White" BorderThickness="2" CornerRadius="10">
+                <StackPanel>
+                    <TextBlock Text="Give to opponent's..." FontSize="18" FontWeight="Bold" Foreground="White" Margin="0,0,0,16"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <Button Style="{StaticResource ActionButtonStyle}" Content="Field" Margin="0,0,12,0" Command="{Binding ConfirmGiveToFieldCommand}"/>
+                        <Button Style="{StaticResource ActionButtonStyle}" Content="Sealed" Command="{Binding ConfirmGiveToSealedCommand}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
+
         <!-- Zoom overlay: right-click any card (CardZoomBehavior) opens it here full-size, with a
              side panel for its status/counter. The scrim and the card art are each their own
              click-to-close Button (matching the old "click anywhere on the card closes it"
@@ -1145,63 +1293,83 @@
                     </Button.Template>
                 </Button>
 
-                <!-- Status/counter side panel — only relevant in play (Field/Champion; see
-                     GameBoardViewModel.ShowCounterAndStatusPanel), hidden everywhere else (Hand,
-                     a deck peek, Glimpse, ...). Status buttons two-way bind straight to the
-                     CardInstance's own IsXxx properties (no command/parameter plumbing needed);
-                     highlighted (gold border) when checked via the StatusToggleStyle below. -->
+                <!-- Side panel — Status/Counter/Tapped only relevant in play (Field/Champion; see
+                     GameBoardViewModel.ShowCounterAndStatusPanel); Bottom/Reveal/Give matter for
+                     exactly the private zones that gate hides (Hand/Memory/Material/Sealed), so the
+                     outer Border's own Visibility is the broader ShowZoomSidePanel instead. Status
+                     buttons two-way bind straight to the CardInstance's own IsXxx properties (no
+                     command/parameter plumbing needed); highlighted (gold border) when checked via
+                     the StatusToggleStyle below. -->
                 <Border Width="170" Margin="16,0,0,0" Padding="14" VerticalAlignment="Center"
                         Background="#2D3748" BorderBrush="White" BorderThickness="2" CornerRadius="10"
-                        Visibility="{Binding ShowCounterAndStatusPanel, Converter={StaticResource BoolToVisibility}}">
+                        Visibility="{Binding ShowZoomSidePanel, Converter={StaticResource BoolToVisibility}}">
                     <StackPanel>
-                        <!-- Status/Tap toggles bind IsChecked OneWay (display only) and drive the
-                             actual change through a Command instead — routing through
-                             GameSession.ToggleStatus/ToggleTapped so it's logged and (for Tap)
-                             breaks any open Life/Damage coalescing streak. A TwoWay binding here
-                             would double-toggle: WPF flips IsChecked itself on click, then the
-                             command would flip the real property again. -->
-                        <TextBlock Text="Status" Foreground="#F7FAFC" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,8"/>
-                        <UniformGrid Columns="2" Margin="0,0,0,16">
-                            <ToggleButton Style="{StaticResource StatusToggleStyle}" IsChecked="{Binding ZoomedCard.Instance.IsEphemeral, Mode=OneWay}"
-                                          Command="{Binding ToggleZoomedCardStatusCommand}" CommandParameter="Ephemeral">
-                                <Image Source="/GameData/Images/Tokens/ephemeral.png" Stretch="Uniform"/>
-                            </ToggleButton>
-                            <ToggleButton Style="{StaticResource StatusToggleStyle}" IsChecked="{Binding ZoomedCard.Instance.IsIgnited, Mode=OneWay}"
-                                          Command="{Binding ToggleZoomedCardStatusCommand}" CommandParameter="Ignited">
-                                <Image Source="/GameData/Images/Tokens/ignited.png" Stretch="Uniform"/>
-                            </ToggleButton>
-                            <ToggleButton Style="{StaticResource StatusToggleStyle}" IsChecked="{Binding ZoomedCard.Instance.IsImbued, Mode=OneWay}"
-                                          Command="{Binding ToggleZoomedCardStatusCommand}" CommandParameter="Imbued">
-                                <Image Source="/GameData/Images/Tokens/imbued.png" Stretch="Uniform"/>
-                            </ToggleButton>
-                            <ToggleButton Style="{StaticResource StatusToggleStyle}" IsChecked="{Binding ZoomedCard.Instance.IsRanged, Mode=OneWay}"
-                                          Command="{Binding ToggleZoomedCardStatusCommand}" CommandParameter="Ranged">
-                                <Image Source="/GameData/Images/Tokens/ranged.png" Stretch="Uniform"/>
-                            </ToggleButton>
-                            <ToggleButton Style="{StaticResource StatusToggleStyle}" IsChecked="{Binding ZoomedCard.Instance.IsRooted, Mode=OneWay}"
-                                          Command="{Binding ToggleZoomedCardStatusCommand}" CommandParameter="Rooted">
-                                <Image Source="/GameData/Images/Tokens/rooted.png" Stretch="Uniform"/>
-                            </ToggleButton>
-                            <ToggleButton Style="{StaticResource StatusToggleStyle}" IsChecked="{Binding ZoomedCard.Instance.IsWarded, Mode=OneWay}"
-                                          Command="{Binding ToggleZoomedCardStatusCommand}" CommandParameter="Warded">
-                                <Image Source="/GameData/Images/Tokens/warded.png" Stretch="Uniform"/>
-                            </ToggleButton>
-                        </UniformGrid>
+                        <StackPanel Visibility="{Binding ShowCounterAndStatusPanel, Converter={StaticResource BoolToVisibility}}">
+                            <!-- Status/Tap toggles bind IsChecked OneWay (display only) and drive the
+                                 actual change through a Command instead — routing through
+                                 GameSession.ToggleStatus/ToggleTapped so it's logged and (for Tap)
+                                 breaks any open Life/Damage coalescing streak. A TwoWay binding here
+                                 would double-toggle: WPF flips IsChecked itself on click, then the
+                                 command would flip the real property again. -->
+                            <TextBlock Text="Status" Foreground="#F7FAFC" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                            <UniformGrid Columns="2" Margin="0,0,0,16">
+                                <ToggleButton Style="{StaticResource StatusToggleStyle}" IsChecked="{Binding ZoomedCard.Instance.IsEphemeral, Mode=OneWay}"
+                                              Command="{Binding ToggleZoomedCardStatusCommand}" CommandParameter="Ephemeral">
+                                    <Image Source="/GameData/Images/Tokens/ephemeral.png" Stretch="Uniform"/>
+                                </ToggleButton>
+                                <ToggleButton Style="{StaticResource StatusToggleStyle}" IsChecked="{Binding ZoomedCard.Instance.IsIgnited, Mode=OneWay}"
+                                              Command="{Binding ToggleZoomedCardStatusCommand}" CommandParameter="Ignited">
+                                    <Image Source="/GameData/Images/Tokens/ignited.png" Stretch="Uniform"/>
+                                </ToggleButton>
+                                <ToggleButton Style="{StaticResource StatusToggleStyle}" IsChecked="{Binding ZoomedCard.Instance.IsImbued, Mode=OneWay}"
+                                              Command="{Binding ToggleZoomedCardStatusCommand}" CommandParameter="Imbued">
+                                    <Image Source="/GameData/Images/Tokens/imbued.png" Stretch="Uniform"/>
+                                </ToggleButton>
+                                <ToggleButton Style="{StaticResource StatusToggleStyle}" IsChecked="{Binding ZoomedCard.Instance.IsRanged, Mode=OneWay}"
+                                              Command="{Binding ToggleZoomedCardStatusCommand}" CommandParameter="Ranged">
+                                    <Image Source="/GameData/Images/Tokens/ranged.png" Stretch="Uniform"/>
+                                </ToggleButton>
+                                <ToggleButton Style="{StaticResource StatusToggleStyle}" IsChecked="{Binding ZoomedCard.Instance.IsRooted, Mode=OneWay}"
+                                              Command="{Binding ToggleZoomedCardStatusCommand}" CommandParameter="Rooted">
+                                    <Image Source="/GameData/Images/Tokens/rooted.png" Stretch="Uniform"/>
+                                </ToggleButton>
+                                <ToggleButton Style="{StaticResource StatusToggleStyle}" IsChecked="{Binding ZoomedCard.Instance.IsWarded, Mode=OneWay}"
+                                              Command="{Binding ToggleZoomedCardStatusCommand}" CommandParameter="Warded">
+                                    <Image Source="/GameData/Images/Tokens/warded.png" Stretch="Uniform"/>
+                                </ToggleButton>
+                            </UniformGrid>
 
-                        <TextBlock Text="Counter" Foreground="#F7FAFC" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,8"/>
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <Button Style="{StaticResource CounterButtonStyle}" Content="-" Command="{Binding DecreaseCounterCommand}"/>
-                            <TextBlock Text="{Binding ZoomedCard.Instance.Counter}" FontSize="20" FontWeight="Bold" Foreground="#F7FAFC"
-                                       Width="44" TextAlignment="Center" VerticalAlignment="Center"/>
-                            <Button Style="{StaticResource CounterButtonStyle}" Content="+" Command="{Binding IncreaseCounterCommand}"/>
+                            <TextBlock Text="Counter" Foreground="#F7FAFC" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <Button Style="{StaticResource CounterButtonStyle}" Content="-" Command="{Binding DecreaseCounterCommand}"/>
+                                <TextBlock Text="{Binding ZoomedCard.Instance.Counter}" FontSize="20" FontWeight="Bold" Foreground="#F7FAFC"
+                                           Width="44" TextAlignment="Center" VerticalAlignment="Center"/>
+                                <Button Style="{StaticResource CounterButtonStyle}" Content="+" Command="{Binding IncreaseCounterCommand}"/>
+                            </StackPanel>
+
+                            <TextBlock Text="Tapped" Foreground="#F7FAFC" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,16,0,8"/>
+                            <ToggleButton Style="{StaticResource StatusToggleStyle}" HorizontalAlignment="Center"
+                                          IsChecked="{Binding ZoomedCard.Instance.IsTapped, Mode=OneWay}"
+                                          Command="{Binding ToggleZoomedCardTappedCommand}">
+                                <TextBlock Text="Tap" Foreground="#F7FAFC" FontWeight="Bold" FontSize="14"/>
+                            </ToggleButton>
                         </StackPanel>
 
-                        <TextBlock Text="Tapped" Foreground="#F7FAFC" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,16,0,8"/>
-                        <ToggleButton Style="{StaticResource StatusToggleStyle}" HorizontalAlignment="Center"
-                                      IsChecked="{Binding ZoomedCard.Instance.IsTapped, Mode=OneWay}"
-                                      Command="{Binding ToggleZoomedCardTappedCommand}">
-                            <TextBlock Text="Tap" Foreground="#F7FAFC" FontWeight="Bold" FontSize="14"/>
-                        </ToggleButton>
+                        <!-- Bottom: any card not already in Main Deck, sends it to the bottom. -->
+                        <Button Style="{StaticResource ActionButtonStyle}" Content="Bottom" Margin="0,12,0,0"
+                                Command="{Binding BottomZoomedCardCommand}"
+                                Visibility="{Binding CanBottomZoomedCard, Converter={StaticResource BoolToVisibility}}"/>
+
+                        <!-- Online only, private zones only (Hand/Memory/Material/Sealed) — shows
+                             the opponent this specific card without moving it. -->
+                        <Button Style="{StaticResource ActionButtonStyle}" Content="Reveal" Margin="0,8,0,0"
+                                Command="{Binding RevealZoomedCardCommand}"
+                                Visibility="{Binding CanRevealZoomedCard, Converter={StaticResource BoolToVisibility}}"/>
+
+                        <!-- Online only, any zone — opens the shared Field/Sealed target picker. -->
+                        <Button Style="{StaticResource ActionButtonStyle}" Content="Give" Margin="0,8,0,0"
+                                Command="{Binding OpenGiveTargetPickerForZoomedCardCommand}"
+                                Visibility="{Binding CanGiveZoomedCard, Converter={StaticResource BoolToVisibility}}"/>
                     </StackPanel>
                 </Border>
             </StackPanel>
@@ -1243,5 +1411,85 @@
                 </Button.Template>
             </Button>
         </Grid>
+
+        <!-- Reveal overlay: shows a card (or a batch, e.g. Main Deck's 'R' chord) the opponent chose
+             to reveal — placed last so it always renders on top of whatever else is open when one
+             arrives. A ring (CountdownRingView) depletes over 5s; clicking "Keep open" (RevealKeptOpen)
+             freezes it so the player can look as long as they want; the scrim closes it outright and
+             advances to the next queued reveal (see GameBoardViewModel.ShowNextReveal). -->
+        <Grid Grid.Column="0" Grid.ColumnSpan="2"
+              Visibility="{Binding ActiveReveal, Converter={StaticResource NullToVisibility}}"
+              d:IsHidden="True">
+            <Button Command="{Binding CloseActiveRevealCommand}" Focusable="False" Cursor="Arrow">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="#CC000000"/>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+
+            <!-- IsHitTestVisible=False only on the card art itself (clicking it falls through to
+                 the scrim, closing) — NOT on a shared ancestor of the ring/button below: WPF's
+                 IsHitTestVisible=False on a container blocks its whole subtree, with no way for a
+                 descendant to "opt back in", which is exactly what made Keep Open unclickable
+                 before this. -->
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <ItemsControl ItemsSource="{Binding ActiveReveal}" IsHitTestVisible="False">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Width="240" Height="336" Margin="8" CornerRadius="10" ClipToBounds="True"
+                                    Background="#333" BorderBrush="Black" BorderThickness="2">
+                                <Image Source="{Binding Artwork}" Stretch="Uniform"
+                                       Visibility="{Binding Artwork, Converter={StaticResource NullToVisibility}}"/>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- Both the ring and the button disappear together once kept open — the ring
+                     stopping but staying on screen read as "did my click not register?". -->
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,8,0,0"
+                            Visibility="{Binding ShowKeepRevealOpenButton, Converter={StaticResource BoolToVisibility}}">
+                    <views:CountdownRingView RemainingFraction="{Binding RevealRemainingFraction}" Diameter="56" Thickness="5" Margin="0,0,16,0"/>
+                    <Button Style="{StaticResource ActionButtonStyle}" Content="Keep open" Command="{Binding KeepRevealOpenCommand}"/>
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+
+        <!-- Undo — shown toast-style (bottom-center, same visual language as the opponent notice
+             below) rather than a small header button, so it's easy to spot and click in time. Real
+             Button, not just a notice: clicking anywhere on it fires Undo. Non-modal (excluded from
+             IsAnyOverlayOpen — see its own comment), so it never blocks a keyboard shortcut. -->
+        <Button Grid.Column="0" Grid.ColumnSpan="2" Command="{Binding UndoCommand}" Focusable="False" Cursor="Hand"
+                HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,24"
+                Visibility="{Binding IsUndoAvailable, Converter={StaticResource BoolToVisibility}}"
+                d:IsHidden="True">
+            <Button.Template>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="#2D3748" BorderBrush="#F6E05E" BorderThickness="2" CornerRadius="8" Padding="16,8">
+                        <StackPanel Orientation="Horizontal">
+                            <views:CountdownRingView RemainingFraction="{Binding UndoRemainingFraction}" Diameter="28" Thickness="4" Margin="0,0,10,0"/>
+                            <TextBlock VerticalAlignment="Center" Foreground="White" FontWeight="Bold">
+                                <Run Text="Undo"/>
+                                <Run Text="{Binding UndoActionLabel, StringFormat=' {0}'}"/>
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+                </ControlTemplate>
+            </Button.Template>
+        </Button>
+
+        <!-- Opponent's Undo notice toast — non-modal (IsHitTestVisible=False, not part of
+             IsAnyOverlayOpen), so it never blocks input or a keyboard shortcut the way every real
+             overlay above does. -->
+        <Border Grid.Column="0" Grid.ColumnSpan="2" Background="#2D3748" BorderBrush="#F6E05E" BorderThickness="2" CornerRadius="8"
+                Padding="16,8" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,24"
+                Visibility="{Binding ToastMessage, Converter={StaticResource NullToVisibility}}" IsHitTestVisible="False"
+                d:IsHidden="True">
+            <TextBlock Text="{Binding ToastMessage}" Foreground="White" FontWeight="Bold"/>
+        </Border>
     </Grid>
 </UserControl>

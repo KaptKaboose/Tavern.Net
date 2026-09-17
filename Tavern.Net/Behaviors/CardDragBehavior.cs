@@ -235,13 +235,10 @@ public static class CardDragBehavior
             _activeAdornerRoot = adornerRoot;
         }
 
-        // Close the peek overlay (if one is open) now that the ghost has its own frozen snapshot
-        // to follow the cursor with — the overlay covers the whole board, so without closing it
-        // here a card dragged from inside it would have nowhere real to be dropped.
-        if (card.Board.ClosePeekCommand.CanExecute(null))
-        {
-            card.Board.ClosePeekCommand.Execute(null);
-        }
+        // Close any overlay that covers the whole board (Peek, and now the Sealed panel) now that
+        // the ghost has its own frozen snapshot to follow the cursor with — without closing it here,
+        // a card dragged from inside one of these would have nowhere real to be dropped.
+        card.Board.CloseOverlaysThatBlockDragTarget();
 
         try
         {

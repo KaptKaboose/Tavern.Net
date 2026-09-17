@@ -11,7 +11,15 @@ public enum OnlineMessageKind
     StartGame,
     PlayerState,
     GameState,
+    RevealCards,
+    TransferCard,
+    UndoNotice,
 }
+
+/// <summary>One revealed card in a RevealCards message — just enough to resolve and display it on
+/// the receiving side (see GameBoardViewModel.ResolveOpponentCardAsync), not a full CardInstance:
+/// the card never actually moves, so there's nothing else about it that matters here.</summary>
+public sealed record RevealedCardEntry(string Slug, bool IsFlipped);
 
 /// <summary>
 /// A single flat message type covering every kind exchanged over a <see cref="GameConnection"/>,
@@ -47,4 +55,20 @@ public sealed class OnlineMessage
 
     /// <summary>GameState.</summary>
     public int? ActivePlayerNumber { get; set; }
+
+    /// <summary>RevealCards — a batch, since a single reveal action (e.g. the 'R' chord off Main
+    /// Deck) can surface more than one card at once.</summary>
+    public List<RevealedCardEntry>? RevealedCards { get; set; }
+
+    /// <summary>TransferCard — the Give slugs (a batch for the same reason as RevealedCards, e.g. a
+    /// blind top-N 'P' chord), the destination on the receiver's own board (Field or Sealed), and an
+    /// informational label of where they came from (shown in the receiver's own log, nothing more).</summary>
+    public List<string>? TransferCardSlugs { get; set; }
+
+    public ZoneType? TransferTargetZone { get; set; }
+
+    public string? TransferSourceLabel { get; set; }
+
+    /// <summary>UndoNotice — which action got undone, if known, purely for the toast's own wording.</summary>
+    public string? UndoActionLabel { get; set; }
 }

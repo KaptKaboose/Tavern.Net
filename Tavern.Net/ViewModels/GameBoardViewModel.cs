@@ -97,6 +97,7 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         if (value)
         {
             HasUnseenOpponentActivity = false;
+            CloseActionsMenu();
         }
     }
 
@@ -115,36 +116,444 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     public ZoneViewModel Champion { get; }
     public ZoneViewModel Tokens { get; }
 
+    /// <summary>Private, fully interactive like Hand (drag in/out, zoomable) — hidden from the
+    /// opponent (see OpponentSealedCount, the Opponent panel's own count-only view of it). Cards a
+    /// player has sealed away themselves, or received from the opponent via Give (see GameSession.
+    /// ReceiveGivenCard).</summary>
+    public ZoneViewModel Sealed { get; }
+
     /// <summary>The card currently shown full-size in the zoom overlay, or null when it's closed.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowCounterAndStatusPanel))]
+    [NotifyPropertyChangedFor(nameof(ShowCounterAndStatusPanel), nameof(ShowZoomSidePanel), nameof(CanBottomZoomedCard), nameof(CanRevealZoomedCard), nameof(CanGiveZoomedCard))]
+    [NotifyCanExecuteChangedFor(nameof(BottomZoomedCardCommand), nameof(RevealZoomedCardCommand), nameof(OpenGiveTargetPickerForZoomedCardCommand))]
     private CardViewModel? _zoomedCard;
+
+    /// <summary>Which of the player's own zones ZoomedCard currently sits in, or null if it isn't in
+    /// any of them (e.g. zoomed from Glimpse — GlimpseStaging/Top/Bottom are ViewModel-only lists,
+    /// not domain zones, hence the null-safe FirstOrDefault rather than First).</summary>
+    private ZoneType? ZoneOfZoomedCard() =>
+        ZoomedCard is null ? null : Player.Zones.FirstOrDefault(kv => kv.Value.Cards.Contains(ZoomedCard.Instance)).Value?.Type;
 
     /// <summary>
     /// Whether the Zoom overlay's status/counter side panel should show for the currently-zoomed
     /// card — Counter/statuses are only ever meaningful in play (Field or Champion; see
     /// GameSession.MoveCard's reset rule), so the panel is irrelevant everywhere else (Hand, a
-    /// deck peek, Glimpse, ...). A card being zoomed from Glimpse isn't in any Player.Zones entry
-    /// at all (GlimpseStaging/Top/Bottom are ViewModel-only lists, not domain zones — see their
-    /// own doc comment below), hence the null-safe FirstOrDefault rather than First.
+    /// deck peek, Glimpse, ...).
     /// </summary>
-    public bool ShowCounterAndStatusPanel
-    {
-        get
-        {
-            if (ZoomedCard is null)
-            {
-                return false;
-            }
+    public bool ShowCounterAndStatusPanel => ZoomedCard is not null && ZoneOfZoomedCard() is ZoneType.Field or ZoneType.Champion;
 
-            var zone = Player.Zones.FirstOrDefault(kv => kv.Value.Cards.Contains(ZoomedCard.Instance)).Value?.Type;
-            return zone == ZoneType.Field || zone == ZoneType.Champion;
+    /// <summary>Whether the Zoom overlay's whole side panel Border should show at all — the Status/
+    /// Counter/Tapped content only matters for Field/Champion, but Bottom/Reveal/Give matter
+    /// precisely for the private zones that gate covers (Hand/Memory/Material/Sealed), so the outer
+    /// panel needs its own, broader visibility check rather than reusing ShowCounterAndStatusPanel
+    /// directly.</summary>
+    public bool ShowZoomSidePanel => ShowCounterAndStatusPanel || CanBottomZoomedCard || CanRevealZoomedCard || CanGiveZoomedCard;
+
+    public bool CanBottomZoomedCard => ZoomedCard is not null && ZoneOfZoomedCard() != ZoneType.MainDeck;
+
+    [RelayCommand(CanExecute = nameof(CanBottomZoomedCard))]
+    private void BottomZoomedCard()
+    {
+        if (ZoomedCard is null)
+        {
+            return;
+        }
+
+        var from = ZoneOfZoomedCard();
+        if (from is null)
+        {
+            return;
+        }
+
+        var card = ZoomedCard.Instance;
+        var originalZone = from.Value;
+        _session.MoveCard(Player, card, originalZone, ZoneType.MainDeck, toBottom: true);
+        // Reverses through the same MoveCard the original move used — any side effect that move
+        // triggered (e.g. a Champion level change) is correctly re-triggered in reverse too, rather
+        // than a raw list edit that would only fix Main's own contents.
+        ArmUndo("Bottom", () => _session.MoveCard(Player, card, ZoneType.MainDeck, originalZone));
+        ZoomedCard = null;
+    }
+
+    private static readonly HashSet<ZoneType> RevealablePrivateZones = new()
+    {
+        ZoneType.Hand,
+        ZoneType.Memory,
+        ZoneType.MaterialDeck,
+        ZoneType.Sealed,
+    };
+
+    public bool CanRevealZoomedCard => IsOnline && ZoomedCard is not null && RevealablePrivateZones.Contains(ZoneOfZoomedCard() ?? default);
+
+    /// <summary>Reveal doesn't remove the card, so unlike Give/Bottom there's no forced reason to
+    /// close the Zoom overlay afterward — the player might still want to look at or act on it.</summary>
+    [RelayCommand(CanExecute = nameof(CanRevealZoomedCard))]
+    private void RevealZoomedCard()
+    {
+        if (ZoomedCard is null)
+        {
+            return;
+        }
+
+        SendReveal(new[] { ZoomedCard.Instance });
+    }
+
+    private void SendReveal(IReadOnlyList<CardInstance> cards)
+    {
+        if (!IsOnline || cards.Count == 0)
+        {
+            return;
+        }
+
+        _ = _connection!.SendAsync(new OnlineMessage
+        {
+            Kind = OnlineMessageKind.RevealCards,
+            RevealedCards = cards.Select(c => new RevealedCardEntry(c.Card.Slug, c.IsFlipped)).ToList(),
+        });
+    }
+
+    /// <summary>'R' chord: reveals a batch off the top of Main at once — nothing to snapshot for
+    /// Undo here, since (unlike Bottom/Mill/Give's blind path) Reveal never actually moves anything.</summary>
+    private void RevealTopCards(int count)
+    {
+        if (!IsOnline)
+        {
+            return;
+        }
+
+        var cards = Player.GetZone(ZoneType.MainDeck).Cards.Take(count).ToList();
+        SendReveal(cards);
+    }
+
+    // --- Give: self-initiated, no request/approval handshake — whoever's card effect calls for a
+    // transfer is the one who reads it and performs it themselves, same "manual bookkeeping, no
+    // rules engine" philosophy as every other action in this app. Both entry points (a specific
+    // card via the Zoom overlay, or a blind top-N off Main via the 'P' chord) open the same small
+    // Field/Sealed target-picker overlay; nothing actually moves until one of those two is clicked.
+
+    private CardViewModel? _giveCandidateCard;
+    private int? _giveBlindCount;
+
+    [ObservableProperty]
+    private bool _isGiveTargetPickerOpen;
+
+    partial void OnIsGiveTargetPickerOpenChanged(bool value)
+    {
+        if (value)
+        {
+            CloseActionsMenu();
+        }
+    }
+
+    public bool CanGiveZoomedCard => IsOnline && ZoomedCard is not null;
+
+    [RelayCommand(CanExecute = nameof(CanGiveZoomedCard))]
+    private void OpenGiveTargetPickerForZoomedCard()
+    {
+        if (ZoomedCard is null)
+        {
+            return;
+        }
+
+        _giveCandidateCard = ZoomedCard;
+        _giveBlindCount = null;
+        ZoomedCard = null;
+        IsGiveTargetPickerOpen = true;
+    }
+
+    private void ArmGiveBlind(int count)
+    {
+        if (!IsOnline)
+        {
+            return;
+        }
+
+        _giveCandidateCard = null;
+        _giveBlindCount = count;
+        IsGiveTargetPickerOpen = true;
+    }
+
+    [RelayCommand]
+    private void ConfirmGiveToField() => ConfirmGive(ZoneType.Field);
+
+    [RelayCommand]
+    private void ConfirmGiveToSealed() => ConfirmGive(ZoneType.Sealed);
+
+    [RelayCommand]
+    private void CancelGive()
+    {
+        IsGiveTargetPickerOpen = false;
+        _giveCandidateCard = null;
+        _giveBlindCount = null;
+    }
+
+    private void ConfirmGive(ZoneType destination)
+    {
+        IsGiveTargetPickerOpen = false;
+
+        List<CardInstance> given;
+        string sourceLabel;
+
+        if (_giveCandidateCard is { } single)
+        {
+            var from = Player.Zones.First(kv => kv.Value.Cards.Contains(single.Instance)).Key;
+            _session.RemoveCardForGive(Player, single.Instance, from);
+            given = new List<CardInstance> { single.Instance };
+            sourceLabel = from.ToString();
+        }
+        else if (_giveBlindCount is { } count)
+        {
+            // Deliberately no Undo entry here — by the time this shows, the TransferCard message
+            // below has already reached the opponent, so a local-only undo would duplicate the
+            // cards instead of actually taking them back (see the Undo section's own comment).
+            given = _session.TakeTopCardsForGive(Player, count);
+            sourceLabel = "Main Deck (blind)";
+        }
+        else
+        {
+            given = new List<CardInstance>();
+            sourceLabel = "";
+        }
+
+        if (given.Count > 0 && IsOnline)
+        {
+            _ = _connection!.SendAsync(new OnlineMessage
+            {
+                Kind = OnlineMessageKind.TransferCard,
+                TransferCardSlugs = given.Select(c => c.Card.Slug).ToList(),
+                TransferTargetZone = destination,
+                TransferSourceLabel = sourceLabel,
+            });
+        }
+
+        _giveCandidateCard = null;
+        _giveBlindCount = null;
+    }
+
+    private async Task ReceiveTransferAsync(IReadOnlyList<string> slugs, ZoneType destination, string? sourceLabel)
+    {
+        foreach (var slug in slugs)
+        {
+            _session.ReceiveGivenCard(Player, await ResolveOpponentCardAsync(slug), destination, sourceLabel);
+        }
+    }
+
+    // --- Receiving a reveal: queued, since more than one can arrive close together (e.g. one from
+    // Hand, then moments later a batch off Main) — shown one at a time via a countdown-ring overlay
+    // (CountdownRingView), auto-advancing to the next queued entry once the current one closes.
+
+    private readonly Queue<IReadOnlyList<CardSnapshotViewModel>> _pendingReveals = new();
+
+    [ObservableProperty]
+    private IReadOnlyList<CardSnapshotViewModel>? _activeReveal;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowKeepRevealOpenButton))]
+    private bool _revealKeptOpen;
+
+    public bool ShowKeepRevealOpenButton => !RevealKeptOpen;
+
+    [ObservableProperty]
+    private double _revealRemainingFraction = 1.0;
+
+    private DispatcherTimer? _revealTimer;
+    private DateTime _revealStartedAt;
+
+    partial void OnActiveRevealChanged(IReadOnlyList<CardSnapshotViewModel>? value)
+    {
+        if (value is not null)
+        {
+            CloseActionsMenu();
+        }
+    }
+
+    private async Task EnqueueRevealAsync(IReadOnlyList<RevealedCardEntry> entries)
+    {
+        var resolved = new List<CardSnapshotViewModel>();
+        foreach (var entry in entries)
+        {
+            var cardDto = await ResolveOpponentCardAsync(entry.Slug);
+            var snapshot = new CardSnapshot(cardDto, ZoneType.Hand, false, entry.IsFlipped, 0, 0, 0, false, false, false, false, false, false);
+            resolved.Add(new CardSnapshotViewModel(snapshot, _apiClient, this));
+        }
+
+        _pendingReveals.Enqueue(resolved);
+        if (ActiveReveal is null)
+        {
+            ShowNextReveal();
+        }
+    }
+
+    private void ShowNextReveal()
+    {
+        if (_pendingReveals.Count == 0)
+        {
+            ActiveReveal = null;
+            _revealTimer?.Stop();
+            return;
+        }
+
+        ActiveReveal = _pendingReveals.Dequeue();
+        RevealKeptOpen = false;
+        RevealRemainingFraction = 1.0;
+        _revealStartedAt = DateTime.UtcNow;
+
+        _revealTimer?.Stop();
+        _revealTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
+        _revealTimer.Tick += OnRevealTimerTick;
+        _revealTimer.Start();
+    }
+
+    private void OnRevealTimerTick(object? sender, EventArgs e)
+    {
+        var fraction = 1.0 - (DateTime.UtcNow - _revealStartedAt).TotalSeconds / 5.0;
+        if (fraction <= 0)
+        {
+            _revealTimer!.Stop();
+            ShowNextReveal();
+            return;
+        }
+
+        RevealRemainingFraction = fraction;
+    }
+
+    [RelayCommand]
+    private void KeepRevealOpen()
+    {
+        RevealKeptOpen = true;
+        _revealTimer?.Stop();
+    }
+
+    [RelayCommand]
+    private void CloseActiveReveal()
+    {
+        _revealTimer?.Stop();
+        ShowNextReveal();
+    }
+
+    // --- Undo: a single-level, Main-Deck-scoped safety net for the blind actions (Mill/Bottom/
+    // Glimpse) — NOT a general undo system. Main Deck can't be peeked online, so a mis-counted
+    // blind action would otherwise be unrecoverable; each call site below hands ArmUndo the exact
+    // closure that reverses IT SPECIFICALLY (not a generic "restore Main's card list" snapshot,
+    // which — tried first — left the same CardInstance sitting in two zones at once for anything
+    // that crossed a zone boundary, e.g. undoing a Mill left the milled cards in the Graveyard
+    // *and* put copies of them back in Main). A flat, non-cancellable 10-second window; only ever
+    // one level deep, since the next blind action's own ArmUndo call overwrites this one. Give's
+    // blind path deliberately does NOT get an Undo entry — by the time it would show, the
+    // TransferCard message has already reached the opponent, so a local-only "undo" would just
+    // duplicate the cards instead of actually taking them back.
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(UndoCommand))]
+    private bool _isUndoAvailable;
+
+    [ObservableProperty]
+    private string? _undoActionLabel;
+
+    [ObservableProperty]
+    private double _undoRemainingFraction = 1.0;
+
+    private Action? _pendingUndo;
+    private DispatcherTimer? _undoTimer;
+    private DateTime _undoStartedAt;
+
+    private void ArmUndo(string actionLabel, Action undo)
+    {
+        _pendingUndo = undo;
+        UndoActionLabel = actionLabel;
+        IsUndoAvailable = true;
+        UndoRemainingFraction = 1.0;
+        _undoStartedAt = DateTime.UtcNow;
+
+        _undoTimer?.Stop();
+        _undoTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
+        _undoTimer.Tick += OnUndoTimerTick;
+        _undoTimer.Start();
+    }
+
+    private void OnUndoTimerTick(object? sender, EventArgs e)
+    {
+        var fraction = 1.0 - (DateTime.UtcNow - _undoStartedAt).TotalSeconds / 10.0;
+        if (fraction <= 0)
+        {
+            DiscardUndo();
+            return;
+        }
+
+        UndoRemainingFraction = fraction;
+    }
+
+    private void DiscardUndo()
+    {
+        _undoTimer?.Stop();
+        IsUndoAvailable = false;
+        _pendingUndo = null;
+        UndoActionLabel = null;
+    }
+
+    [RelayCommand(CanExecute = nameof(IsUndoAvailable))]
+    private void Undo()
+    {
+        if (_pendingUndo is null)
+        {
+            return;
+        }
+
+        var actionLabel = UndoActionLabel;
+        _pendingUndo();
+
+        // The opponent may have already reasoned about now-stale deck-order information (e.g. what
+        // a Reveal just showed them, or what they know got milled) — a courtesy notice, not
+        // anything that affects their own board.
+        if (IsOnline)
+        {
+            _ = _connection!.SendAsync(new OnlineMessage { Kind = OnlineMessageKind.UndoNotice, UndoActionLabel = actionLabel });
+        }
+
+        DiscardUndo();
+    }
+
+    // --- Toast: a small, non-modal, single-purpose notification — currently only used for the
+    // opponent's own Undo notice. Deliberately not a general queue/primitive; nothing else needs
+    // one yet.
+
+    [ObservableProperty]
+    private string? _toastMessage;
+
+    private DispatcherTimer? _toastTimer;
+
+    private void ShowToast(string message)
+    {
+        ToastMessage = message;
+        _toastTimer?.Stop();
+        _toastTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
+        _toastTimer.Tick += (_, _) =>
+        {
+            ToastMessage = null;
+            _toastTimer!.Stop();
+        };
+        _toastTimer.Start();
+    }
+
+    partial void OnZoomedCardChanged(CardViewModel? value)
+    {
+        if (value is not null)
+        {
+            CloseActionsMenu();
         }
     }
 
     /// <summary>The pile currently fanned out in the peek overlay, or null when it's closed.</summary>
     [ObservableProperty]
     private PeekedZoneInfo? _peekedZone;
+
+    partial void OnPeekedZoneChanged(PeekedZoneInfo? value)
+    {
+        if (value is not null)
+        {
+            CloseActionsMenu();
+        }
+    }
 
     /// <summary>The Major event currently being viewed (read-only) in the snapshot overlay, or
     /// null when it's closed. Viewing never mutates the live game — see GameSession.TakeSnapshot's
@@ -191,11 +600,27 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     [ObservableProperty]
     private SnapshotZoneGroup? _viewedSnapshotPile;
 
+    partial void OnViewedSnapshotPileChanged(SnapshotZoneGroup? value)
+    {
+        if (value is not null)
+        {
+            CloseActionsMenu();
+        }
+    }
+
     /// <summary>The snapshot card currently shown full-size in its own zoom overlay (right-click,
     /// via CardZoomBehavior), or null when it's closed. Parallel to <see cref="ZoomedCard"/> but
     /// with no status/counter side panel — a snapshot is read-only, so there's nothing to edit.</summary>
     [ObservableProperty]
     private CardSnapshotViewModel? _zoomedSnapshotCard;
+
+    partial void OnZoomedSnapshotCardChanged(CardSnapshotViewModel? value)
+    {
+        if (value is not null)
+        {
+            CloseActionsMenu();
+        }
+    }
 
     // Display order for the snapshot viewer's pile boxes — not the ZoneType enum's declaration
     // order, which reads oddly here. Field/Hand/Memory aren't included: they're spread out
@@ -260,6 +685,12 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
 
     [ObservableProperty]
     private int _opponentMainDeckCount;
+
+    /// <summary>Count-only, same redaction treatment as Hand/Memory/Material/Main — the Opponent
+    /// panel's own box for this is hidden entirely at 0 rather than always showing "Sealed: 0", per
+    /// how rarely this zone is actually used (see GameBoardView's own IntToVisibility binding).</summary>
+    [ObservableProperty]
+    private int _opponentSealedCount;
 
     [ObservableProperty]
     private int _opponentLife;
@@ -326,6 +757,7 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         OpponentMemoryCount = OpponentPlayer.GetZone(ZoneType.Memory).Cards.Count;
         OpponentMaterialDeckCount = OpponentPlayer.GetZone(ZoneType.MaterialDeck).Cards.Count;
         OpponentMainDeckCount = OpponentPlayer.GetZone(ZoneType.MainDeck).Cards.Count;
+        OpponentSealedCount = OpponentPlayer.GetZone(ZoneType.Sealed).Cards.Count;
 
         var previousOpponentLife = OpponentLife;
         OpponentLife = OpponentPlayer.Life;
@@ -379,6 +811,11 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     /// own doc comment).</summary>
     partial void OnViewedMajorEventChanged(MajorEvent? value)
     {
+        if (value is not null)
+        {
+            CloseActionsMenu();
+        }
+
         IsShowingOtherPlayerTab = false;
         ViewedOtherPlayerEvent = null;
         PrimaryEntryIsOwn = true;
@@ -469,6 +906,14 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     [ObservableProperty]
     private bool _isRollingDice;
 
+    partial void OnIsRollingDiceChanged(bool value)
+    {
+        if (value)
+        {
+            CloseActionsMenu();
+        }
+    }
+
     /// <summary>How many dice the next Roll will create — set via the panel's +/- pair, clamped
     /// to a sane [1, 20] range.</summary>
     [ObservableProperty]
@@ -479,6 +924,14 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     /// <summary>Whether the Save Game panel is open.</summary>
     [ObservableProperty]
     private bool _isSavingGame;
+
+    partial void OnIsSavingGameChanged(bool value)
+    {
+        if (value)
+        {
+            CloseActionsMenu();
+        }
+    }
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ConfirmSaveGameCommand))]
@@ -567,6 +1020,7 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         Memory = new ZoneViewModel(player.GetZone(ZoneType.Memory), apiClient, this);
         Champion = new ZoneViewModel(player.GetZone(ZoneType.Champion), apiClient, this);
         Tokens = new ZoneViewModel(player.GetZone(ZoneType.Tokens), apiClient, this);
+        Sealed = new ZoneViewModel(player.GetZone(ZoneType.Sealed), apiClient, this);
 
         // Populated once here, not by GameSession.StartNewGame — the Tokens zone is a static
         // catalog, not deck content, and StartNewGame deliberately leaves it untouched (see its
@@ -618,7 +1072,33 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
             case OnlineMessageKind.GameState when message.Phase is not null && message.ActivePlayerNumber is not null:
                 ApplyRemoteGameState(message.Phase.Value, message.ActivePlayerNumber.Value);
                 break;
+            case OnlineMessageKind.RevealCards when message.RevealedCards is { Count: > 0 } entries:
+                _ = EnqueueRevealAsync(entries);
+                break;
+            case OnlineMessageKind.TransferCard when message.TransferCardSlugs is { Count: > 0 } slugs && message.TransferTargetZone is not null:
+                _ = ReceiveTransferAsync(slugs, message.TransferTargetZone.Value, message.TransferSourceLabel);
+                break;
+            case OnlineMessageKind.UndoNotice:
+                ShowToast(message.UndoActionLabel is { } label ? $"Opponent used Undo ({label})." : "Opponent used Undo.");
+                break;
         }
+    }
+
+    /// <summary>Resolves a slug to a CardDto for a card that isn't (and for Reveal, never will be)
+    /// in any local zone — reuses the same per-connection cache ApplyOpponentStateAsync already
+    /// keeps warm, since Reveal/Give overwhelmingly reference cards the opponent's own broadcasts
+    /// have already resolved once.</summary>
+    private async Task<CardDto> ResolveOpponentCardAsync(string slug)
+    {
+        if (_opponentCardCache.TryGetValue(slug, out var cached))
+        {
+            return cached;
+        }
+
+        var card = await _apiClient.GetCardBySlugAsync(slug)
+            ?? throw new InvalidOperationException($"Couldn't resolve \"{slug}\" for a Reveal/Give.");
+        _opponentCardCache[slug] = card;
+        return card;
     }
 
     private async Task ApplyOpponentStateAsync(SavedPlayer state)
@@ -693,25 +1173,54 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     [RelayCommand]
     private void ToggleOpponentPanel() => IsOpponentPanelOpen = !IsOpponentPanelOpen;
 
+    /// <summary>Whether the Sealed panel is open — usable in solo too (unlike the Opponent panel),
+    /// since Sealed is just a private zone of your own, not an online-only concept.</summary>
+    [ObservableProperty]
+    private bool _isSealedPanelOpen;
+
+    partial void OnIsSealedPanelOpenChanged(bool value)
+    {
+        if (value)
+        {
+            CloseActionsMenu();
+        }
+    }
+
+    [RelayCommand]
+    private void ToggleSealedPanel() => IsSealedPanelOpen = !IsSealedPanelOpen;
+
     [RelayCommand]
     private void DrawCard() => _session.DrawCard(Player);
 
     [RelayCommand]
     private void DrawCardIntoMemory() => _session.DrawCard(Player, ZoneType.MainDeck, ZoneType.Memory);
 
-    /// <summary>'G'. First press opens the overlay and draws the top card; every press after that
-    /// (while it's open) draws one more, appending to Staging. No-ops once Main is empty.</summary>
-    [RelayCommand]
-    private void GlimpseNext()
+    // Captured the instant a glimpse starts pulling cards off Main, but not shown as an available
+    // Undo until FinishGlimpse actually commits (see MoveGlimpseCard) — while still sorting, the
+    // player has full visibility/control over Staging/Top/Bottom already, so surfacing "Undo" that
+    // early is just confusing, and clicking it mid-sort would restore Main out from under cards
+    // still sitting in Staging.
+    private List<CardInstance>? _pendingGlimpseUndoSnapshot;
+
+    /// <summary>Glimpse action: pulls up to count cards off the top of Main in one batch and opens
+    /// the overlay already populated — replaces the old repeat-G-to-add-one flow now that Undo
+    /// makes a mis-counted glimpse recoverable. Stops early, same as GameSession.GlimpseCards, once
+    /// Main is empty.</summary>
+    private void GlimpseCardsForChord(int count)
     {
-        var card = _session.GlimpseNextCard(Player);
-        if (card is null)
+        _pendingGlimpseUndoSnapshot = Player.GetZone(ZoneType.MainDeck).Cards.ToList();
+        var glimpsed = _session.GlimpseCards(Player, count);
+        if (glimpsed.Count == 0)
         {
+            _pendingGlimpseUndoSnapshot = null;
             return;
         }
 
         IsGlimpsing = true;
-        GlimpseStaging.Add(new CardViewModel(card, _apiClient, this));
+        foreach (var card in glimpsed)
+        {
+            GlimpseStaging.Add(new CardViewModel(card, _apiClient, this));
+        }
     }
 
     /// <summary>
@@ -755,6 +1264,14 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
                 _drawAfterGlimpsing = false;
                 _session.DrawStartingHand(Player);
             }
+
+            // Only the Glimpse action's own chord takes this snapshot — the very first, opening-hand
+            // glimpse (triggered by New Game, not the player) has none, and shouldn't offer Undo.
+            if (_pendingGlimpseUndoSnapshot is { } snapshot)
+            {
+                _pendingGlimpseUndoSnapshot = null;
+                ArmUndo("Glimpse", () => _session.RestoreMainDeckOrder(Player, snapshot));
+            }
         }
     }
 
@@ -786,35 +1303,177 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
 
     private bool CanAdvancePhase() => !IsOnline || IsMyTurn;
 
-    // Set by the 'B' case below; consumed by the very next key press. Keeps a bare digit key
-    // from meaning anything on its own — it's only "banish count" for the one keystroke right
-    // after 'B', so future digit-driven shortcuts elsewhere can't collide with this one.
-    private bool _banishArmed;
+    // --- Actions menu: click the header's Actions button, pick Banish/Reveal/Glimpse/Mill/Give
+    // (Reveal/Give hidden solo — see CanUseOnlineAction), then set a count and confirm. Replaces
+    // the old keyboard arm-then-digit chords (B/R/P/M/G) entirely — a visible menu instead of an
+    // invisible armed state, and a real counter instead of a single 1-9 keypress, since some of
+    // these (Glimpse especially) genuinely need double-digit counts.
+
+    /// <summary>Which action is currently selected for count entry — None means the menu is still
+    /// showing the top-level list (see IsShowingActionsList/IsEnteringActionCount).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsShowingActionsList), nameof(IsEnteringActionCount), nameof(SelectedActionLabel))]
+    private ArmedChord _selectedAction;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsShowingActionsList), nameof(IsEnteringActionCount))]
+    private bool _isActionsMenuOpen;
+
+    [ObservableProperty]
+    private int _actionCount = 1;
+
+    // Whether the count still reads its opening default (1) or the player has actually typed a
+    // digit yet — decides whether the next digit *replaces* it (so typing "5" reads 5, not 15) or
+    // *appends* to it (so typing "1" then "0" reads 10). Reset every time a new action is selected.
+    private bool _hasTypedActionCount;
+
+    public bool IsShowingActionsList => IsActionsMenuOpen && SelectedAction == ArmedChord.None;
+
+    public bool IsEnteringActionCount => IsActionsMenuOpen && SelectedAction != ArmedChord.None;
+
+    public string SelectedActionLabel => SelectedAction switch
+    {
+        ArmedChord.Banish => "Banish",
+        ArmedChord.Reveal => "Reveal",
+        ArmedChord.Give => "Give",
+        ArmedChord.Mill => "Mill",
+        ArmedChord.Glimpse => "Glimpse",
+        _ => "",
+    };
+
+    /// <summary>Reveal and Give are online-only — solo has no opponent to reveal to or give to, so
+    /// the menu hides them entirely there rather than showing a permanently-disabled option.</summary>
+    public bool CanUseOnlineAction => IsOnline;
+
+    [RelayCommand]
+    private void OpenActionsMenu()
+    {
+        IsActionsMenuOpen = true;
+        SelectedAction = ArmedChord.None;
+    }
+
+    [RelayCommand]
+    private void SelectAction(ArmedChord action)
+    {
+        SelectedAction = action;
+        ActionCount = 1;
+        _hasTypedActionCount = false;
+    }
+
+    [RelayCommand]
+    private void BackToActionsList() => SelectedAction = ArmedChord.None;
+
+    [RelayCommand]
+    private void CloseActionsMenu()
+    {
+        IsActionsMenuOpen = false;
+        SelectedAction = ArmedChord.None;
+    }
+
+    [RelayCommand]
+    private void IncreaseActionCount() => ActionCount = Math.Min(ActionCount + 1, 99);
+
+    [RelayCommand]
+    private void DecreaseActionCount() => ActionCount = Math.Max(ActionCount - 1, 1);
+
+    [RelayCommand]
+    private void ConfirmAction()
+    {
+        var action = SelectedAction;
+        var count = ActionCount;
+        CloseActionsMenu();
+        RunAction(action, count);
+    }
+
+    private void RunAction(ArmedChord action, int count)
+    {
+        switch (action)
+        {
+            case ArmedChord.Banish:
+                _session.Banish(Player, count);
+                break;
+            case ArmedChord.Mill:
+                var milled = _session.Mill(Player, count);
+                ArmUndo("Mill", () =>
+                {
+                    var graveyard = Player.GetZone(ZoneType.Graveyard);
+                    foreach (var card in milled)
+                    {
+                        graveyard.Cards.Remove(card);
+                    }
+
+                    // Insert back-to-front so milled[0] (the original top card) ends up on top
+                    // again — ObservableCollection has no InsertRange.
+                    var deck = Player.GetZone(ZoneType.MainDeck);
+                    for (var i = milled.Count - 1; i >= 0; i--)
+                    {
+                        deck.Cards.Insert(0, milled[i]);
+                    }
+                });
+                break;
+            case ArmedChord.Glimpse:
+                GlimpseCardsForChord(count);
+                break;
+            case ArmedChord.Reveal:
+                RevealTopCards(count);
+                break;
+            case ArmedChord.Give:
+                ArmGiveBlind(count);
+                break;
+        }
+    }
 
     /// <summary>Keyboard shortcuts for the board — add more cases here as they come up.</summary>
     public bool HandleKey(Key key)
     {
-        // Glimpsing locks out everything except G itself, per its own design — swallow every
-        // other key outright rather than letting it fall through to the normal switch below.
+        // Glimpsing locks out every key — the count was already decided up front by the Glimpse
+        // action that opened it, so there's nothing left for a keystroke to do until sorting
+        // finishes.
         if (IsGlimpsing)
         {
-            if (key == Key.G && GlimpseNextCommand.CanExecute(null))
+            return true;
+        }
+
+        // While the Actions menu's counter is showing, digits/Backspace type directly into
+        // ActionCount and Enter confirms — everything else is swallowed, same as any other overlay.
+        if (IsEnteringActionCount)
+        {
+            if (TryGetDigit(key, out var digit))
             {
-                GlimpseNextCommand.Execute(null);
+                ActionCount = _hasTypedActionCount ? Math.Min(ActionCount * 10 + digit, 99) : digit;
+                _hasTypedActionCount = true;
+                return true;
+            }
+
+            if (key == Key.Back)
+            {
+                ActionCount = Math.Max(ActionCount / 10, 1);
+                return true;
+            }
+
+            if (key == Key.Enter && ConfirmActionCommand.CanExecute(null))
+            {
+                ConfirmActionCommand.Execute(null);
             }
 
             return true;
         }
 
-        if (_banishArmed)
+        // Every other overlay (Zoom, Peek, Dice, Save Game, Opponent panel, the Actions menu's own
+        // list view, the snapshot viewer and its pile popup, ...) blocks shortcuts the same way
+        // Glimpsing already did above — a key meant for the board shouldn't reach through a modal
+        // that's currently covering it.
+        if (IsAnyOverlayOpen())
         {
-            _banishArmed = false;
-            if (TryGetDigit(key, out var count))
-            {
-                _session.Banish(Player, count);
-                return true;
-            }
-            // Any non-digit key cancels the chord and falls through to its own normal handling.
+            return true;
+        }
+
+        // Banish is common enough during ordinary play to warrant a bare digit key rather than a
+        // trip through the Actions menu every time — no letter, no arming, just press a count.
+        if (TryGetDigit(key, out var banishCount) && banishCount > 0)
+        {
+            _session.Banish(Player, banishCount);
+            return true;
         }
 
         switch (key)
@@ -854,34 +1513,31 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
                     }
                 }
                 return true;
-            case Key.B:
-                // Arm the chord; the count comes from whatever digit key (1-9) is pressed next.
-                _banishArmed = true;
-                return true;
-            case Key.G:
-                // Not glimpsing yet (the IsGlimpsing branch above handles every later press) —
-                // this is the opening press, which GlimpseNext treats identically to any other.
-                if (GlimpseNextCommand.CanExecute(null))
-                {
-                    GlimpseNextCommand.Execute(null);
-                }
-                return true;
             default:
                 return false;
         }
     }
 
+    /// <summary>True while any modal overlay is covering the board — see HandleKey's own comment on
+    /// why that blocks every keyboard shortcut. Extend this alongside each new overlay-flag
+    /// property (and give that property an OnXChanged hook calling CloseActionsMenu(), so a
+    /// half-configured action can't go stale if some other overlay opens first).</summary>
+    private bool IsAnyOverlayOpen() =>
+        IsOpponentPanelOpen || IsRollingDice || IsSavingGame || IsSealedPanelOpen || IsGiveTargetPickerOpen || IsActionsMenuOpen ||
+        ZoomedCard is not null || PeekedZone is not null || ViewedMajorEvent is not null ||
+        ViewedSnapshotPile is not null || ZoomedSnapshotCard is not null || ActiveReveal is not null;
+
     private static bool TryGetDigit(Key key, out int digit)
     {
-        if (key is >= Key.D1 and <= Key.D9)
+        if (key is >= Key.D0 and <= Key.D9)
         {
-            digit = key - Key.D1 + 1;
+            digit = key - Key.D0;
             return true;
         }
 
-        if (key is >= Key.NumPad1 and <= Key.NumPad9)
+        if (key is >= Key.NumPad0 and <= Key.NumPad9)
         {
-            digit = key - Key.NumPad1 + 1;
+            digit = key - Key.NumPad0;
             return true;
         }
 
@@ -1142,6 +1798,15 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
 
     [RelayCommand]
     private void ClosePeek() => PeekedZone = null;
+
+    /// <summary>Called by CardDragBehavior right before a drag actually starts — closes every
+    /// overlay that covers the whole board (Peek, Sealed) so a card dragged out of one has
+    /// somewhere real to land, rather than the overlay itself being on top of every drop target.</summary>
+    internal void CloseOverlaysThatBlockDragTarget()
+    {
+        PeekedZone = null;
+        IsSealedPanelOpen = false;
+    }
 
     /// <summary>Opens the read-only snapshot viewer for a Major event — see GameSession.TakeSnapshot
     /// and ViewedMajorEvent's own doc comments on why this never touches the live game.</summary>
