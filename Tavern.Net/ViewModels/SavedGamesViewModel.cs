@@ -21,8 +21,10 @@ public sealed partial class SavedGamesViewModel : ObservableObject
     public ObservableCollection<SavedGame> SavedGames { get; } = new();
 
     /// <summary>Raised once a saved game has been fully rebuilt — MainViewModel handles it by
-    /// switching to the game board.</summary>
-    public event Action<GameSession, Player>? GameLoaded;
+    /// switching to the game board. The TimeSpan? is the saved match clock (SavedGame.ElapsedTime,
+    /// online games only) — read straight off the SavedGame we already have in hand rather than
+    /// threading it through GameSessionSerializer.RestoreAsync's own return shape.</summary>
+    public event Action<GameSession, Player, TimeSpan?>? GameLoaded;
 
     /// <summary>Raised when the player wants to return to the start menu.</summary>
     public event Action? BackRequested;
@@ -56,7 +58,7 @@ public sealed partial class SavedGamesViewModel : ObservableObject
         try
         {
             var (session, player) = await GameSessionSerializer.RestoreAsync(game, _apiClient);
-            GameLoaded?.Invoke(session, player);
+            GameLoaded?.Invoke(session, player, game.ElapsedTime);
         }
         catch (Exception ex)
         {

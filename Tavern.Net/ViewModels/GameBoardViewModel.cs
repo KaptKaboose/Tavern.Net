@@ -70,23 +70,26 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     /// the panel itself, so the opponent can never yank the screen away mid-drag/mid-zoom; the
     /// player decides when to actually look. Cleared the moment the panel opens, by any means
     /// (manual toggle or the turn-handoff auto-open in UpdateIsMyTurn) — see
-    /// OnIsOpponentPanelOpenChanged. Set from RefreshOpponentPanel, which is the only place new
-    /// opponent MajorEvents ever arrive.</summary>
+    /// OnIsOpponentPanelOpenChanged. Set from RefreshOpponentPanel for non-Life/Damage MajorEvents
+    /// only — Life changes get their own always-visible OpponentLife number + flash instead (see
+    /// OpponentLifeJustChanged), since Life matters too much to only surface once the player already
+    /// went looking.</summary>
     [ObservableProperty]
     private bool _hasUnseenOpponentActivity;
 
-    /// <summary>OpponentPlayer.Stats.MajorEvents.Count as of the last RefreshOpponentPanel call —
-    /// that collection is fully cleared and rebuilt from scratch on every ~300ms broadcast (see
-    /// GameSessionSerializer.ApplyToPlayer), even when nothing actually changed, so a raw
-    /// CollectionChanged subscription would glow constantly. Comparing counts across calls is what
-    /// actually detects a genuinely new event.</summary>
+    /// <summary>OpponentPlayer.Stats.MajorEvents.Count(Kind == Other) as of the last
+    /// RefreshOpponentPanel call — that collection is fully cleared and rebuilt from scratch on
+    /// every ~300ms broadcast (see GameSessionSerializer.ApplyToPlayer), even when nothing actually
+    /// changed, so a raw CollectionChanged subscription would glow constantly. Comparing counts
+    /// across calls is what actually detects a genuinely new event.</summary>
     private int _lastSeenOpponentMajorEventCount;
 
     /// <summary>False until the very first PlayerState broadcast arrives. That first call always
     /// carries the opponent's own game-start setup (their "Game started." MajorEvent, base champion
-    /// materialized, opening hand drawn) — automated setup, not something the player did, so it
-    /// shouldn't glow the Opponent button either. This just seeds _lastSeenOpponentMajorEventCount
-    /// from that first snapshot instead of comparing against it.</summary>
+    /// materialized, opening hand drawn, starting Life) — automated setup, not something the player
+    /// did, so it shouldn't glow the Opponent button or flash OpponentLife either. This just seeds
+    /// _lastSeenOpponentMajorEventCount/OpponentLife from that first snapshot instead of comparing
+    /// against it.</summary>
     private bool _hasSeenInitialOpponentState;
 
     partial void OnIsOpponentPanelOpenChanged(bool value)
@@ -264,6 +267,15 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     [ObservableProperty]
     private int _opponentTurnCount;
 
+    /// <summary>True for one second right after OpponentLife changes — gold-highlights the number
+    /// itself (see GameBoardView's OpponentLifeTextStyle) instead of the Opponent button glowing for
+    /// it; Life is important enough to warrant its own always-visible number rather than only
+    /// showing up once the player goes looking for it in the panel.</summary>
+    [ObservableProperty]
+    private bool _opponentLifeJustChanged;
+
+    private DispatcherTimer? _opponentLifeGlowTimer;
+
     /// <summary>Online only: both players' MajorEvents interleaved by Timestamp, "You"/"Opp"
     /// tagged — the actual order things happened in, including responses played during the other
     /// player's turn, not two disconnected per-player lists. Rebuilt whenever either side's
@@ -314,10 +326,20 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         OpponentMemoryCount = OpponentPlayer.GetZone(ZoneType.Memory).Cards.Count;
         OpponentMaterialDeckCount = OpponentPlayer.GetZone(ZoneType.MaterialDeck).Cards.Count;
         OpponentMainDeckCount = OpponentPlayer.GetZone(ZoneType.MainDeck).Cards.Count;
+
+        var previousOpponentLife = OpponentLife;
         OpponentLife = OpponentPlayer.Life;
         OpponentTurnCount = OpponentPlayer.Stats.TurnCount;
 
-        var majorEventCount = OpponentPlayer.Stats.MajorEvents.Count;
+        if (_hasSeenInitialOpponentState && OpponentLife != previousOpponentLife)
+        {
+            FlashOpponentLifeChanged();
+        }
+
+        // Life/Damage MajorEvents get their own always-visible number + flash (above) instead —
+        // only "something happened on their board" kinds (a card played, moved to the Graveyard/
+        // Banishment, a turn started, ...) glow the Opponent button now.
+        var majorEventCount = OpponentPlayer.Stats.MajorEvents.Count(e => e.Kind == MajorEventKind.Other);
         if (_hasSeenInitialOpponentState && majorEventCount > _lastSeenOpponentMajorEventCount && !IsOpponentPanelOpen)
         {
             HasUnseenOpponentActivity = true;
@@ -327,6 +349,24 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         _hasSeenInitialOpponentState = true;
 
         RefreshMergedLog();
+    }
+
+    private void FlashOpponentLifeChanged()
+    {
+        OpponentLifeJustChanged = true;
+
+        if (_opponentLifeGlowTimer is null)
+        {
+            _opponentLifeGlowTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+            _opponentLifeGlowTimer.Tick += (_, _) =>
+            {
+                OpponentLifeJustChanged = false;
+                _opponentLifeGlowTimer!.Stop();
+            };
+        }
+
+        _opponentLifeGlowTimer.Stop();
+        _opponentLifeGlowTimer.Start();
     }
 
     private List<CardSnapshotViewModel> BuildOpponentCardSnapshots(ZoneType zone) =>
@@ -447,6 +487,26 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     [ObservableProperty]
     private string? _saveGameStatusMessage;
 
+    /// <summary>The online match clock — ticks once a second while genuinely live (IsOnline and not
+    /// yet frozen), starts from a loaded save's own frozen value when viewing one later (see the
+    /// constructor's loadedElapsedTime param), and is otherwise irrelevant to solo. See
+    /// ShowElapsedTime for when it's actually displayed, and FreezeElapsedTime/ConfirmSaveGame for
+    /// how saving stops it.</summary>
+    [ObservableProperty]
+    private TimeSpan _elapsedTime;
+
+    /// <summary>Strictly online: true for a live game (IsOnline) or when viewing a saved game that
+    /// was online (a non-null loadedElapsedTime was passed in) — a solo game never shows this at
+    /// all, live or loaded.</summary>
+    public bool ShowElapsedTime => IsOnline || _isElapsedTimeFrozen;
+
+    // Set immediately if constructed with a loaded save's own frozen ElapsedTime (never ticks in
+    // that case — there's no live connection driving it anyway) and permanently once ConfirmSaveGame
+    // successfully saves a live online game (that save's own copy of ElapsedTime is what's frozen;
+    // this stops the live display from drifting past it for the rest of this process).
+    private bool _isElapsedTimeFrozen;
+    private DispatcherTimer? _elapsedTimeTimer;
+
     /// <summary>Raised when the player wants to return to the start menu, leaving this game running
     /// in the background (nothing is auto-saved — see Save Game).</summary>
     public event Action? BackToMenuRequested;
@@ -457,7 +517,8 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         GrandArchiveApiClient apiClient,
         GameStorageService gameStorage,
         GameConnection? connection = null,
-        Player? opponentPlayer = null)
+        Player? opponentPlayer = null,
+        TimeSpan? loadedElapsedTime = null)
     {
         _session = session;
         _apiClient = apiClient;
@@ -467,6 +528,18 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         OpponentPlayer = opponentPlayer;
         _currentPhase = session.CurrentPhase;
         _isMyTurn = !IsOnline || session.ActivePlayer == player;
+
+        if (loadedElapsedTime is { } elapsed)
+        {
+            ElapsedTime = elapsed;
+            _isElapsedTimeFrozen = true;
+        }
+        else if (IsOnline)
+        {
+            _elapsedTimeTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+            _elapsedTimeTimer.Tick += (_, _) => ElapsedTime += TimeSpan.FromSeconds(1);
+            _elapsedTimeTimer.Start();
+        }
 
         // Whoever isn't going first should see this open the instant the game starts, not only on
         // the first turn handoff — UpdateIsMyTurn only fires on a transition, and there isn't one
@@ -848,9 +921,17 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     private void ConfirmSaveGame()
     {
         GameSessionSerializer.WarmCardCache(_session, _apiClient);
-        var saved = GameSessionSerializer.Capture(SaveGameName.Trim(), _session);
+        var saved = GameSessionSerializer.Capture(SaveGameName.Trim(), _session, IsOnline ? ElapsedTime : null);
         _gameStorage.Save(saved);
         SaveGameStatusMessage = $"Saved \"{saved.Name}\".";
+
+        // The saved copy of ElapsedTime is now fixed at this instant — stop the live clock here too
+        // so what's on screen for the rest of this session can't drift past what got saved.
+        if (IsOnline)
+        {
+            _elapsedTimeTimer?.Stop();
+            _isElapsedTimeFrozen = true;
+        }
     }
 
     private bool CanConfirmSaveGame() => !string.IsNullOrWhiteSpace(SaveGameName);
@@ -1043,8 +1124,10 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     [RelayCommand]
     private void CloseSnapshotZoom() => ZoomedSnapshotCard = null;
 
-    /// <summary>Clicking the same pile again closes it; clicking a different one switches to it.</summary>
-    [RelayCommand]
+    /// <summary>Clicking the same pile again closes it; clicking a different one switches to it.
+    /// Main Deck is excluded online (CanPeekZone) — knowing your own draw order ahead of time is a
+    /// solo goldfishing convenience, not something a real opponent should be able to see you do.</summary>
+    [RelayCommand(CanExecute = nameof(CanPeekZone))]
     private void PeekZone(PeekedZoneInfo? info)
     {
         if (info is null)
@@ -1054,6 +1137,8 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
 
         PeekedZone = PeekedZone?.Zone == info.Zone ? null : info;
     }
+
+    private bool CanPeekZone(PeekedZoneInfo? info) => info is null || info.Zone.Type != ZoneType.MainDeck || IsSolo;
 
     [RelayCommand]
     private void ClosePeek() => PeekedZone = null;

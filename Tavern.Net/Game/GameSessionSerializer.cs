@@ -12,13 +12,13 @@ namespace Tavern.Net.Game;
 /// </summary>
 public static class GameSessionSerializer
 {
-    public static SavedGame Capture(string name, GameSession session)
+    public static SavedGame Capture(string name, GameSession session, TimeSpan? elapsedTime = null)
     {
         var players = session.Players.Select(CapturePlayer).ToList();
         var first = session.Players.FirstOrDefault();
         var summary = first is null ? "Empty game" : $"Turn {first.Stats.TurnCount + 1} · {first.Life} life";
 
-        return new SavedGame(name, DateTime.UtcNow, summary, session.CurrentPhase, players);
+        return new SavedGame(name, DateTime.UtcNow, summary, session.CurrentPhase, players, elapsedTime);
     }
 
     /// <summary>Writes every distinct card this save references into the by-slug cache

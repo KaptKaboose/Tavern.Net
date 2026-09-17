@@ -114,10 +114,104 @@
         </Setter>
     </Style>
 
+    <!-- Thumb for the app's scrollbars — a flat rounded bar (no arrow buttons, matching the app's
+         otherwise chrome-free look), lighter while hovered/dragged so it stays discoverable. -->
+    <Style x:Key="ScrollBarThumbStyle" TargetType="Thumb">
+        <Setter Property="Background" Value="#4A5568"/>
+        <Setter Property="MinWidth" Value="20"/>
+        <Setter Property="MinHeight" Value="20"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Thumb">
+                    <Border Background="{TemplateBinding Background}" CornerRadius="4" Margin="2"/>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="#5A6578"/>
+            </Trigger>
+            <Trigger Property="IsDragging" Value="True">
+                <Setter Property="Background" Value="#718096"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- Page-up/down (or left/right) regions either side of the thumb — invisible, just a click
+         target, same as every other scrollbar's paging area. -->
+    <Style x:Key="ScrollBarPageButtonStyle" TargetType="RepeatButton">
+        <Setter Property="IsTabStop" Value="False"/>
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RepeatButton">
+                    <Border Background="Transparent"/>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <ControlTemplate x:Key="VerticalScrollBarTemplate" TargetType="ScrollBar">
+        <Border Background="{TemplateBinding Background}">
+            <Track x:Name="PART_Track" Orientation="Vertical" IsDirectionReversed="True">
+                <Track.DecreaseRepeatButton>
+                    <RepeatButton Style="{StaticResource ScrollBarPageButtonStyle}" Command="ScrollBar.PageUpCommand"/>
+                </Track.DecreaseRepeatButton>
+                <Track.IncreaseRepeatButton>
+                    <RepeatButton Style="{StaticResource ScrollBarPageButtonStyle}" Command="ScrollBar.PageDownCommand"/>
+                </Track.IncreaseRepeatButton>
+                <Track.Thumb>
+                    <Thumb Style="{StaticResource ScrollBarThumbStyle}"/>
+                </Track.Thumb>
+            </Track>
+        </Border>
+    </ControlTemplate>
+
+    <ControlTemplate x:Key="HorizontalScrollBarTemplate" TargetType="ScrollBar">
+        <Border Background="{TemplateBinding Background}">
+            <Track x:Name="PART_Track" Orientation="Horizontal" IsDirectionReversed="False">
+                <Track.DecreaseRepeatButton>
+                    <RepeatButton Style="{StaticResource ScrollBarPageButtonStyle}" Command="ScrollBar.PageLeftCommand"/>
+                </Track.DecreaseRepeatButton>
+                <Track.IncreaseRepeatButton>
+                    <RepeatButton Style="{StaticResource ScrollBarPageButtonStyle}" Command="ScrollBar.PageRightCommand"/>
+                </Track.IncreaseRepeatButton>
+                <Track.Thumb>
+                    <Thumb Style="{StaticResource ScrollBarThumbStyle}"/>
+                </Track.Thumb>
+            </Track>
+        </Border>
+    </ControlTemplate>
+
+    <!-- Implicit — every ScrollViewer in the app (ListBox, peek/snapshot/opponent panels, the Play
+         Log, ...) picks this up automatically instead of the system's light-chrome default. -->
+    <Style TargetType="ScrollBar">
+        <Setter Property="Background" Value="#1A202C"/>
+        <Setter Property="Width" Value="10"/>
+        <Setter Property="Template" Value="{StaticResource VerticalScrollBarTemplate}"/>
+        <Style.Triggers>
+            <Trigger Property="Orientation" Value="Horizontal">
+                <Setter Property="Width" Value="Auto"/>
+                <Setter Property="Height" Value="10"/>
+                <Setter Property="Template" Value="{StaticResource HorizontalScrollBarTemplate}"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
     <!-- The app's one button look: dark chrome, subtle border, lighter on hover. Every ordinary
          button in the app (menu, deck import, board header actions) uses this explicitly rather
          than an implicit TargetType="Button" style, since a few spots (CounterButtonStyle,
-         StatusToggleStyle in GameBoardView) need their own fixed-size variants instead. -->
+         StatusToggleStyle in GameBoardView) need their own fixed-size variants instead.
+
+         Own ControlTemplate rather than just property Setters: the default Button chrome renders
+         its own hardcoded disabled bevel that ignores plain Background/Foreground Setters, which is
+         exactly why a disabled button used to look like a stray Windows-98 control instead of a
+         dimmed version of this style — a Border+ContentPresenter template puts every visual state
+         fully under our own Setters/Triggers instead. Disabled uses Opacity (fading border, text and
+         background together) rather than another gray, so it can't be confused with the hover
+         state's own distinct #4A5568 swap; IsHitTestVisible=False on top stops that hover trigger
+         from ever firing on a disabled button in the first place (otherwise resting the mouse over
+         one while it's disabled would still light it up as if it were interactive). -->
     <Style x:Key="ActionButtonStyle" TargetType="Button">
         <Setter Property="Padding" Value="16,8"/>
         <Setter Property="FontWeight" Value="Bold"/>
@@ -126,12 +220,25 @@
         <Setter Property="BorderBrush" Value="#4A5568"/>
         <Setter Property="BorderThickness" Value="2"/>
         <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
         <Style.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
                 <Setter Property="Background" Value="#4A5568"/>
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
-                <Setter Property="Foreground" Value="#718096"/>
+                <Setter Property="Opacity" Value="0.45"/>
+                <Setter Property="IsHitTestVisible" Value="False"/>
                 <Setter Property="Cursor" Value="Arrow"/>
             </Trigger>
         </Style.Triggers>

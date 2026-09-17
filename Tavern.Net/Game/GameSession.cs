@@ -425,6 +425,14 @@ public sealed class GameSession
 
         player.Stats.Log($"Moved {card.Card.Name} from {from} to {to}.");
 
+        // A manual drag out of Main is the same act as DrawCard — just player-directed (picking
+        // Memory instead of Hand, or a specific card via Glimpse) rather than always the top card
+        // to Hand — so it counts toward CardsDrawnCount the same way.
+        if (from == ZoneType.MainDeck && (to == ZoneType.Hand || to == ZoneType.Memory))
+        {
+            player.Stats.CardsDrawnCount++;
+        }
+
         switch (to)
         {
             case ZoneType.Field:
@@ -498,14 +506,23 @@ public sealed class GameSession
     /// life shift, which isn't the player "recovering" anything.</param>
     public void AdjustLife(Player player, int delta, bool trackRecovery = true)
     {
-        player.Life += delta;
-        if (trackRecovery && delta > 0)
+        var newLife = Math.Max(0, player.Life + delta);
+        var actualDelta = newLife - player.Life;
+        if (actualDelta == 0)
         {
-            player.Stats.LifeRecoveredCount += delta;
+            // Already at 0 and dropping further (or an already-clamped attempt repeats) — nothing
+            // actually changed, so skip the log/MajorEvent rather than recording a "+0" no-op.
+            return;
         }
 
-        player.Stats.Log($"Life changed by {delta:+0;-0} to {player.Life}.");
-        RecordLifeOrDamageChange(player, MajorEventKind.LifeChanged, "Life", delta);
+        player.Life = newLife;
+        if (trackRecovery && actualDelta > 0)
+        {
+            player.Stats.LifeRecoveredCount += actualDelta;
+        }
+
+        player.Stats.Log($"Life changed by {actualDelta:+0;-0} to {player.Life}.");
+        RecordLifeOrDamageChange(player, MajorEventKind.LifeChanged, "Life", actualDelta);
     }
 
     /// <summary>Adjusts the running damage-dealt tally (a manual count, since goldfishing has no

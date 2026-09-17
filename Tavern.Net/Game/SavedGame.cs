@@ -83,9 +83,13 @@ public sealed record SavedPlayer(
 /// <summary>A named, resumable snapshot of an entire GameSession — every player's zones, stats and
 /// full Play Log/Major Event history. Built by GameSessionSerializer.Capture and rebuilt by
 /// GameSessionSerializer.RestoreAsync.</summary>
+/// <param name="ElapsedTime">Online games only — the match clock's value at the moment of saving
+/// (see GameBoardViewModel.ElapsedTime), frozen from then on; null for solo saves, and for any save
+/// made before this field existed. Defaulted so older save files without it still deserialize.</param>
 public sealed record SavedGame(
     string Name,
     DateTime SavedAtUtc,
     string Summary,
     TurnPhase CurrentPhase,
-    List<SavedPlayer> Players);
+    List<SavedPlayer> Players,
+    TimeSpan? ElapsedTime = null);

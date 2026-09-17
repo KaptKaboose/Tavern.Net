@@ -19,6 +19,7 @@
         <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
         <conv:DieFaceToImageConverter x:Key="DieFaceToImage"/>
         <conv:BoolToPlayerLabelConverter x:Key="BoolToPlayerLabel"/>
+        <conv:LowLifeToBrushConverter x:Key="LowLifeToBrush"/>
 
         <!-- One pile box — real card art (or an empty dark box, via IntToVisibility, when the zone
              has no cards) plus a count badge that always shows, including 0. Click opens the full
@@ -143,17 +144,9 @@
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
-            <!-- Meta-action bar: Menu and Save Game, kept small (CompactButtonStyle) and separate
-                 from the gameplay header below so the phase tracker keeps its room. -->
-            <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,6">
-                <Button Style="{StaticResource CompactButtonStyle}" Content="Menu" Margin="0,0,8,0" Command="{Binding BackToMenuCommand}"/>
-                <Button Style="{StaticResource CompactButtonStyle}" Content="Save Game" Margin="0,0,8,0" Command="{Binding OpenSaveGamePanelCommand}"/>
-                <TextBlock Text="{Binding ConnectionLostMessage}" Foreground="IndianRed" VerticalAlignment="Center"
-                           Visibility="{Binding ConnectionLostMessage, Converter={StaticResource NullToVisibility}}"/>
-            </StackPanel>
-
-            <!-- Header: life + turn (left), the turn-phase tracker (centered), Roll/Damage (right). -->
-            <Grid Grid.Row="1" Margin="0,0,0,10">
+            <!-- Meta-action bar: Menu/Save Game (left, CompactButtonStyle) and the turn-phase
+                 tracker (centered) — moved up here so the stats/actions row below isn't crowded. -->
+            <Grid Grid.Row="0" Margin="0,0,0,6">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
@@ -161,62 +154,129 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Grid.Column="0" Orientation="Horizontal">
-                    <Button Style="{StaticResource CounterButtonStyle}" Content="-" Command="{Binding DecreaseLifeCommand}"/>
-                    <TextBlock Text="{Binding Player.Life, StringFormat='Life: {0}'}" FontSize="18" FontWeight="Bold"
-                               Foreground="#F7FAFC" VerticalAlignment="Center" Margin="8,0"/>
-                    <Button Style="{StaticResource CounterButtonStyle}" Content="+" Command="{Binding IncreaseLifeCommand}"/>
-
-                    <TextBlock Text="{Binding Stats.TurnCount, Converter={StaticResource TurnCountDisplay}, StringFormat='   Turn {0}'}" FontSize="18"
-                               Foreground="#F7FAFC" VerticalAlignment="Center" Margin="16,0,0,0"/>
-
-                    <!-- Online only: whose turn it currently is — drives the same IsMyTurn that
-                         gates Advance Phase and auto-opens/closes the opponent panel. -->
-                    <Border Background="#4A5568" CornerRadius="10" Padding="10,3" Margin="16,0,0,0"
-                            VerticalAlignment="Center"
-                            Visibility="{Binding IsOnline, Converter={StaticResource BoolToVisibility}}">
-                        <TextBlock FontSize="14" FontWeight="Bold" Foreground="#F7FAFC" VerticalAlignment="Center">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="Text" Value="Opponent's Turn"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsMyTurn}" Value="True">
-                                            <Setter Property="Text" Value="Your Turn"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
-                    </Border>
+                    <Button Style="{StaticResource CompactButtonStyle}" Content="Menu" Margin="0,0,8,0" Command="{Binding BackToMenuCommand}"/>
+                    <Button Style="{StaticResource CompactButtonStyle}" Content="Save Game" Margin="0,0,8,0" Command="{Binding OpenSaveGamePanelCommand}"/>
+                    <TextBlock Text="{Binding ConnectionLostMessage}" Foreground="IndianRed" VerticalAlignment="Center"
+                               Visibility="{Binding ConnectionLostMessage, Converter={StaticResource NullToVisibility}}"/>
                 </StackPanel>
 
                 <!-- Wake Up => Materialization => Recollection => Draw => Main => End, with the
                      current phase highlighted. A fixed set of 6, so written out directly rather
-                     than templated from TurnPhase's values. -->
-                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <TextBlock Text="Wake Up" FontSize="14" VerticalAlignment="Center"
+                     than templated from TurnPhase's values. The right-only margin nudges the
+                     centered group left of true-center (a right margin still counts toward what
+                     gets centered, so it shifts the visible content left without needing a mirrored
+                     spacer column). -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,100,0">
+                    <TextBlock Text="Wake Up" FontSize="16" VerticalAlignment="Center"
                                Foreground="{Binding CurrentPhase, Converter={StaticResource PhaseToBrush}, ConverterParameter=WakeUp}"
                                FontWeight="{Binding CurrentPhase, Converter={StaticResource PhaseToFontWeight}, ConverterParameter=WakeUp}"/>
-                    <TextBlock Text=" ➤ " FontSize="14" Foreground="#A0AEC0" VerticalAlignment="Center"/>
-                    <TextBlock Text="Materialization" FontSize="14" VerticalAlignment="Center"
+                    <TextBlock Text=" ➤ " FontSize="16" Foreground="#A0AEC0" VerticalAlignment="Center"/>
+                    <TextBlock Text="Materialization" FontSize="16" VerticalAlignment="Center"
                                Foreground="{Binding CurrentPhase, Converter={StaticResource PhaseToBrush}, ConverterParameter=Materialization}"
                                FontWeight="{Binding CurrentPhase, Converter={StaticResource PhaseToFontWeight}, ConverterParameter=Materialization}"/>
-                    <TextBlock Text=" ➤ " FontSize="14" Foreground="#A0AEC0" VerticalAlignment="Center"/>
-                    <TextBlock Text="Recollection" FontSize="14" VerticalAlignment="Center"
+                    <TextBlock Text=" ➤ " FontSize="16" Foreground="#A0AEC0" VerticalAlignment="Center"/>
+                    <TextBlock Text="Recollection" FontSize="16" VerticalAlignment="Center"
                                Foreground="{Binding CurrentPhase, Converter={StaticResource PhaseToBrush}, ConverterParameter=Recollection}"
                                FontWeight="{Binding CurrentPhase, Converter={StaticResource PhaseToFontWeight}, ConverterParameter=Recollection}"/>
-                    <TextBlock Text=" ➤ " FontSize="14" Foreground="#A0AEC0" VerticalAlignment="Center"/>
-                    <TextBlock Text="Draw" FontSize="14" VerticalAlignment="Center"
+                    <TextBlock Text=" ➤ " FontSize="16" Foreground="#A0AEC0" VerticalAlignment="Center"/>
+                    <TextBlock Text="Draw" FontSize="16" VerticalAlignment="Center"
                                Foreground="{Binding CurrentPhase, Converter={StaticResource PhaseToBrush}, ConverterParameter=Draw}"
                                FontWeight="{Binding CurrentPhase, Converter={StaticResource PhaseToFontWeight}, ConverterParameter=Draw}"/>
-                    <TextBlock Text=" ➤ " FontSize="14" Foreground="#A0AEC0" VerticalAlignment="Center"/>
-                    <TextBlock Text="Main" FontSize="14" VerticalAlignment="Center"
+                    <TextBlock Text=" ➤ " FontSize="16" Foreground="#A0AEC0" VerticalAlignment="Center"/>
+                    <TextBlock Text="Main" FontSize="16" VerticalAlignment="Center"
                                Foreground="{Binding CurrentPhase, Converter={StaticResource PhaseToBrush}, ConverterParameter=Main}"
                                FontWeight="{Binding CurrentPhase, Converter={StaticResource PhaseToFontWeight}, ConverterParameter=Main}"/>
-                    <TextBlock Text=" ➤ " FontSize="14" Foreground="#A0AEC0" VerticalAlignment="Center"/>
-                    <TextBlock Text="End" FontSize="14" VerticalAlignment="Center"
+                    <TextBlock Text=" ➤ " FontSize="16" Foreground="#A0AEC0" VerticalAlignment="Center"/>
+                    <TextBlock Text="End" FontSize="16" VerticalAlignment="Center"
                                Foreground="{Binding CurrentPhase, Converter={StaticResource PhaseToBrush}, ConverterParameter=End}"
                                FontWeight="{Binding CurrentPhase, Converter={StaticResource PhaseToFontWeight}, ConverterParameter=End}"/>
                 </StackPanel>
+            </Grid>
+
+            <!-- Stats/actions row: the Life/Turn/opponent stats box (left), Roll/Opponent/Damage
+                 (right). The phase tracker used to live in the middle column here — moved up to the
+                 meta-action bar above so this row has more breathing room. -->
+            <Grid Grid.Row="1" Margin="0,0,0,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Stats area: Life, Turn number, the turn badge, (online) the opponent's Life, and
+                     the match clock — grouped in their own bordered box rather than loose in the
+                     header, so this doesn't visually blend into Roll/Damage/Opponent on the other
+                     side. -->
+                <Border Grid.Column="0" Background="#2D3748" CornerRadius="8" Padding="12,6" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal">
+                        <Button Style="{StaticResource CounterButtonStyle}" Content="-" Command="{Binding DecreaseLifeCommand}"/>
+                        <TextBlock Text="{Binding Player.Life, StringFormat='Life: {0}'}" FontSize="16" FontWeight="Bold"
+                                   Foreground="{Binding Player.Life, Converter={StaticResource LowLifeToBrush}}"
+                                   VerticalAlignment="Center" Margin="8,0"/>
+                        <Button Style="{StaticResource CounterButtonStyle}" Content="+" Command="{Binding IncreaseLifeCommand}"/>
+
+                        <TextBlock Text="{Binding Stats.TurnCount, Converter={StaticResource TurnCountDisplay}, StringFormat='   Turn {0}'}" FontSize="16"
+                                   Foreground="#F7FAFC" VerticalAlignment="Center" Margin="16,0,0,0"/>
+
+                        <!-- Online only: whose turn it currently is — drives the same IsMyTurn that
+                             gates Advance Phase and auto-opens/closes the opponent panel. Green
+                             while it's actually yours, the same muted gray as before otherwise. -->
+                        <Border CornerRadius="10" Padding="10,3" Margin="16,0,0,0"
+                                VerticalAlignment="Center"
+                                Visibility="{Binding IsOnline, Converter={StaticResource BoolToVisibility}}">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Background" Value="#4A5568"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsMyTurn}" Value="True">
+                                            <Setter Property="Background" Value="#2F855A"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock FontSize="13" FontWeight="Bold" Foreground="#F7FAFC" VerticalAlignment="Center">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text" Value="Opp Turn"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsMyTurn}" Value="True">
+                                                <Setter Property="Text" Value="Your Turn"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Border>
+
+                        <!-- Online only: always-visible opponent Life, boxed (unlike the plain Life/
+                             Turn/clock text) so it stands out as its own thing, and gold for 1s
+                             right after it changes (GameBoardViewModel.FlashOpponentLifeChanged). -->
+                        <Border Background="#1A202C" BorderBrush="#4A5568" BorderThickness="1" CornerRadius="8"
+                                Padding="8,3" Margin="16,0,0,0" VerticalAlignment="Center"
+                                Visibility="{Binding IsOnline, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock FontSize="16" FontWeight="Bold"
+                                       Text="{Binding OpponentLife, StringFormat='Opp Life: {0}'}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{Binding OpponentLife, Converter={StaticResource LowLifeToBrush}}"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding OpponentLifeJustChanged}" Value="True">
+                                                <Setter Property="Foreground" Value="#F6E05E"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Border>
+
+                        <!-- Match clock — online games only (live, or viewing a saved online game
+                             later, in which case this is frozen at whatever it read when saved and
+                             never resumes; see GameBoardViewModel.ShowElapsedTime/ElapsedTime). -->
+                        <TextBlock Text="{Binding ElapsedTime, StringFormat={}{0:hh\\:mm\\:ss}}" FontSize="16" FontWeight="Bold"
+                                   Foreground="#F7FAFC" VerticalAlignment="Center" Margin="16,0,0,0"
+                                   Visibility="{Binding ShowElapsedTime, Converter={StaticResource BoolToVisibility}}"/>
+                    </StackPanel>
+                </Border>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                     <!-- Online only: opens the read-only opponent panel (also auto-opens/closes on
@@ -347,8 +407,10 @@
                      (Background=Transparent, same reasoning as Field's Canvas) so it's a stable,
                      permanently-present drop target no matter how small the Viewbox scales the
                      cards down to. The Viewbox only ever shrinks (StretchDirection=DownOnly) —
-                     a hand that already fits renders at full size, centered. -->
-                <Border Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,0,0,8" Background="Transparent"
+                     a hand that already fits renders at full size, centered. The left-only margin
+                     nudges that centered content right of where column 0-1's own true center sits
+                     (missing column 2's width on the right otherwise biases it left). -->
+                <Border Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Margin="100,0,0,8" Background="Transparent"
                         behaviors:CardDropBehavior.TargetZone="Hand"
                         behaviors:CardDropBehavior.MoveCommand="{Binding MoveCardToCommand}">
                     <Viewbox Stretch="Uniform" StretchDirection="DownOnly">
@@ -358,6 +420,43 @@
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"/>
                                 </ItemsPanelTemplate>
                             </ItemsControl.ItemsPanel>
+                            <!-- Hand-only: cards rest at CardTemplate's own normal 125x175 size (no
+                                 shrinking) and pop larger on hover, growing from the bottom edge so
+                                 they lift toward the viewer instead of just downward. Scoped to this
+                                 ItemsControl's own ItemContainerStyle rather than touching
+                                 CardTemplate itself, which Field/Memory/Glimpse/the peek popups all
+                                 share. -->
+                            <ItemsControl.ItemContainerStyle>
+                                <Style TargetType="ContentPresenter">
+                                    <Setter Property="RenderTransformOrigin" Value="0.5,1"/>
+                                    <Setter Property="RenderTransform">
+                                        <Setter.Value>
+                                            <ScaleTransform ScaleX="1" ScaleY="1"/>
+                                        </Setter.Value>
+                                    </Setter>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Panel.ZIndex" Value="10"/>
+                                            <Trigger.EnterActions>
+                                                <BeginStoryboard>
+                                                    <Storyboard>
+                                                        <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX" To="1.3" Duration="0:0:0.12"/>
+                                                        <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY" To="1.3" Duration="0:0:0.12"/>
+                                                    </Storyboard>
+                                                </BeginStoryboard>
+                                            </Trigger.EnterActions>
+                                            <Trigger.ExitActions>
+                                                <BeginStoryboard>
+                                                    <Storyboard>
+                                                        <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleX" To="1" Duration="0:0:0.12"/>
+                                                        <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY" To="1" Duration="0:0:0.12"/>
+                                                    </Storyboard>
+                                                </BeginStoryboard>
+                                            </Trigger.ExitActions>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </ItemsControl.ItemContainerStyle>
                         </ItemsControl>
                     </Viewbox>
                 </Border>
@@ -831,6 +930,16 @@
                         <Run Text="   "/>
                         <Run Text="{Binding OpponentTurnCount, Converter={StaticResource TurnCountDisplay}, StringFormat='Turn: {0}'}"/>
                     </TextBlock>
+
+                    <!-- Own life, adjustable right here — most damage lands on the opponent's own
+                         turn, while this panel is open, so reacting to it shouldn't mean closing
+                         the panel first. Same DecreaseLifeCommand/IncreaseLifeCommand as the header. -->
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,12">
+                        <Button Style="{StaticResource CounterButtonStyle}" Content="-" Command="{Binding DecreaseLifeCommand}"/>
+                        <TextBlock Text="{Binding Player.Life, StringFormat='Your Life: {0}'}" FontSize="16" FontWeight="Bold"
+                                   Foreground="{Binding Player.Life, Converter={StaticResource LowLifeToBrush}}" VerticalAlignment="Center" Margin="8,0"/>
+                        <Button Style="{StaticResource CounterButtonStyle}" Content="+" Command="{Binding IncreaseLifeCommand}"/>
+                    </StackPanel>
 
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <Grid>
