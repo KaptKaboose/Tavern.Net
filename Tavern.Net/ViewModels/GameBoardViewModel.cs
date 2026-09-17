@@ -1948,7 +1948,7 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     /// half-configured action can't go stale if some other overlay opens first).</summary>
     private bool IsAnyOverlayOpen() =>
         IsOpponentPanelOpen || IsRollingDice || IsSavingGame || IsSealedPanelOpen || IsGiveTargetPickerOpen || IsActionsMenuOpen ||
-        IsGenerateSearchOpen || IsGenerateCountOpen || IsNewGameReadyUpOpen ||
+        IsGenerateSearchOpen || IsGenerateCountOpen || IsNewGameReadyUpOpen || IsHelpOpen ||
         ZoomedCard is not null || PeekedZone is not null || ViewedMajorEvent is not null ||
         ViewedSnapshotPile is not null || ZoomedSnapshotCard is not null || ActiveReveal is not null;
 
@@ -1997,6 +1997,24 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
 
     [RelayCommand]
     private void CloseSaveGamePanel() => IsSavingGame = false;
+
+    /// <summary>Whether the keyboard-shortcuts reference panel is open.</summary>
+    [ObservableProperty]
+    private bool _isHelpOpen;
+
+    partial void OnIsHelpOpenChanged(bool value)
+    {
+        if (value)
+        {
+            CloseActionsMenu();
+        }
+    }
+
+    [RelayCommand]
+    private void OpenHelp() => IsHelpOpen = true;
+
+    [RelayCommand]
+    private void CloseHelp() => IsHelpOpen = false;
 
     [RelayCommand(CanExecute = nameof(CanConfirmSaveGame))]
     private void ConfirmSaveGame()
