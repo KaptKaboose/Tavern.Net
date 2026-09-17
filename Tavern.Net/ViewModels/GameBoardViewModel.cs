@@ -64,6 +64,39 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     [ObservableProperty]
     private bool _isOpponentPanelOpen;
 
+    /// <summary>True while the opponent has done something (played a card, moved one to the
+    /// Graveyard/Banishment, taken their turn, ...) since the panel was last open — glows the
+    /// header's Opponent button (see GameBoardView's OpponentButtonStyle) rather than auto-opening
+    /// the panel itself, so the opponent can never yank the screen away mid-drag/mid-zoom; the
+    /// player decides when to actually look. Cleared the moment the panel opens, by any means
+    /// (manual toggle or the turn-handoff auto-open in UpdateIsMyTurn) — see
+    /// OnIsOpponentPanelOpenChanged. Set from RefreshOpponentPanel, which is the only place new
+    /// opponent MajorEvents ever arrive.</summary>
+    [ObservableProperty]
+    private bool _hasUnseenOpponentActivity;
+
+    /// <summary>OpponentPlayer.Stats.MajorEvents.Count as of the last RefreshOpponentPanel call —
+    /// that collection is fully cleared and rebuilt from scratch on every ~300ms broadcast (see
+    /// GameSessionSerializer.ApplyToPlayer), even when nothing actually changed, so a raw
+    /// CollectionChanged subscription would glow constantly. Comparing counts across calls is what
+    /// actually detects a genuinely new event.</summary>
+    private int _lastSeenOpponentMajorEventCount;
+
+    /// <summary>False until the very first PlayerState broadcast arrives. That first call always
+    /// carries the opponent's own game-start setup (their "Game started." MajorEvent, base champion
+    /// materialized, opening hand drawn) — automated setup, not something the player did, so it
+    /// shouldn't glow the Opponent button either. This just seeds _lastSeenOpponentMajorEventCount
+    /// from that first snapshot instead of comparing against it.</summary>
+    private bool _hasSeenInitialOpponentState;
+
+    partial void OnIsOpponentPanelOpenChanged(bool value)
+    {
+        if (value)
+        {
+            HasUnseenOpponentActivity = false;
+        }
+    }
+
     /// <summary>Set once the connection drops — shown as a banner rather than forcing navigation
     /// away, so the player can finish looking at the board before backing out via Menu themselves.</summary>
     [ObservableProperty]
@@ -283,6 +316,15 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         OpponentMainDeckCount = OpponentPlayer.GetZone(ZoneType.MainDeck).Cards.Count;
         OpponentLife = OpponentPlayer.Life;
         OpponentTurnCount = OpponentPlayer.Stats.TurnCount;
+
+        var majorEventCount = OpponentPlayer.Stats.MajorEvents.Count;
+        if (_hasSeenInitialOpponentState && majorEventCount > _lastSeenOpponentMajorEventCount && !IsOpponentPanelOpen)
+        {
+            HasUnseenOpponentActivity = true;
+        }
+
+        _lastSeenOpponentMajorEventCount = majorEventCount;
+        _hasSeenInitialOpponentState = true;
 
         RefreshMergedLog();
     }

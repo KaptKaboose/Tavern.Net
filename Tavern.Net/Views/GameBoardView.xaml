@@ -114,6 +114,21 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
+
+        <!-- Header's Opponent button — gold-bordered while HasUnseenOpponentActivity, same
+             highlight color used everywhere else for an active/selected state. A deliberate glow
+             rather than auto-opening the panel itself: the opponent shouldn't be able to yank the
+             screen away from whatever the player's doing just by moving a card. Clears the instant
+             the panel is actually opened, by any means (see GameBoardViewModel.
+             OnIsOpponentPanelOpenChanged). -->
+        <Style x:Key="OpponentButtonStyle" TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding HasUnseenOpponentActivity}" Value="True">
+                    <Setter Property="BorderBrush" Value="#F6E05E"/>
+                    <Setter Property="BorderThickness" Value="3"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
     </UserControl.Resources>
     <Grid>
         <Grid.ColumnDefinitions>
@@ -205,8 +220,10 @@
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                     <!-- Online only: opens the read-only opponent panel (also auto-opens/closes on
-                         each turn handoff — see GameBoardViewModel.UpdateIsMyTurn). -->
-                    <Button Style="{StaticResource ActionButtonStyle}" Content="Opponent" Margin="0,0,16,0"
+                         each turn handoff — see GameBoardViewModel.UpdateIsMyTurn). Glows gold
+                         (OpponentButtonStyle) when they've done something since the panel was last
+                         open. -->
+                    <Button Style="{StaticResource OpponentButtonStyle}" Content="Opponent" Margin="0,0,16,0"
                             Command="{Binding ToggleOpponentPanelCommand}"
                             Visibility="{Binding IsOnline, Converter={StaticResource BoolToVisibility}}"/>
 
@@ -679,37 +696,6 @@
             </Border>
         </Grid>
 
-        <!-- Snapshot pile popup: full contents of a clicked pile box (Champion/Graveyard/
-             Banishment/Material/Main), on top of the snapshot viewer itself. Read-only, same as
-             the snapshot viewer — closing it just hides it. -->
-        <Grid Grid.Column="0" Grid.ColumnSpan="2"
-              Visibility="{Binding ViewedSnapshotPile, Converter={StaticResource NullToVisibility}}"
-              d:IsHidden="True">
-            <Button Command="{Binding CloseSnapshotPileViewCommand}" Focusable="False" Cursor="Arrow">
-                <Button.Template>
-                    <ControlTemplate TargetType="Button">
-                        <Border Background="#CC000000"/>
-                    </ControlTemplate>
-                </Button.Template>
-            </Button>
-
-            <Border MaxWidth="1200" MaxHeight="820" Margin="40" Padding="16"
-                    HorizontalAlignment="Center" VerticalAlignment="Center"
-                    Background="#2D3748" BorderBrush="White" BorderThickness="2" CornerRadius="10">
-                <DockPanel>
-                    <TextBlock DockPanel.Dock="Top" Text="{Binding ViewedSnapshotPile.Zone}"
-                               Foreground="White" FontSize="20" FontWeight="Bold" Margin="0,0,0,12"/>
-                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                        <ItemsControl ItemsSource="{Binding ViewedSnapshotPile.Cards}" ItemTemplate="{StaticResource CardSnapshotTemplate}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                        </ItemsControl>
-                    </ScrollViewer>
-                </DockPanel>
-            </Border>
-        </Grid>
-
         <!-- Glimpse overlay: 'G' draws the top card of Main into Staging (and opens this if not
              already open); every later 'G' press draws another, appending to Staging. Drag cards
              from Staging into Top or Bottom to sort them — dropping directly on another card
@@ -920,6 +906,39 @@
                                 </StackPanel>
                             </UniformGrid>
                         </Grid>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Grid>
+
+        <!-- Snapshot pile popup: full contents of a clicked pile box (Champion/Graveyard/
+             Banishment/Material/Main), shared by both the snapshot viewer and the Opponent panel
+             above — declared after both so it always renders on top of whichever one it popped out
+             of, rather than being pinned above just one of them. Read-only either way — closing it
+             just hides it. -->
+        <Grid Grid.Column="0" Grid.ColumnSpan="2"
+              Visibility="{Binding ViewedSnapshotPile, Converter={StaticResource NullToVisibility}}"
+              d:IsHidden="True">
+            <Button Command="{Binding CloseSnapshotPileViewCommand}" Focusable="False" Cursor="Arrow">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="#CC000000"/>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+
+            <Border MaxWidth="1200" MaxHeight="820" Margin="40" Padding="16"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Background="#2D3748" BorderBrush="White" BorderThickness="2" CornerRadius="10">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="{Binding ViewedSnapshotPile.Zone}"
+                               Foreground="White" FontSize="20" FontWeight="Bold" Margin="0,0,0,12"/>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl ItemsSource="{Binding ViewedSnapshotPile.Cards}" ItemTemplate="{StaticResource CardSnapshotTemplate}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
                     </ScrollViewer>
                 </DockPanel>
             </Border>
