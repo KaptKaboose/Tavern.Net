@@ -57,6 +57,11 @@ public sealed class GameSession
 
     public TurnPhase CurrentPhase { get; private set; } = TurnPhase.WakeUp;
 
+    /// <summary>Whose turn it currently is — the one player (in an online game) allowed to advance
+    /// the shared phase; irrelevant for solo, where it's always the only player. Defaults to the
+    /// first player added. See AdvancePhase's End-of-turn handoff for where this changes.</summary>
+    public Player? ActivePlayer { get; private set; }
+
     public GameSession(Random? random = null)
     {
         _random = random ?? new Random();
@@ -66,6 +71,7 @@ public sealed class GameSession
     {
         var player = new Player(name, Players.Count, startingLife);
         Players.Add(player);
+        ActivePlayer ??= player;
         return player;
     }
 
@@ -73,6 +79,16 @@ public sealed class GameSession
     /// actions the way SetPhase does — used only by GameSessionSerializer.RestoreAsync, where those
     /// actions already happened and are already reflected in the restored zones/stats.</summary>
     internal void SetPhaseForRestore(TurnPhase phase) => CurrentPhase = phase;
+
+    /// <summary>Applies a shared phase/active-player update received from the network — used only
+    /// by the passive side of an online game, mirroring whatever the active side already computed
+    /// and ran SetPhase's own side effects for locally. No side effects re-run here: the active
+    /// side's own broadcast PlayerState already reflects their WakeUp/Recollect/Draw outcome.</summary>
+    internal void ApplyRemoteGameState(TurnPhase phase, Player activePlayer)
+    {
+        CurrentPhase = phase;
+        ActivePlayer = activePlayer;
+    }
 
     public void Shuffle(Player player, ZoneType zoneType = ZoneType.MainDeck)
     {
@@ -108,126 +124,154 @@ public sealed class GameSession
 
         foreach (var player in Players)
         {
-            player.Stats.PlayLog.Clear();
-            player.Stats.MajorEvents.Clear();
-            _canCoalesceLastMajorEvent[player] = false;
-            player.Stats.TurnCount = 0;
-            player.Life = 15;
-            player.Stats.CardsDrawnCount = 0;
-            player.Stats.DamageDealtCount = 0;
-            player.Stats.LifeRecoveredCount = 0;
-            player.Stats.DeadTurnsCount = 0;
-            player.Stats.PlayedCardThisTurn = false;
-            player.Stats.CardsPlayedCount = 0;
-            player.Stats.CardsLostToMemoryDecayCount = 0;
-            player.Stats.ChampionLevelMilestones.Clear();
-            _pendingFirstTurnFastForward.Add(player);
-
-            // Tokens is excluded from both the sweep and the clear: it's a static, always-present
-            // catalog (one CardInstance per token type, loaded once by GameBoardViewModel), not
-            // deck content — sweeping it in would both lose it forever (nothing ever rebuilds it,
-            // unlike MaterialDeck/MainDeck below) and reset it needlessly on every new game.
-            var allCards = player.Zones.Values.Where(zone => zone.Type != ZoneType.Tokens).SelectMany(zone => zone.Cards).ToList();
-            foreach (var zone in player.Zones.Values)
+            var glimpsed = InitializePlayerForNewGame(player, enableFirstTurnFastForward: true);
+            if (player == Players[0])
             {
-                if (zone.Type == ZoneType.Tokens)
-                {
-                    continue;
-                }
-
-                zone.Cards.Clear();
+                glimpsedForFirstPlayer = glimpsed;
             }
-
-            foreach (var card in allCards)
-            {
-                card.IsTapped = false;
-                card.IsFlipped = false;
-                card.FieldX = 0;
-                card.FieldY = 0;
-                card.ResetCounterAndStatuses();
-            }
-
-            var materialDeck = player.GetZone(ZoneType.MaterialDeck);
-            foreach (var card in allCards.Where(c => c.HomeZone == ZoneType.MaterialDeck).OrderBy(c => c.HomeOrder))
-            {
-                materialDeck.Cards.Add(card);
-            }
-
-            var mainDeck = player.GetZone(ZoneType.MainDeck);
-            foreach (var card in allCards.Where(c => c.HomeZone == ZoneType.MainDeck).OrderBy(c => c.HomeOrder))
-            {
-                mainDeck.Cards.Add(card);
-            }
-
-            Shuffle(player, ZoneType.MainDeck);
-
-            // Play the base champion from the Material Deck to the Champion zone, since that's a required starting action
-            var baseChampion = allCards.FirstOrDefault(c => c.Card.IsChampion && c.Card.Level == 0 && c.HomeZone == ZoneType.MaterialDeck);
-            MoveCard(player, baseChampion!, ZoneType.MaterialDeck, ZoneType.Champion);
-
-            // Draw the opening hand based on the base champion effect
-            var baseChampionEffect = baseChampion?.Card.Effect?.ToLower();
-            if (baseChampionEffect is not null)
-            {
-                if (baseChampionEffect.Contains("memory"))
-                {
-                    player.SetStartsInMemory(true);
-                }
-
-                switch (baseChampionEffect)
-                {
-                    case string e when e.Contains("draw seven"):
-                        player.SetStartingHandSize(7);
-                        break;
-                    case string e when e.Contains("draw six"):
-                        player.SetStartingHandSize(6);
-                        break;
-                }
-
-                // Check for glimpsing
-                if (baseChampionEffect.Contains("glimpse"))
-                {
-                    var glimpseCount = 0;
-                    switch (baseChampionEffect)
-                    {
-                        case string e when e.Contains("glimpse 6"):
-                            glimpseCount = 6;
-                            break;
-                        case string e when e.Contains("glimpse 7"):
-                            glimpseCount = 7;
-                            break;
-                    }
-
-                    if (glimpseCount > 0)
-                    {
-                        var glimpsedCards = new List<CardInstance>();
-                        for (var i = 0; i < glimpseCount; i++)
-                        {
-                            var card = GlimpseNextCard(player);
-                            if (card is not null)
-                            {
-                                glimpsedCards.Add(card);
-                            }
-                        }
-
-                        if (player == Players[0])
-                        {
-                            glimpsedForFirstPlayer = glimpsedCards;
-                        }
-                    }
-                }
-                else
-                {
-                    DrawStartingHand(player);
-                }
-            }
-
-            RecordMajorEvent(player, "Game started.", insertAtStart: true);
         }
 
         SetPhase(TurnPhase.Materialization, Players[0]);
 
         return glimpsedForFirstPlayer;
+    }
+
+    /// <summary>
+    /// The online equivalent of <see cref="StartNewGame"/>, scoped to just <paramref name="player"/>
+    /// — an online session's other Player is a mirror of the real opponent's own authoritative
+    /// state (see GameBoardViewModel's ApplyOpponentStateAsync), so nothing here may touch it; their
+    /// own client runs this same initialization on their own side and broadcasts the result. Doesn't
+    /// set the shared CurrentPhase/ActivePlayer either — the caller (the online lobby, once both
+    /// sides are ready) sets that once via ApplyRemoteGameState using the agreed first player, not
+    /// per-player like solo's own Materialization kickoff. Also skips the first-turn fast-forward:
+    /// that logic assumes PlayerNumber 0 always goes first, which isn't true once who goes first is
+    /// decided by a dice roll — both players just draw normally on their first turn instead.
+    /// </summary>
+    public IReadOnlyList<CardInstance> StartNewGameForPlayer(Player player)
+        => InitializePlayerForNewGame(player, enableFirstTurnFastForward: false);
+
+    private IReadOnlyList<CardInstance> InitializePlayerForNewGame(Player player, bool enableFirstTurnFastForward)
+    {
+        var glimpsedCards = (IReadOnlyList<CardInstance>)Array.Empty<CardInstance>();
+
+        player.Stats.PlayLog.Clear();
+        player.Stats.MajorEvents.Clear();
+        _canCoalesceLastMajorEvent[player] = false;
+        player.Stats.TurnCount = 0;
+        player.Life = 15;
+        player.Stats.CardsDrawnCount = 0;
+        player.Stats.DamageDealtCount = 0;
+        player.Stats.LifeRecoveredCount = 0;
+        player.Stats.DeadTurnsCount = 0;
+        player.Stats.PlayedCardThisTurn = false;
+        player.Stats.CardsPlayedCount = 0;
+        player.Stats.CardsLostToMemoryDecayCount = 0;
+        player.Stats.ChampionLevelMilestones.Clear();
+
+        if (enableFirstTurnFastForward)
+        {
+            _pendingFirstTurnFastForward.Add(player);
+        }
+
+        // Tokens is excluded from both the sweep and the clear: it's a static, always-present
+        // catalog (one CardInstance per token type, loaded once by GameBoardViewModel), not
+        // deck content — sweeping it in would both lose it forever (nothing ever rebuilds it,
+        // unlike MaterialDeck/MainDeck below) and reset it needlessly on every new game.
+        var allCards = player.Zones.Values.Where(zone => zone.Type != ZoneType.Tokens).SelectMany(zone => zone.Cards).ToList();
+        foreach (var zone in player.Zones.Values)
+        {
+            if (zone.Type == ZoneType.Tokens)
+            {
+                continue;
+            }
+
+            zone.Cards.Clear();
+        }
+
+        foreach (var card in allCards)
+        {
+            card.IsTapped = false;
+            card.IsFlipped = false;
+            card.FieldX = 0;
+            card.FieldY = 0;
+            card.ResetCounterAndStatuses();
+        }
+
+        var materialDeck = player.GetZone(ZoneType.MaterialDeck);
+        foreach (var card in allCards.Where(c => c.HomeZone == ZoneType.MaterialDeck).OrderBy(c => c.HomeOrder))
+        {
+            materialDeck.Cards.Add(card);
+        }
+
+        var mainDeck = player.GetZone(ZoneType.MainDeck);
+        foreach (var card in allCards.Where(c => c.HomeZone == ZoneType.MainDeck).OrderBy(c => c.HomeOrder))
+        {
+            mainDeck.Cards.Add(card);
+        }
+
+        Shuffle(player, ZoneType.MainDeck);
+
+        // Play the base champion from the Material Deck to the Champion zone, since that's a required starting action
+        var baseChampion = allCards.FirstOrDefault(c => c.Card.IsChampion && c.Card.Level == 0 && c.HomeZone == ZoneType.MaterialDeck);
+        MoveCard(player, baseChampion!, ZoneType.MaterialDeck, ZoneType.Champion);
+
+        // Draw the opening hand based on the base champion effect
+        var baseChampionEffect = baseChampion?.Card.Effect?.ToLower();
+        if (baseChampionEffect is not null)
+        {
+            if (baseChampionEffect.Contains("memory"))
+            {
+                player.SetStartsInMemory(true);
+            }
+
+            switch (baseChampionEffect)
+            {
+                case string e when e.Contains("draw seven"):
+                    player.SetStartingHandSize(7);
+                    break;
+                case string e when e.Contains("draw six"):
+                    player.SetStartingHandSize(6);
+                    break;
+            }
+
+            // Check for glimpsing
+            if (baseChampionEffect.Contains("glimpse"))
+            {
+                var glimpseCount = 0;
+                switch (baseChampionEffect)
+                {
+                    case string e when e.Contains("glimpse 6"):
+                        glimpseCount = 6;
+                        break;
+                    case string e when e.Contains("glimpse 7"):
+                        glimpseCount = 7;
+                        break;
+                }
+
+                if (glimpseCount > 0)
+                {
+                    var drawn = new List<CardInstance>();
+                    for (var i = 0; i < glimpseCount; i++)
+                    {
+                        var card = GlimpseNextCard(player);
+                        if (card is not null)
+                        {
+                            drawn.Add(card);
+                        }
+                    }
+
+                    glimpsedCards = drawn;
+                }
+            }
+            else
+            {
+                DrawStartingHand(player);
+            }
+        }
+
+        RecordMajorEvent(player, "Game started.", insertAtStart: true);
+
+        return glimpsedCards;
     }
 
     /// <summary>Moves the top card of <paramref name="from"/> to <paramref name="to"/>. Returns false if the source zone was empty.</summary>
@@ -526,9 +570,10 @@ public sealed class GameSession
 
     /// <summary>
     /// Advances to the next phase of <paramref name="player"/>'s turn, running whichever automatic
-    /// behavior belongs to the phase being entered. Advancing past End starts the next turn — in
-    /// goldfish mode that's just <paramref name="player"/> going again; multiplayer (not implemented
-    /// yet) will need this to hand the turn to whichever player is up next instead.
+    /// behavior belongs to the phase being entered. Advancing past End hands the turn to the next
+    /// player in <see cref="Players"/> (wrapping around) and starts their turn at WakeUp — for solo
+    /// (one player), that next player is always the same one, so this is a no-op change from the
+    /// old goldfish-only behavior; for an online 2-player game it correctly alternates.
     /// </summary>
     public void AdvancePhase(Player player)
     {
@@ -550,8 +595,11 @@ public sealed class GameSession
         var nextIndex = Array.IndexOf(PhaseOrder, CurrentPhase) + 1;
         if (nextIndex >= PhaseOrder.Length)
         {
-            NextTurn(player);
-            nextIndex = 0;
+            var nextPlayer = Players[(Players.IndexOf(player) + 1) % Players.Count];
+            NextTurn(nextPlayer);
+            ActivePlayer = nextPlayer;
+            SetPhase(PhaseOrder[0], nextPlayer);
+            return;
         }
 
         SetPhase(PhaseOrder[nextIndex], player);

@@ -5,6 +5,8 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Tavern.Net.Game;
 using Tavern.Net.GameData;
+using Tavern.Net.GameData.Models;
+using Tavern.Net.Online;
 
 namespace Tavern.Net.ViewModels;
 
@@ -13,6 +15,14 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     private readonly GameSession _session;
     private readonly GrandArchiveApiClient _apiClient;
     private readonly GameStorageService _gameStorage;
+    private readonly GameConnection? _connection;
+
+    // Local to this game's lifetime: the opponent's cards repeat heavily across every incoming
+    // PlayerState broadcast, so this avoids re-awaiting GetCardBySlugAsync for a slug already seen
+    // — same reasoning as GameSessionSerializer's own per-restore cache, just kept alive for as
+    // long as the connection is (many broadcasts), not just one load.
+    private readonly Dictionary<string, CardDto> _opponentCardCache = new();
+
     private readonly Random _diceRandom = new();
 
     // Set by the 'N' handler when StartNewGame hands back cards to glimpse instead of a normal
@@ -29,6 +39,35 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     public Player Player { get; }
 
     public GameStats Stats => Player.Stats;
+
+    /// <summary>The opponent's mirrored Player in an online game — kept up to date by ApplyOpponentStateAsync
+    /// every time a PlayerState broadcast arrives. Null for solo.</summary>
+    public Player? OpponentPlayer { get; }
+
+    public bool IsOnline => _connection is not null;
+
+    /// <summary>The inverse of IsOnline — for XAML bindings that hide something online-only (the
+    /// damage-dealt tally makes no sense once there's a real opponent whose Life is directly
+    /// visible; see the header's own binding).</summary>
+    public bool IsSolo => !IsOnline;
+
+    /// <summary>Solo is always "my turn" (there's no one else); online, this tracks GameSession's
+    /// shared ActivePlayer. Drives both Advance Phase's gating and the opponent panel's auto-open/
+    /// close — see UpdateIsMyTurn.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(NextPhaseCommand))]
+    private bool _isMyTurn = true;
+
+    /// <summary>Whether the opponent panel overlay is open — auto-toggled on every IsMyTurn
+    /// transition (see UpdateIsMyTurn) but can also be opened/closed manually at any time via
+    /// ToggleOpponentPanelCommand, regardless of whose turn it is.</summary>
+    [ObservableProperty]
+    private bool _isOpponentPanelOpen;
+
+    /// <summary>Set once the connection drops — shown as a banner rather than forcing navigation
+    /// away, so the player can finish looking at the board before backing out via Menu themselves.</summary>
+    [ObservableProperty]
+    private string? _connectionLostMessage;
 
     public ZoneViewModel Hand { get; }
     public ZoneViewModel Field { get; }
@@ -75,8 +114,40 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     /// null when it's closed. Viewing never mutates the live game — see GameSession.TakeSnapshot's
     /// own doc comment on why this is a display-only feature, not a rollback.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasViewedMemoryCards), nameof(HasViewedHandCards))]
+    [NotifyPropertyChangedFor(nameof(HasViewedMemoryCards), nameof(HasViewedHandCards), nameof(CurrentlyViewedEvent))]
     private MajorEvent? _viewedMajorEvent;
+
+    /// <summary>Online only: whether ViewedMajorEvent belongs to this player (true) or the opponent
+    /// (false) — decides the "Your Board"/"Opponent's Board" tab labels and which side
+    /// ViewedOtherPlayerEvent searches on. Meaningless (and unused) for solo.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PrimaryTabLabel), nameof(OtherTabLabel))]
+    private bool _primaryEntryIsOwn = true;
+
+    /// <summary>The other player's own most recent MajorEvent at or before ViewedMajorEvent's
+    /// Timestamp — "what did their board look like at roughly this same point in the game." Null if
+    /// they hadn't recorded anything yet by then (or offline). Recomputed whenever ViewedMajorEvent
+    /// changes.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CurrentlyViewedEvent))]
+    private MajorEvent? _viewedOtherPlayerEvent;
+
+    /// <summary>Whether the review popup is currently showing ViewedOtherPlayerEvent's board instead
+    /// of ViewedMajorEvent's — see PopulateViewedCollections, re-run on every toggle.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CurrentlyViewedEvent))]
+    private bool _isShowingOtherPlayerTab;
+
+    public bool HasOtherPlayerTab => OpponentPlayer is not null;
+
+    public string PrimaryTabLabel => PrimaryEntryIsOwn ? "Your Board" : "Opponent's Board";
+
+    public string OtherTabLabel => PrimaryEntryIsOwn ? "Opponent's Board" : "Your Board";
+
+    /// <summary>Whichever event's board the popup is currently showing — drives the header's own
+    /// Turn/Description/Life/Phase line, which needs to follow the active tab the same way the
+    /// card collections below it do.</summary>
+    public MajorEvent? CurrentlyViewedEvent => IsShowingOtherPlayerTab ? ViewedOtherPlayerEvent : ViewedMajorEvent;
 
     /// <summary>Which zone's full contents are currently drilled into from the snapshot viewer's
     /// pile boxes (Champion, Graveyard, Banishment, Material, Main — the same zones StackZoneView
@@ -122,7 +193,137 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
 
     public bool HasViewedHandCards => ViewedHandCards.Count > 0;
 
+    /// <summary>Live version of ViewedFieldCards/ViewedSnapshotPiles, fed from OpponentPlayer's
+    /// current state instead of one frozen historical MajorEvent — see RefreshOpponentPanel, called
+    /// every time a PlayerState broadcast arrives. Zoom/pile-browse reuse ZoomSnapshotCardCommand/
+    /// ViewSnapshotPileCommand as-is, since those already just react to "some CardSnapshotViewModel/
+    /// SnapshotZoneGroup was clicked" regardless of where it came from.</summary>
+    public ObservableCollection<CardSnapshotViewModel> OpponentFieldCards { get; } = new();
+
+    // Individually bound (rather than one ItemsControl-driven collection) so the opponent panel's
+    // XAML can lay them out in the exact same Champion/Material/Graveyard/Banishment/Main order and
+    // pairing the snapshot viewer uses (SnapshotPileOrder) — each always present, even with an empty
+    // Cards list, so an empty zone still shows as a "0" box instead of vanishing.
+    [ObservableProperty]
+    private SnapshotZoneGroup _opponentChampionPile = new(ZoneType.Champion, Array.Empty<CardSnapshotViewModel>());
+
+    [ObservableProperty]
+    private SnapshotZoneGroup _opponentGraveyardPile = new(ZoneType.Graveyard, Array.Empty<CardSnapshotViewModel>());
+
+    [ObservableProperty]
+    private SnapshotZoneGroup _opponentBanishmentPile = new(ZoneType.Banishment, Array.Empty<CardSnapshotViewModel>());
+
+    [ObservableProperty]
+    private int _opponentHandCount;
+
+    [ObservableProperty]
+    private int _opponentMemoryCount;
+
+    [ObservableProperty]
+    private int _opponentMaterialDeckCount;
+
+    [ObservableProperty]
+    private int _opponentMainDeckCount;
+
+    [ObservableProperty]
+    private int _opponentLife;
+
+    [ObservableProperty]
+    private int _opponentTurnCount;
+
+    /// <summary>Online only: both players' MajorEvents interleaved by Timestamp, "You"/"Opp"
+    /// tagged — the actual order things happened in, including responses played during the other
+    /// player's turn, not two disconnected per-player lists. Rebuilt whenever either side's
+    /// MajorEvents changes (see RefreshOpponentPanel and the constructor's own CollectionChanged
+    /// hook on this player's MajorEvents).</summary>
+    public ObservableCollection<MergedLogEntry> MergedLog { get; } = new();
+
+    private void RefreshMergedLog()
+    {
+        if (OpponentPlayer is null)
+        {
+            return;
+        }
+
+        var merged = Player.Stats.MajorEvents.Select(e => new MergedLogEntry(true, e))
+            .Concat(OpponentPlayer.Stats.MajorEvents.Select(e => new MergedLogEntry(false, e)))
+            .OrderBy(e => e.Event.Timestamp)
+            .ToList();
+
+        MergedLog.Clear();
+        foreach (var entry in merged)
+        {
+            MergedLog.Add(entry);
+        }
+    }
+
+    /// <summary>Rebuilds every opponent-panel property from OpponentPlayer's current (just-updated)
+    /// state. Simplest-correct approach: full rebuild each time rather than an incremental diff —
+    /// updates are already coalesced to the connection's ~300ms broadcast tick, so this is cheap.</summary>
+    private void RefreshOpponentPanel()
+    {
+        if (OpponentPlayer is null)
+        {
+            return;
+        }
+
+        OpponentFieldCards.Clear();
+        foreach (var card in BuildOpponentCardSnapshots(ZoneType.Field))
+        {
+            OpponentFieldCards.Add(card);
+        }
+
+        OpponentChampionPile = new SnapshotZoneGroup(ZoneType.Champion, BuildOpponentCardSnapshots(ZoneType.Champion));
+        OpponentGraveyardPile = new SnapshotZoneGroup(ZoneType.Graveyard, BuildOpponentCardSnapshots(ZoneType.Graveyard));
+        OpponentBanishmentPile = new SnapshotZoneGroup(ZoneType.Banishment, BuildOpponentCardSnapshots(ZoneType.Banishment));
+
+        OpponentHandCount = OpponentPlayer.GetZone(ZoneType.Hand).Cards.Count;
+        OpponentMemoryCount = OpponentPlayer.GetZone(ZoneType.Memory).Cards.Count;
+        OpponentMaterialDeckCount = OpponentPlayer.GetZone(ZoneType.MaterialDeck).Cards.Count;
+        OpponentMainDeckCount = OpponentPlayer.GetZone(ZoneType.MainDeck).Cards.Count;
+        OpponentLife = OpponentPlayer.Life;
+        OpponentTurnCount = OpponentPlayer.Stats.TurnCount;
+
+        RefreshMergedLog();
+    }
+
+    private List<CardSnapshotViewModel> BuildOpponentCardSnapshots(ZoneType zone) =>
+        OpponentPlayer!.GetZone(zone).Cards
+            .Select(card => new CardSnapshotViewModel(CardSnapshot.From(card, zone), _apiClient, this))
+            .ToList();
+
+    /// <summary>Picking a new event resets to its own tab and, online, looks up the other player's
+    /// nearest preceding event so the second tab has something to show (see ViewedOtherPlayerEvent's
+    /// own doc comment).</summary>
     partial void OnViewedMajorEventChanged(MajorEvent? value)
+    {
+        IsShowingOtherPlayerTab = false;
+        ViewedOtherPlayerEvent = null;
+        PrimaryEntryIsOwn = true;
+
+        if (value is not null && OpponentPlayer is not null)
+        {
+            PrimaryEntryIsOwn = Player.Stats.MajorEvents.Contains(value);
+            var otherPlayerEvents = PrimaryEntryIsOwn ? OpponentPlayer.Stats.MajorEvents : Player.Stats.MajorEvents;
+            ViewedOtherPlayerEvent = otherPlayerEvents
+                .Where(e => e.Timestamp <= value.Timestamp)
+                .OrderByDescending(e => e.Timestamp)
+                .FirstOrDefault();
+        }
+
+        PopulateViewedCollections(value?.Snapshot);
+    }
+
+    partial void OnIsShowingOtherPlayerTabChanged(bool value) =>
+        PopulateViewedCollections((value ? ViewedOtherPlayerEvent : ViewedMajorEvent)?.Snapshot);
+
+    [RelayCommand]
+    private void ShowPrimaryTab() => IsShowingOtherPlayerTab = false;
+
+    [RelayCommand]
+    private void ShowOtherPlayerTab() => IsShowingOtherPlayerTab = true;
+
+    private void PopulateViewedCollections(GameSnapshot? snapshot)
     {
         ViewedSnapshotPiles.Clear();
         ViewedFieldCards.Clear();
@@ -131,51 +332,35 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         ViewedSnapshotPile = null;
         ZoomedSnapshotCard = null;
 
-        if (value is null)
+        if (snapshot is null)
         {
             return;
         }
 
-        foreach (var group in value.Snapshot.Cards.GroupBy(c => c.Zone))
+        var cardsByZone = snapshot.Cards.ToLookup(c => c.Zone);
+
+        foreach (var card in cardsByZone[ZoneType.Field])
         {
-            var cards = group.Select(c => new CardSnapshotViewModel(c, _apiClient, this)).ToList();
-            switch (group.Key)
-            {
-                case ZoneType.Field:
-                    foreach (var card in cards)
-                    {
-                        ViewedFieldCards.Add(card);
-                    }
-
-                    break;
-                case ZoneType.Hand:
-                    foreach (var card in cards)
-                    {
-                        ViewedHandCards.Add(card);
-                    }
-
-                    break;
-                case ZoneType.Memory:
-                    foreach (var card in cards)
-                    {
-                        ViewedMemoryCards.Add(card);
-                    }
-
-                    break;
-                default:
-                    ViewedSnapshotPiles.Add(new SnapshotZoneGroup(group.Key, cards));
-                    break;
-            }
+            ViewedFieldCards.Add(new CardSnapshotViewModel(card, _apiClient, this));
         }
 
-        // Re-sort piles into SnapshotPileOrder — GroupBy above doesn't guarantee any particular
-        // zone order, and Tokens (excluded from TakeSnapshot already) is the only zone that could
-        // otherwise slip through the default case, so this also acts as a final filter.
-        var ordered = ViewedSnapshotPiles.OrderBy(g => Array.IndexOf(SnapshotPileOrder, g.Zone)).ToList();
-        ViewedSnapshotPiles.Clear();
-        foreach (var group in ordered)
+        foreach (var card in cardsByZone[ZoneType.Hand])
         {
-            ViewedSnapshotPiles.Add(group);
+            ViewedHandCards.Add(new CardSnapshotViewModel(card, _apiClient, this));
+        }
+
+        foreach (var card in cardsByZone[ZoneType.Memory])
+        {
+            ViewedMemoryCards.Add(new CardSnapshotViewModel(card, _apiClient, this));
+        }
+
+        // Always all 5 piles, even ones with no cards (a "0" box rather than the pile vanishing) —
+        // walking SnapshotPileOrder directly rather than grouping+reordering also guarantees that
+        // fixed order regardless of which zones the snapshot happens to have cards in.
+        foreach (var zone in SnapshotPileOrder)
+        {
+            var cards = cardsByZone[zone].Select(c => new CardSnapshotViewModel(c, _apiClient, this)).ToList();
+            ViewedSnapshotPiles.Add(new SnapshotZoneGroup(zone, cards));
         }
     }
 
@@ -224,13 +409,39 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     /// in the background (nothing is auto-saved — see Save Game).</summary>
     public event Action? BackToMenuRequested;
 
-    public GameBoardViewModel(GameSession session, Player player, GrandArchiveApiClient apiClient, GameStorageService gameStorage)
+    public GameBoardViewModel(
+        GameSession session,
+        Player player,
+        GrandArchiveApiClient apiClient,
+        GameStorageService gameStorage,
+        GameConnection? connection = null,
+        Player? opponentPlayer = null)
     {
         _session = session;
         _apiClient = apiClient;
         _gameStorage = gameStorage;
+        _connection = connection;
         Player = player;
+        OpponentPlayer = opponentPlayer;
         _currentPhase = session.CurrentPhase;
+        _isMyTurn = !IsOnline || session.ActivePlayer == player;
+
+        // Whoever isn't going first should see this open the instant the game starts, not only on
+        // the first turn handoff — UpdateIsMyTurn only fires on a transition, and there isn't one
+        // yet this early, so it's set directly here instead.
+        _isOpponentPanelOpen = IsOnline && !_isMyTurn;
+
+        if (_connection is not null)
+        {
+            _connection.BroadcastTick += OnBroadcastTick;
+            _connection.MessageReceived += OnMessageReceived;
+            _connection.Disconnected += OnConnectionLost;
+
+            // My own MajorEvents feed the merged log too, not just the opponent's (see
+            // RefreshMergedLog) — this is the one side of that merge that isn't already covered by
+            // RefreshOpponentPanel running on every incoming broadcast.
+            Player.Stats.MajorEvents.CollectionChanged += (_, _) => RefreshMergedLog();
+        }
 
         Hand = new ZoneViewModel(player.GetZone(ZoneType.Hand), apiClient, this);
         Field = new ZoneViewModel(player.GetZone(ZoneType.Field), apiClient, this);
@@ -272,6 +483,76 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
             tokenZone.Cards.Add(new CardInstance(token, ZoneType.Tokens));
         }
     }
+
+    /// <summary>Fires every ~300ms while connected — broadcasts this player's full current state.
+    /// Unconditional (not just on change) so this doubles as the connection's keepalive; see
+    /// GameConnection's own doc comment.</summary>
+    private void OnBroadcastTick()
+    {
+        var state = GameSessionSerializer.CapturePlayer(Player);
+        _ = _connection!.SendAsync(new OnlineMessage { Kind = OnlineMessageKind.PlayerState, PlayerState = state });
+    }
+
+    private void OnMessageReceived(OnlineMessage message)
+    {
+        switch (message.Kind)
+        {
+            case OnlineMessageKind.PlayerState when message.PlayerState is not null:
+                _ = ApplyOpponentStateAsync(message.PlayerState);
+                break;
+            case OnlineMessageKind.GameState when message.Phase is not null && message.ActivePlayerNumber is not null:
+                ApplyRemoteGameState(message.Phase.Value, message.ActivePlayerNumber.Value);
+                break;
+        }
+    }
+
+    private async Task ApplyOpponentStateAsync(SavedPlayer state)
+    {
+        if (OpponentPlayer is null)
+        {
+            return;
+        }
+
+        await GameSessionSerializer.ApplyToPlayer(OpponentPlayer, state, _apiClient, _opponentCardCache);
+        RefreshOpponentPanel();
+    }
+
+    /// <summary>Applies a GameState update from the active side of the handoff — see
+    /// GameSession.ApplyRemoteGameState's own doc comment on why this never re-runs WakeUp/
+    /// Recollect/Draw locally; that already happened on their end and is reflected in whatever
+    /// PlayerState they broadcast alongside this.</summary>
+    private void ApplyRemoteGameState(TurnPhase phase, int activePlayerNumber)
+    {
+        var activePlayer = activePlayerNumber == Player.PlayerNumber ? Player : OpponentPlayer;
+        if (activePlayer is null)
+        {
+            return;
+        }
+
+        _session.ApplyRemoteGameState(phase, activePlayer);
+        CurrentPhase = _session.CurrentPhase;
+        UpdateIsMyTurn();
+    }
+
+    /// <summary>Recomputes IsMyTurn from GameSession's shared ActivePlayer and, only on an actual
+    /// transition, auto-toggles the opponent panel — open when it just became their turn, closed
+    /// when it just became mine. A manual toggle (see ToggleOpponentPanelCommand) still works
+    /// independently of this at any other time.</summary>
+    private void UpdateIsMyTurn()
+    {
+        var wasMyTurn = IsMyTurn;
+        IsMyTurn = !IsOnline || _session.ActivePlayer == Player;
+
+        if (IsOnline && wasMyTurn != IsMyTurn)
+        {
+            IsOpponentPanelOpen = !IsMyTurn;
+        }
+    }
+
+    private void OnConnectionLost() => ConnectionLostMessage = "Connection to your opponent was lost.";
+
+    [RelayCommand]
+    private void ToggleOpponentPanel() => IsOpponentPanelOpen = !IsOpponentPanelOpen;
 
     [RelayCommand]
     private void DrawCard() => _session.DrawCard(Player);
@@ -338,13 +619,33 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         }
     }
 
-    /// <summary>Advances to the next phase of the turn; advancing past End starts the next turn.</summary>
-    [RelayCommand]
+    /// <summary>Advances to the next phase of the turn; advancing past End starts the next turn.
+    /// Online, this no-ops unless it's currently this player's turn (see CanAdvancePhase) — playing
+    /// cards is never gated this way, only phase progression itself.</summary>
+    [RelayCommand(CanExecute = nameof(CanAdvancePhase))]
     private void NextPhase()
     {
+        var previousActivePlayer = _session.ActivePlayer;
         _session.AdvancePhase(Player);
         CurrentPhase = _session.CurrentPhase;
+
+        // CurrentPhase/ActivePlayer are shared session state, not part of either player's own
+        // broadcast Player — only whoever just changed them (the handoff at End) sends this
+        // one-shot update; the passive side never echoes it back (see ApplyRemoteGameState).
+        if (IsOnline && _session.ActivePlayer != previousActivePlayer)
+        {
+            _ = _connection!.SendAsync(new OnlineMessage
+            {
+                Kind = OnlineMessageKind.GameState,
+                Phase = _session.CurrentPhase,
+                ActivePlayerNumber = _session.ActivePlayer!.PlayerNumber,
+            });
+        }
+
+        UpdateIsMyTurn();
     }
+
+    private bool CanAdvancePhase() => !IsOnline || IsMyTurn;
 
     // Set by the 'B' case below; consumed by the very next key press. Keeps a bare digit key
     // from meaning anything on its own — it's only "banish count" for the one keystroke right
@@ -489,7 +790,11 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     private bool CanConfirmSaveGame() => !string.IsNullOrWhiteSpace(SaveGameName);
 
     [RelayCommand]
-    private void BackToMenu() => BackToMenuRequested?.Invoke();
+    private void BackToMenu()
+    {
+        _connection?.Dispose();
+        BackToMenuRequested?.Invoke();
+    }
 
     [RelayCommand]
     private void IncreaseDiceToRoll() => DiceToRoll = Math.Min(20, DiceToRoll + 1);

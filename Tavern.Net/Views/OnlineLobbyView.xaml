@@ -1,0 +1,234 @@
+<UserControl x:Class="Tavern.Net.Views.OnlineLobbyView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:Tavern.Net.ViewModels"
+             xmlns:conv="clr-namespace:Tavern.Net.Converters"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:OnlineLobbyViewModel}"
+             d:DesignWidth="1000" d:DesignHeight="750">
+    <UserControl.Resources>
+        <conv:NullToVisibilityConverter x:Key="NullToVisibility"/>
+        <conv:DieFaceToImageConverter x:Key="DieFaceToImage"/>
+        <conv:BoolToCheckMarkConverter x:Key="BoolToCheckMark"/>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+
+        <Style x:Key="InverseBoolVisibilityStyle" TargetType="FrameworkElement">
+            <Setter Property="Visibility" Value="Visible"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsConnected}" Value="True">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Ready indicator: a colored check/x instead of the raw True/False text. -->
+        <Style x:Key="ReadyMarkStyle" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="Foreground" Value="IndianRed"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding}" Value="True">
+                    <Setter Property="Foreground" Value="#68D391"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Turn-order choice buttons: gold-bordered once that choice has actually been made (by
+             either side — see IsMeChosenFirst/IsOpponentChosenFirst), same highlight color the rest
+             of the app uses for an active/selected state (StatusToggleStyle). Disabled (via the
+             command's own CanExecute = CanChooseFirstPlayer) until someone's rolled strictly higher. -->
+        <Style x:Key="ChooseMeFirstButtonStyle" TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsMeChosenFirst}" Value="True">
+                    <Setter Property="BorderBrush" Value="#F6E05E"/>
+                    <Setter Property="BorderThickness" Value="3"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="ChooseOpponentFirstButtonStyle" TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsOpponentChosenFirst}" Value="True">
+                    <Setter Property="BorderBrush" Value="#F6E05E"/>
+                    <Setter Property="BorderThickness" Value="3"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Background="#1A202C" Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <Button Grid.Row="0" Content="&lt; Back to Menu" Style="{StaticResource ActionButtonStyle}"
+                HorizontalAlignment="Left" Margin="0,0,0,16" Command="{Binding BackCommand}"/>
+
+        <StackPanel Grid.Row="1" MaxWidth="800" HorizontalAlignment="Center" VerticalAlignment="Top">
+            <TextBlock Text="Online" FontSize="32" FontWeight="Bold" Foreground="#F7FAFC" Margin="0,0,0,20"/>
+
+            <TextBlock Text="{Binding ErrorMessage}" Foreground="IndianRed" Margin="0,0,0,16" TextWrapping="Wrap" FontSize="14"
+                       Visibility="{Binding ErrorMessage, Converter={StaticResource NullToVisibility}}"/>
+
+            <!-- Before connecting: name + host/join. -->
+            <Border Background="#2D3748" CornerRadius="8" Padding="24,20" Margin="0,0,0,16"
+                    Style="{StaticResource InverseBoolVisibilityStyle}">
+                <StackPanel>
+                    <TextBlock Text="Your name" FontSize="15" Foreground="#A0AEC0" Margin="0,0,0,6"/>
+                    <TextBox Text="{Binding PlayerName, UpdateSourceTrigger=PropertyChanged}" FontSize="15" Padding="6,4" Margin="0,0,0,20"/>
+
+                    <TextBlock Text="Host a game" FontSize="18" FontWeight="Bold" Foreground="#F7FAFC" Margin="0,0,0,6"/>
+                    <TextBlock Text="Starts listening and shows an address to send your opponent." FontSize="14"
+                               Foreground="#A0AEC0" TextWrapping="Wrap" Margin="0,0,0,10"/>
+                    <Button Content="Host" Style="{StaticResource ActionButtonStyle}" HorizontalAlignment="Left"
+                            Command="{Binding HostCommand}" Margin="0,0,0,20"/>
+
+                    <TextBlock Text="Join a game" FontSize="18" FontWeight="Bold" Foreground="#F7FAFC" Margin="0,0,0,6"/>
+                    <TextBlock Text="Paste the address your opponent shared (e.g. 192.168.1.5:51900)." FontSize="14"
+                               Foreground="#A0AEC0" TextWrapping="Wrap" Margin="0,0,0,10"/>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBox Width="280" FontSize="15" Padding="6,4" VerticalContentAlignment="Center"
+                                 Text="{Binding JoinAddress, UpdateSourceTrigger=PropertyChanged}"/>
+                        <Button Content="Join" Style="{StaticResource ActionButtonStyle}" Margin="10,0,0,0" Command="{Binding JoinCommand}"/>
+                    </StackPanel>
+
+                    <TextBlock Text="Connecting..." FontSize="14" Foreground="#A0AEC0" Margin="0,16,0,0"
+                               Visibility="{Binding IsConnecting, Converter={StaticResource BoolToVisibility}}"/>
+
+                    <StackPanel Margin="0,20,0,0" Visibility="{Binding IsConnecting, Converter={StaticResource BoolToVisibility}}">
+                        <TextBlock Text="Hosting? Your address:" FontSize="14" Foreground="#A0AEC0"/>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding HostAddress}" Foreground="#F7FAFC" FontWeight="Bold" FontSize="20" VerticalAlignment="Center"/>
+                            <Button Content="Copy" Style="{StaticResource ActionButtonStyle}" Margin="12,0,0,0"
+                                    Command="{Binding CopyHostAddressCommand}"/>
+                            <TextBlock Text="{Binding CopyStatusMessage}" Foreground="#68D391" FontWeight="Bold" VerticalAlignment="Center" Margin="10,0,0,0"
+                                       Visibility="{Binding CopyStatusMessage, Converter={StaticResource NullToVisibility}}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Once connected: turn order, then Ready Up last (the final check before Start), then Start. -->
+            <StackPanel Visibility="{Binding IsConnected, Converter={StaticResource BoolToVisibility}}">
+                <Border Background="#2D3748" CornerRadius="8" Padding="24,20" Margin="0,0,0,16">
+                    <StackPanel>
+                        <TextBlock Foreground="#F7FAFC" FontSize="18" FontWeight="Bold" Margin="0,0,0,4">
+                            <Run Text="Connected to"/>
+                            <Run Text="{Binding OpponentName}"/>
+                        </TextBlock>
+                    </StackPanel>
+                </Border>
+
+                <Border Background="#2D3748" CornerRadius="8" Padding="24,20" Margin="0,0,0,16">
+                    <StackPanel>
+                        <TextBlock Text="Turn order" FontSize="18" FontWeight="Bold" Foreground="#F7FAFC" Margin="0,0,0,6"/>
+                        <TextBlock Text="Both roll 2 dice — whoever's higher picks who goes first. Informational only, nothing here is enforced."
+                                   FontSize="14" Foreground="#A0AEC0" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                        <Button Content="Roll" Style="{StaticResource ActionButtonStyle}" HorizontalAlignment="Left"
+                                Command="{Binding RollDiceCommand}" Margin="0,0,0,12"/>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                            <StackPanel Margin="0,0,32,0">
+                                <TextBlock Text="You" FontSize="14" Foreground="#A0AEC0" HorizontalAlignment="Center"/>
+                                <ItemsControl ItemsSource="{Binding MyDice}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type vm:DieViewModel}">
+                                            <Image Width="48" Height="48" Margin="3" Source="{Binding FaceValue, Converter={StaticResource DieFaceToImage}}"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Text="{Binding MyDiceTotal}" Foreground="#F7FAFC" FontWeight="Bold" FontSize="18" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel>
+                                <TextBlock Text="Opponent" FontSize="14" Foreground="#A0AEC0" HorizontalAlignment="Center"/>
+                                <ItemsControl ItemsSource="{Binding OpponentDice}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type vm:DieViewModel}">
+                                            <Image Width="48" Height="48" Margin="3" Source="{Binding FaceValue, Converter={StaticResource DieFaceToImage}}"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Text="{Binding OpponentDiceTotal}" Foreground="#F7FAFC" FontWeight="Bold" FontSize="18" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <TextBlock Text="Tied — roll again." Foreground="#F6E05E" FontWeight="Bold"
+                                   Visibility="{Binding IsDiceTied, Converter={StaticResource BoolToVisibility}}"/>
+
+                        <!-- Only the side that rolled higher sees these, and only until a choice is
+                             made (ShowChoiceButtons) — the other side sees "waiting" below instead. -->
+                        <StackPanel Orientation="Horizontal" Visibility="{Binding ShowChoiceButtons, Converter={StaticResource BoolToVisibility}}">
+                            <Button Content="You go first" Style="{StaticResource ChooseMeFirstButtonStyle}" Margin="0,0,10,0"
+                                    Command="{Binding ChooseMeFirstCommand}"/>
+                            <Button Content="Opponent goes first" Style="{StaticResource ChooseOpponentFirstButtonStyle}"
+                                    Command="{Binding ChooseOpponentFirstCommand}"/>
+                        </StackPanel>
+
+                        <TextBlock Text="Your opponent rolled higher — waiting for them to pick who goes first..." Foreground="#A0AEC0" TextWrapping="Wrap"
+                                   Visibility="{Binding IsWaitingForOpponentChoice, Converter={StaticResource BoolToVisibility}}"/>
+
+                        <!-- Persistent, seen by both sides once a choice has actually been made —
+                             replaces the buttons/waiting text above, stays highlighted regardless of
+                             which side is looking. -->
+                        <TextBlock FontWeight="Bold" FontSize="16" Foreground="#F6E05E"
+                                   Visibility="{Binding HasChosenFirstPlayer, Converter={StaticResource BoolToVisibility}}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Text" Value="Opponent goes first"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsMeChosenFirst}" Value="True">
+                                            <Setter Property="Text" Value="You go first"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </StackPanel>
+                </Border>
+
+                <!-- Ready Up last — the final check before Start, so it belongs at the bottom of the
+                     flow rather than up top. -->
+                <Border Background="#2D3748" CornerRadius="8" Padding="24,20" Margin="0,0,0,16">
+                    <StackPanel Orientation="Horizontal">
+                        <Button Style="{StaticResource ActionButtonStyle}" Command="{Binding ToggleReadyCommand}">
+                            <TextBlock>
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text" Value="Ready Up"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsReady}" Value="True">
+                                                <Setter Property="Text" Value="Not Ready"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Button>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
+                            <TextBlock Text="You:" Foreground="#A0AEC0" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                            <TextBlock DataContext="{Binding IsReady}" Text="{Binding Converter={StaticResource BoolToCheckMark}}"
+                                       Style="{StaticResource ReadyMarkStyle}"/>
+                            <TextBlock Text="Opponent:" Foreground="#A0AEC0" VerticalAlignment="Center" Margin="16,0,6,0"/>
+                            <TextBlock DataContext="{Binding OpponentReady}" Text="{Binding Converter={StaticResource BoolToCheckMark}}"
+                                       Style="{StaticResource ReadyMarkStyle}"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Button Content="Start Game" Style="{StaticResource ActionButtonStyle}" HorizontalAlignment="Left"
+                        Command="{Binding StartGameCommand}"
+                        Visibility="{Binding IsHost, Converter={StaticResource BoolToVisibility}}"/>
+                <TextBlock Text="Waiting for the host to start..." Foreground="#A0AEC0" Margin="0,8,0,0"
+                           Visibility="{Binding IsGuest, Converter={StaticResource BoolToVisibility}}"/>
+            </StackPanel>
+        </StackPanel>
+    </Grid>
+</UserControl>

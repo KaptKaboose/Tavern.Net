@@ -5,7 +5,10 @@ namespace Tavern.Net.Game;
 
 /// <summary>
 /// Converts a live GameSession + its Players to/from a <see cref="SavedGame"/> — the plumbing
-/// behind GameBoardViewModel's Save Game panel and SavedGamesViewModel's Load.
+/// behind GameBoardViewModel's Save Game panel, SavedGamesViewModel's Load, and (via
+/// <see cref="CapturePlayer"/>/<see cref="ApplyToPlayer"/> individually) an online game's
+/// broadcast-and-mirror state sync, which is really the same "player &lt;-&gt; DTO" conversion run
+/// continuously instead of once.
 /// </summary>
 public static class GameSessionSerializer
 {
@@ -40,7 +43,10 @@ public static class GameSessionSerializer
         }
     }
 
-    private static SavedPlayer CapturePlayer(Player player)
+    /// <summary>Captures one player's full live state as a <see cref="SavedPlayer"/> — used both for
+    /// a whole-game save (<see cref="Capture"/>) and, in an online game, to serialize just the local
+    /// player for broadcast to the opponent.</summary>
+    public static SavedPlayer CapturePlayer(Player player)
     {
         var cards = player.Zones.Values
             .Where(zone => zone.Type != ZoneType.Tokens)
@@ -108,7 +114,7 @@ public static class GameSessionSerializer
 
         var savedSnapshot = new SavedGameSnapshot(snapshot.Life, snapshot.DamageDealtCount, snapshot.TurnCount, snapshot.Phase, cards);
 
-        return new SavedMajorEvent(majorEvent.Description, majorEvent.Kind, majorEvent.NetDelta, majorEvent.Turn, savedSnapshot);
+        return new SavedMajorEvent(majorEvent.Description, majorEvent.Kind, majorEvent.NetDelta, majorEvent.Turn, majorEvent.Timestamp, savedSnapshot);
     }
 
     /// <summary>Rebuilds a full GameSession from a save. Throws if a card's slug can no longer be
@@ -125,37 +131,56 @@ public static class GameSessionSerializer
         foreach (var savedPlayer in saved.Players)
         {
             var player = session.AddPlayer(savedPlayer.Name, savedPlayer.Life);
-            player.SetStartingHandSize(savedPlayer.StartingHandSize);
-            player.SetStartsInMemory(savedPlayer.StartsInMemory);
-
-            foreach (var savedCard in savedPlayer.Cards)
-            {
-                var cardDto = await ResolveCardAsync(savedCard.Slug, apiClient, cardCache);
-                var instance = new CardInstance(cardDto, savedCard.HomeZone, savedCard.HomeOrder)
-                {
-                    IsTapped = savedCard.IsTapped,
-                    IsFlipped = savedCard.IsFlipped,
-                    FieldX = savedCard.FieldX,
-                    FieldY = savedCard.FieldY,
-                    Counter = savedCard.Counter,
-                    IsEphemeral = savedCard.IsEphemeral,
-                    IsIgnited = savedCard.IsIgnited,
-                    IsImbued = savedCard.IsImbued,
-                    IsRanged = savedCard.IsRanged,
-                    IsRooted = savedCard.IsRooted,
-                    IsWarded = savedCard.IsWarded,
-                };
-                player.GetZone(savedCard.Zone).Cards.Add(instance);
-            }
-
-            await RestoreStatsAsync(player.Stats, savedPlayer.Stats, apiClient, cardCache);
+            await ApplyToPlayer(player, savedPlayer, apiClient, cardCache);
         }
 
         session.SetPhaseForRestore(saved.CurrentPhase);
         return (session, session.Players[0]);
     }
 
-    private static async Task RestoreStatsAsync(GameStats stats, SavedGameStats saved, GrandArchiveApiClient apiClient, Dictionary<string, CardDto> cardCache)
+    /// <summary>
+    /// Rebuilds <paramref name="target"/>'s zones and stats in place from <paramref name="saved"/> —
+    /// clearing and re-populating rather than assuming it's empty, since this is also how an online
+    /// game keeps a mirrored copy of the opponent's Player up to date: called again every time a
+    /// fresh PlayerState broadcast arrives, not just once at game load.
+    /// </summary>
+    public static async Task ApplyToPlayer(Player target, SavedPlayer saved, GrandArchiveApiClient apiClient, Dictionary<string, CardDto>? cardCache = null)
+    {
+        cardCache ??= new Dictionary<string, CardDto>();
+
+        target.Life = saved.Life;
+        target.SetStartingHandSize(saved.StartingHandSize);
+        target.SetStartsInMemory(saved.StartsInMemory);
+
+        foreach (var zone in target.Zones.Values)
+        {
+            zone.Cards.Clear();
+        }
+
+        foreach (var savedCard in saved.Cards)
+        {
+            var cardDto = await ResolveCardAsync(savedCard.Slug, apiClient, cardCache);
+            var instance = new CardInstance(cardDto, savedCard.HomeZone, savedCard.HomeOrder)
+            {
+                IsTapped = savedCard.IsTapped,
+                IsFlipped = savedCard.IsFlipped,
+                FieldX = savedCard.FieldX,
+                FieldY = savedCard.FieldY,
+                Counter = savedCard.Counter,
+                IsEphemeral = savedCard.IsEphemeral,
+                IsIgnited = savedCard.IsIgnited,
+                IsImbued = savedCard.IsImbued,
+                IsRanged = savedCard.IsRanged,
+                IsRooted = savedCard.IsRooted,
+                IsWarded = savedCard.IsWarded,
+            };
+            target.GetZone(savedCard.Zone).Cards.Add(instance);
+        }
+
+        await ApplyStatsAsync(target.Stats, saved.Stats, apiClient, cardCache);
+    }
+
+    private static async Task ApplyStatsAsync(GameStats stats, SavedGameStats saved, GrandArchiveApiClient apiClient, Dictionary<string, CardDto> cardCache)
     {
         stats.TurnCount = saved.TurnCount;
         stats.CardsDrawnCount = saved.CardsDrawnCount;
@@ -166,16 +191,19 @@ public static class GameSessionSerializer
         stats.PlayedCardThisTurn = saved.PlayedCardThisTurn;
         stats.CardsLostToMemoryDecayCount = saved.CardsLostToMemoryDecayCount;
 
+        stats.ChampionLevelMilestones.Clear();
         foreach (var milestone in saved.ChampionLevelMilestones)
         {
             stats.ChampionLevelMilestones.Add(milestone);
         }
 
+        stats.PlayLog.Clear();
         foreach (var line in saved.PlayLog)
         {
             stats.PlayLog.Add(line);
         }
 
+        stats.MajorEvents.Clear();
         foreach (var savedEvent in saved.MajorEvents)
         {
             var snapshotCards = new List<CardSnapshot>();
@@ -211,6 +239,7 @@ public static class GameSessionSerializer
                 Kind = savedEvent.Kind,
                 NetDelta = savedEvent.NetDelta,
                 Turn = savedEvent.Turn,
+                Timestamp = savedEvent.Timestamp,
                 Snapshot = snapshot,
             });
         }

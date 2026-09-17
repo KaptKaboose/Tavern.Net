@@ -562,6 +562,27 @@ public class GameSessionTests
     }
 
     [Fact]
+    public void AdvancePhase_PastEnd_WithTwoPlayers_HandsTurnToOtherPlayerAndIncrementsTheirTurnCount()
+    {
+        var session = new GameSession();
+        var playerA = session.AddPlayer("A");
+        var playerB = session.AddPlayer("B");
+        for (var i = 0; i < 5; i++)
+        {
+            session.AdvancePhase(playerA);
+        }
+        Assert.Equal(TurnPhase.End, session.CurrentPhase);
+        Assert.Equal(playerA, session.ActivePlayer);
+
+        session.AdvancePhase(playerA);
+
+        Assert.Equal(TurnPhase.WakeUp, session.CurrentPhase);
+        Assert.Equal(playerB, session.ActivePlayer);
+        Assert.Equal(1, playerB.Stats.TurnCount);
+        Assert.Equal(0, playerA.Stats.TurnCount);
+    }
+
+    [Fact]
     public void AdvancePhase_ToWakeUp_UntapsField()
     {
         var player = MakePlayerWithDeck(deckSize: 5);

@@ -5,17 +5,22 @@ using System.Text.Json.Serialization;
 namespace Tavern.Net.Decklists;
 
 /// <summary>
-/// Persists named decks to a single JSON file under %LocalAppData%\Tavern.Net, alongside which one
-/// is "active" — the deck Solo uses to jump straight into a game without going through the Change
-/// Deck screen again.
+/// Persists named decks to a single JSON file under %LocalAppData%\Tavern.Net, shared by every
+/// running instance (it's a library — decks you've built should show up everywhere). Which one is
+/// "active" — the deck Solo/Online use to jump straight into a game — is instead per-instance (see
+/// AppInstanceSlot), stored in its own slot-numbered file, so two copies running side by side (e.g.
+/// testing Online against yourself) can each have a different deck selected at once.
 /// </summary>
 public sealed class DeckStorageService
 {
-    private sealed class StorageFile
+    private sealed class LibraryFile
+    {
+        public List<SavedDeck> Decks { get; set; } = new();
+    }
+
+    private sealed class ActiveDeckFile
     {
         public string? ActiveDeckName { get; set; }
-
-        public List<SavedDeck> Decks { get; set; } = new();
     }
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -24,7 +29,8 @@ public sealed class DeckStorageService
         Converters = { new JsonStringEnumConverter() },
     };
 
-    private readonly string _filePath;
+    private readonly string _libraryFilePath;
+    private readonly string _activeDeckFilePath;
 
     public DeckStorageService()
     {
@@ -32,73 +38,95 @@ public sealed class DeckStorageService
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "Tavern.Net");
         Directory.CreateDirectory(appDataDirectory);
-        _filePath = Path.Combine(appDataDirectory, "decks.json");
+        _libraryFilePath = Path.Combine(appDataDirectory, "decks.json");
+        _activeDeckFilePath = Path.Combine(appDataDirectory, $"active-deck-{AppInstanceSlot.Id}.json");
     }
 
-    public IReadOnlyList<SavedDeck> LoadAll() => Load().Decks;
+    public IReadOnlyList<SavedDeck> LoadAll() => LoadLibrary().Decks;
 
     public SavedDeck? GetActiveDeck()
     {
-        var file = Load();
-        return file.Decks.FirstOrDefault(d => d.Name == file.ActiveDeckName);
+        var activeDeckName = LoadActiveDeck().ActiveDeckName;
+        return LoadLibrary().Decks.FirstOrDefault(d => d.Name == activeDeckName);
     }
 
     /// <summary>Saves (overwriting any existing deck with the same name) and marks it active.</summary>
     public void SaveAndActivate(SavedDeck deck)
     {
-        var file = Load();
-        file.Decks.RemoveAll(d => d.Name == deck.Name);
-        file.Decks.Add(deck);
-        file.ActiveDeckName = deck.Name;
-        Persist(file);
+        var library = LoadLibrary();
+        library.Decks.RemoveAll(d => d.Name == deck.Name);
+        library.Decks.Add(deck);
+        PersistLibrary(library);
+
+        SetActiveDeck(deck.Name);
     }
 
     /// <summary>Marks an already-saved deck active, e.g. when the player loads it without re-saving.</summary>
     public void SetActiveDeck(string name)
     {
-        var file = Load();
-        if (file.Decks.Any(d => d.Name == name))
-        {
-            file.ActiveDeckName = name;
-            Persist(file);
-        }
+        PersistActiveDeck(new ActiveDeckFile { ActiveDeckName = name });
     }
 
-    /// <summary>Deletes a saved deck, clearing ActiveDeckName too if it was the one deleted.</summary>
+    /// <summary>Deletes a saved deck, clearing this instance's active deck too if it was the one
+    /// deleted (other instances that had a different deck active are unaffected).</summary>
     public void Delete(string name)
     {
-        var file = Load();
-        if (file.Decks.RemoveAll(d => d.Name == name) > 0)
+        var library = LoadLibrary();
+        if (library.Decks.RemoveAll(d => d.Name == name) > 0)
         {
-            if (file.ActiveDeckName == name)
-            {
-                file.ActiveDeckName = null;
-            }
+            PersistLibrary(library);
+        }
 
-            Persist(file);
+        var activeDeck = LoadActiveDeck();
+        if (activeDeck.ActiveDeckName == name)
+        {
+            PersistActiveDeck(new ActiveDeckFile());
         }
     }
 
-    private StorageFile Load()
+    private LibraryFile LoadLibrary()
     {
-        if (!File.Exists(_filePath))
+        if (!File.Exists(_libraryFilePath))
         {
-            return new StorageFile();
+            return new LibraryFile();
         }
 
         try
         {
-            var json = File.ReadAllText(_filePath);
-            return JsonSerializer.Deserialize<StorageFile>(json, JsonOptions) ?? new StorageFile();
+            var json = File.ReadAllText(_libraryFilePath);
+            return JsonSerializer.Deserialize<LibraryFile>(json, JsonOptions) ?? new LibraryFile();
         }
         catch (JsonException)
         {
-            return new StorageFile();
+            return new LibraryFile();
         }
     }
 
-    private void Persist(StorageFile file)
+    private void PersistLibrary(LibraryFile library)
     {
-        File.WriteAllText(_filePath, JsonSerializer.Serialize(file, JsonOptions));
+        File.WriteAllText(_libraryFilePath, JsonSerializer.Serialize(library, JsonOptions));
+    }
+
+    private ActiveDeckFile LoadActiveDeck()
+    {
+        if (!File.Exists(_activeDeckFilePath))
+        {
+            return new ActiveDeckFile();
+        }
+
+        try
+        {
+            var json = File.ReadAllText(_activeDeckFilePath);
+            return JsonSerializer.Deserialize<ActiveDeckFile>(json, JsonOptions) ?? new ActiveDeckFile();
+        }
+        catch (JsonException)
+        {
+            return new ActiveDeckFile();
+        }
+    }
+
+    private void PersistActiveDeck(ActiveDeckFile activeDeck)
+    {
+        File.WriteAllText(_activeDeckFilePath, JsonSerializer.Serialize(activeDeck, JsonOptions));
     }
 }

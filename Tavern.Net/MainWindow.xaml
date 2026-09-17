@@ -20,6 +20,9 @@
         <DataTemplate DataType="{x:Type vm:SavedGamesViewModel}">
             <views:SavedGamesView/>
         </DataTemplate>
+        <DataTemplate DataType="{x:Type vm:OnlineLobbyViewModel}">
+            <views:OnlineLobbyView/>
+        </DataTemplate>
         <DataTemplate DataType="{x:Type vm:GameBoardViewModel}">
             <views:GameBoardView/>
         </DataTemplate>

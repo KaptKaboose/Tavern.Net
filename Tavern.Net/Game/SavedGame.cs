@@ -52,6 +52,7 @@ public sealed record SavedMajorEvent(
     MajorEventKind Kind,
     int NetDelta,
     int Turn,
+    DateTime Timestamp,
     SavedGameSnapshot Snapshot);
 
 /// <summary>The full GameStats for one player — including PlayLog and MajorEvents (with their own

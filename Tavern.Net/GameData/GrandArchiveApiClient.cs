@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Json;
@@ -22,6 +23,19 @@ public sealed class GrandArchiveApiClient
     private readonly HttpClient _http;
     private readonly string _imageCacheDirectory;
     private readonly string _cardCacheDirectory;
+
+    // Keyed by destination file path — see GetCardImagePathAsync's own comment on why concurrent
+    // callers for the same image need to share one in-flight fetch instead of each starting their
+    // own.
+    // Lazy<T>, not a bare Task — ConcurrentDictionary.GetOrAdd's own factory delegate is NOT
+    // guaranteed to run only once under concurrent calls (per its documented contract), so a
+    // dictionary of bare Tasks could still start the same download twice if several callers all hit
+    // GetOrAdd before either has stored a result. Lazy<T>'s default thread-safety mode genuinely
+    // does guarantee single execution: constructing a Lazy is cheap and side-effect-free (so
+    // GetOrAdd's own factory running more than once is harmless — the "loser" Lazy is just
+    // discarded, unused), and only accessing .Value on whichever Lazy actually wins the dictionary
+    // slot starts the real download, with every caller blocking on that same one.
+    private readonly ConcurrentDictionary<string, Lazy<Task<string?>>> _imageFetchTasks = new();
 
     public GrandArchiveApiClient(HttpClient? httpClient = null)
     {
@@ -192,6 +206,28 @@ public sealed class GrandArchiveApiClient
             return localPath;
         }
 
+        // Every copy of a card in a deck gets its own CardViewModel, and each independently calls
+        // this for the same image — without sharing one in-flight fetch here, they'd race to
+        // File.Create the same destination path; File.Create takes an exclusive lock, so every
+        // loser throws inside what's ultimately a fire-and-forget task in CardViewModel, silently
+        // leaving that copy's artwork blank forever. Removed from the dictionary once done (success
+        // or failure) so a later, non-concurrent call still retries fresh rather than being stuck
+        // on one failed attempt for the rest of the session.
+        var lazyFetch = _imageFetchTasks.GetOrAdd(
+            localPath,
+            _ => new Lazy<Task<string?>>(() => DownloadAndCacheImageAsync(imagePath, rounded, localPath, cancellationToken)));
+        try
+        {
+            return await lazyFetch.Value;
+        }
+        finally
+        {
+            _imageFetchTasks.TryRemove(new KeyValuePair<string, Lazy<Task<string?>>>(localPath, lazyFetch));
+        }
+    }
+
+    private async Task<string?> DownloadAndCacheImageAsync(string imagePath, bool rounded, string localPath, CancellationToken cancellationToken)
+    {
         var requestPath = rounded ? $"{imagePath}?rounded=true" : imagePath;
         var response = await _http.GetAsync(requestPath, cancellationToken);
         if (!response.IsSuccessStatusCode)

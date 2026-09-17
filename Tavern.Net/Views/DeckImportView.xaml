@@ -91,6 +91,8 @@
             <!-- Right: resolution results -->
             <DockPanel Grid.Column="2">
                 <TextBlock DockPanel.Dock="Top" Text="Resolved cards" FontSize="18" FontWeight="Bold" Foreground="#F7FAFC" Margin="0,0,0,8"/>
+                <TextBlock DockPanel.Dock="Top" Text="Loading..." Foreground="#A0AEC0" Margin="0,0,0,8"
+                           Visibility="{Binding IsImporting, Converter={StaticResource BoolToVisibility}}"/>
                 <TextBlock DockPanel.Dock="Top" Text="{Binding ErrorMessage}" Foreground="IndianRed" Margin="0,0,0,8"
                            Visibility="{Binding ErrorMessage, Converter={StaticResource NullToVisibility}}"
                            TextWrapping="Wrap"/>

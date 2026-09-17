@@ -24,6 +24,11 @@ public sealed class MajorEvent
 
     public required MajorEventKind Kind { get; init; }
 
+    /// <summary>When this event happened — set implicitly at construction. Used to interleave both
+    /// players' MajorEvents into one chronological log in an online game (see
+    /// GameBoardViewModel's merged Play Log); irrelevant for solo, where there's only one stream.</summary>
+    public DateTime Timestamp { get; init; } = DateTime.UtcNow;
+
     /// <summary>Only meaningful for Kind == LifeChanged/DamageDealt — the running total for the
     /// currently-open coalescing streak.</summary>
     public int NetDelta { get; set; }

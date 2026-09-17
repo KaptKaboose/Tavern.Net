@@ -36,8 +36,7 @@
             <Button Content="Solo" Style="{StaticResource SoloButton}" Command="{Binding SoloCommand}"/>
             <TextBlock Text="Starting..." Foreground="#A0AEC0" HorizontalAlignment="Center" Margin="0,0,0,16"
                        Visibility="{Binding IsStartingSolo, Converter={StaticResource BoolToVisibility}}"/>
-            <Button Content="Online" Style="{StaticResource MenuButton}" Command="{Binding OnlineCommand}"
-                    ToolTip="Coming soon"/>
+            <Button Content="Online" Style="{StaticResource MenuButton}" Command="{Binding OnlineCommand}"/>
             <Button Content="Change Deck" Style="{StaticResource MenuButton}" Command="{Binding ChangeDeckCommand}"/>
             <Button Content="View Game" Style="{StaticResource MenuButton}" Command="{Binding ViewGameCommand}"/>
 

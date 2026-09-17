@@ -9,8 +9,8 @@ namespace Tavern.Net.ViewModels;
 /// <summary>
 /// The app's landing screen. Solo jumps straight into a game with the active saved deck (falling
 /// back to the Change Deck screen if there isn't one yet); Change Deck is the dedicated screen to
-/// load/import/save decks; View Game opens the saved-games list. Online is the one remaining
-/// placeholder, since there's no networking code yet — its command stays disabled.
+/// load/import/save decks; View Game opens the saved-games list; Online opens the host/join lobby —
+/// same active-deck requirement as Solo, since each player's deck is chosen locally before joining.
 /// </summary>
 public sealed partial class StartMenuViewModel : ObservableObject
 {
@@ -39,6 +39,9 @@ public sealed partial class StartMenuViewModel : ObservableObject
 
     /// <summary>Raised when the player picks View Game.</summary>
     public event Action? ViewGameRequested;
+
+    /// <summary>Raised when the player picks Online and has an active deck.</summary>
+    public event Action? OnlineRequested;
 
     public StartMenuViewModel(GrandArchiveApiClient apiClient, DeckStorageService deckStorage)
     {
@@ -92,12 +95,21 @@ public sealed partial class StartMenuViewModel : ObservableObject
         }
     }
 
-    [RelayCommand(CanExecute = nameof(CanUseOnline))]
+    /// <summary>Like Solo, Online needs an active deck picked beforehand (each player brings their
+    /// own) — falls back to Change Deck the same way if there isn't one yet.</summary>
+    [RelayCommand]
     private void Online()
     {
-    }
+        ErrorMessage = null;
 
-    private bool CanUseOnline() => false;
+        if (_deckStorage.GetActiveDeck() is null)
+        {
+            ChangeDeckRequested?.Invoke();
+            return;
+        }
+
+        OnlineRequested?.Invoke();
+    }
 
     [RelayCommand]
     private void ChangeDeck() => ChangeDeckRequested?.Invoke();

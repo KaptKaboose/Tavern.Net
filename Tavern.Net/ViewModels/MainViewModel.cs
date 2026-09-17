@@ -2,16 +2,18 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using Tavern.Net.Decklists;
 using Tavern.Net.Game;
 using Tavern.Net.GameData;
+using Tavern.Net.Online;
 
 namespace Tavern.Net.ViewModels;
 
 /// <summary>Root view model — switches between the start menu, the deck-import screen, the
-/// saved-games screen and the game board.</summary>
+/// saved-games screen, the online lobby and the game board.</summary>
 public sealed partial class MainViewModel : ObservableObject
 {
     private readonly GrandArchiveApiClient _apiClient = new();
     private readonly DeckStorageService _deckStorage = new();
     private readonly GameStorageService _gameStorage = new();
+    private readonly PlayerNameStorageService _playerNameStorage = new();
 
     private StartMenuViewModel? _startMenuViewModel;
 
@@ -28,10 +30,11 @@ public sealed partial class MainViewModel : ObservableObject
         var startMenuViewModel = new StartMenuViewModel(_apiClient, _deckStorage);
         // Solo falls back here only when there's no active deck yet — that's still "start a solo
         // game", so Start Game stays available. Change Deck is purely deck management: we don't know
-        // whether the player is about to play Solo or (eventually) Online, so it's hidden there.
+        // whether the player is about to play Solo or Online, so it's hidden there.
         startMenuViewModel.SoloRequested += () => CurrentView = CreateImportViewModel(allowStartGame: true);
         startMenuViewModel.ChangeDeckRequested += () => CurrentView = CreateImportViewModel(allowStartGame: false);
         startMenuViewModel.ViewGameRequested += () => CurrentView = CreateSavedGamesViewModel();
+        startMenuViewModel.OnlineRequested += () => CurrentView = CreateOnlineLobbyViewModel();
         startMenuViewModel.GameReady += (session, player) => CurrentView = CreateGameBoardViewModel(session, player);
         _startMenuViewModel = startMenuViewModel;
         return startMenuViewModel;
@@ -53,9 +56,18 @@ public sealed partial class MainViewModel : ObservableObject
         return savedGamesViewModel;
     }
 
-    private GameBoardViewModel CreateGameBoardViewModel(GameSession session, Player player)
+    private OnlineLobbyViewModel CreateOnlineLobbyViewModel()
     {
-        var gameBoardViewModel = new GameBoardViewModel(session, player, _apiClient, _gameStorage);
+        var onlineLobbyViewModel = new OnlineLobbyViewModel(_apiClient, _deckStorage, _gameStorage, _playerNameStorage);
+        onlineLobbyViewModel.GameStarted += (session, player, connection) => CurrentView = CreateGameBoardViewModel(session, player, connection);
+        onlineLobbyViewModel.BackRequested += () => CurrentView = ReturnToStartMenu();
+        return onlineLobbyViewModel;
+    }
+
+    private GameBoardViewModel CreateGameBoardViewModel(GameSession session, Player player, GameConnection? connection = null)
+    {
+        var opponentPlayer = connection is not null ? session.Players.First(p => p != player) : null;
+        var gameBoardViewModel = new GameBoardViewModel(session, player, _apiClient, _gameStorage, connection, opponentPlayer);
         gameBoardViewModel.BackToMenuRequested += () => CurrentView = ReturnToStartMenu();
         return gameBoardViewModel;
     }
