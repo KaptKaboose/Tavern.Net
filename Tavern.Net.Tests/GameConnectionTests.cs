@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using Tavern.Net.Game;
 using Tavern.Net.Online;
 
 namespace Tavern.Net.Tests;
@@ -15,16 +16,35 @@ public class GameConnectionTests
         return port;
     }
 
-    [Fact]
-    public async Task HostAndJoin_SendAsync_DeliversMessageIntact()
+    private static async Task<(GameConnection Host, GameConnection Guest)> ConnectedPairAsync()
     {
-        using var host = new GameConnection();
-        using var guest = new GameConnection();
+        var host = new GameConnection();
+        var guest = new GameConnection();
         var port = GetFreePort();
 
         var hostTask = host.HostAsync(port);
         await guest.JoinAsync("127.0.0.1", port);
         await hostTask;
+        return (host, guest);
+    }
+
+    private static OnlineMessage BigState(string name, int extraLogLines) => new()
+    {
+        Kind = OnlineMessageKind.PlayerState,
+        PlayerState = new SavedPlayer(
+            name, 0, 15, 7, false, new List<SavedCardInstance>(),
+            new SavedGameStats(
+                0, 0, 0, 0, 0, 0, false, 0, new List<ChampionLevelMilestone>(),
+                Enumerable.Range(0, extraLogLines).Select(i => $"Moved Some Card {i} from Hand to Field.").ToList(),
+                new List<SavedMajorEvent>())),
+    };
+
+    [Fact]
+    public async Task HostAndJoin_SendAsync_DeliversMessageIntact()
+    {
+        var (host, guest) = await ConnectedPairAsync();
+        using var _ = host;
+        using var __ = guest;
 
         OnlineMessage? received = null;
         var receivedTcs = new TaskCompletionSource();
@@ -45,13 +65,9 @@ public class GameConnectionTests
     [Fact]
     public async Task HostAndJoin_MultipleSendsInARow_EachArrivesUncorrupted()
     {
-        using var host = new GameConnection();
-        using var guest = new GameConnection();
-        var port = GetFreePort();
-
-        var hostTask = host.HostAsync(port);
-        await guest.JoinAsync("127.0.0.1", port);
-        await hostTask;
+        var (host, guest) = await ConnectedPairAsync();
+        using var _ = host;
+        using var __ = guest;
 
         var received = new List<OnlineMessage>();
         var allReceivedTcs = new TaskCompletionSource();
@@ -79,15 +95,57 @@ public class GameConnectionTests
     }
 
     [Fact]
+    public async Task LargeMessage_IsCompressedOnTheWire_AndArrivesIntact()
+    {
+        var (host, guest) = await ConnectedPairAsync();
+        using var _ = host;
+        using var __ = guest;
+
+        OnlineMessage? received = null;
+        var receivedTcs = new TaskCompletionSource();
+        guest.MessageReceived += message =>
+        {
+            received = message;
+            receivedTcs.TrySetResult();
+        };
+
+        var big = BigState("Big", extraLogLines: 5000);
+        await host.SendAsync(big);
+        await Task.WhenAny(receivedTcs.Task, Task.Delay(TimeSpan.FromSeconds(5)));
+
+        Assert.NotNull(received?.PlayerState);
+        Assert.Equal(5000, received!.PlayerState!.Stats.PlayLog.Count);
+        Assert.Equal(big.PlayerState!.Stats.PlayLog[4999], received.PlayerState.Stats.PlayLog[4999]);
+    }
+
+    [Fact]
+    public async Task UnchangedPlayerState_IsNotResentEveryTick()
+    {
+        var (host, guest) = await ConnectedPairAsync();
+        using var _ = host;
+        using var __ = guest;
+
+        var count = 0;
+        guest.MessageReceived += _ => Interlocked.Increment(ref count);
+
+        for (var i = 0; i < 5; i++)
+        {
+            await host.SendAsync(BigState("Same", extraLogLines: 3));
+        }
+
+        await Task.Delay(300);
+        Assert.Equal(1, count);
+
+        await host.SendAsync(BigState("Changed", extraLogLines: 3));
+        await Task.Delay(300);
+        Assert.Equal(2, count);
+    }
+
+    [Fact]
     public async Task Dispose_OnOneSide_RaisesDisconnectedOnTheOther()
     {
-        using var host = new GameConnection();
-        var guest = new GameConnection();
-        var port = GetFreePort();
-
-        var hostTask = host.HostAsync(port);
-        await guest.JoinAsync("127.0.0.1", port);
-        await hostTask;
+        var (host, guest) = await ConnectedPairAsync();
+        using var _ = host;
 
         var disconnectedTcs = new TaskCompletionSource();
         host.Disconnected += () => disconnectedTcs.TrySetResult();

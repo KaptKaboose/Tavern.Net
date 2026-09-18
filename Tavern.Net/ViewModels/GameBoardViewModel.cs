@@ -1184,6 +1184,13 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         return card;
     }
 
+    // Only the newest opponent state matters, and applying one is async (it clears and rebuilds
+    // their whole mirror, resolving any card not yet cached) — so a state arriving mid-apply is
+    // parked here and applied next, rather than starting a second apply that would interleave with
+    // the first and leave the mirror half of each.
+    private SavedPlayer? _pendingOpponentState;
+    private bool _isApplyingOpponentState;
+
     private async Task ApplyOpponentStateAsync(SavedPlayer state)
     {
         if (OpponentPlayer is null)
@@ -1191,8 +1198,26 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
             return;
         }
 
-        await GameSessionSerializer.ApplyToPlayer(OpponentPlayer, state, _apiClient, _opponentCardCache);
-        RefreshOpponentPanel();
+        _pendingOpponentState = state;
+        if (_isApplyingOpponentState)
+        {
+            return;
+        }
+
+        _isApplyingOpponentState = true;
+        try
+        {
+            while (_pendingOpponentState is { } next)
+            {
+                _pendingOpponentState = null;
+                await GameSessionSerializer.ApplyToPlayer(OpponentPlayer, next, _apiClient, _opponentCardCache);
+                RefreshOpponentPanel();
+            }
+        }
+        finally
+        {
+            _isApplyingOpponentState = false;
+        }
     }
 
     /// <summary>Applies a GameState update from the active side of the handoff. The sender always
