@@ -6,8 +6,8 @@
         xmlns:vm="clr-namespace:Tavern.Net.ViewModels"
         xmlns:views="clr-namespace:Tavern.Net.Views"
         mc:Ignorable="d"
-        Title="Tavern.Net" Height="950" Width="1600" WindowStartupLocation="CenterScreen"
-        ResizeMode="NoResize"
+        Title="Tavern.Net" Height="850" Width="1400" MinHeight="500" MinWidth="800" WindowStartupLocation="CenterScreen"
+        ResizeMode="CanResize"
         Icon="Icon.ico"
         Background="#1A202C"
         PreviewKeyDown="OnPreviewKeyDown">
@@ -29,7 +29,12 @@
         </DataTemplate>
     </Window.Resources>
 
-    <Grid>
-        <ContentControl Content="{Binding CurrentView}"/>
-    </Grid>
+    <!-- Every view is always laid out at the 1600x950 design size and then scaled uniformly to fit
+         the window (letterboxed if the aspect ratio differs) — keeps the "no resize glitches"
+         property of a locked window while still fitting small/high-DPI screens. -->
+    <Viewbox Stretch="Uniform">
+        <Grid Width="1600" Height="950">
+            <ContentControl Content="{Binding CurrentView}"/>
+        </Grid>
+    </Viewbox>
 </Window>

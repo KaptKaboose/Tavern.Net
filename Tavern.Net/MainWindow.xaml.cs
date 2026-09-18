@@ -40,6 +40,20 @@ namespace Tavern.Net
             DwmSetWindowAttribute(hwnd, DwmwaTextColor, ref textColor, sizeof(int));
         }
 
+        private void ToggleFullScreen()
+        {
+            if (WindowStyle == WindowStyle.None)
+            {
+                WindowStyle = WindowStyle.SingleBorderWindow;
+                WindowState = WindowState.Normal;
+            }
+            else
+            {
+                WindowStyle = WindowStyle.None;
+                WindowState = WindowState.Maximized;
+            }
+        }
+
         /// <summary>
         /// Routes key presses to whichever view-model is currently active. Handled at the tunnel
         /// phase (PreviewKeyDown), before a focused Button's own bubble-phase handling can treat
@@ -49,6 +63,13 @@ namespace Tavern.Net
         /// </summary>
         private void OnPreviewKeyDown(object sender, KeyEventArgs e)
         {
+            if (e.Key == Key.F11)
+            {
+                ToggleFullScreen();
+                e.Handled = true;
+                return;
+            }
+
             if (Keyboard.FocusedElement is TextBox)
             {
                 return;

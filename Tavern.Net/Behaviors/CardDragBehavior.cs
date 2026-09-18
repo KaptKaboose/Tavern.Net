@@ -211,22 +211,34 @@ public static class CardDragBehavior
             // moment that source stops being rendered; a frozen snapshot keeps following the
             // cursor unaffected, matching "anchor stays on mouse" regardless of what closing the
             // peek does to the card's original visual container.
-            var pixelWidth = Math.Max(1, (int)Math.Ceiling(element.ActualWidth));
-            var pixelHeight = Math.Max(1, (int)Math.Ceiling(element.ActualHeight));
-            var renderTarget = new RenderTargetBitmap(pixelWidth, pixelHeight, 96, 96, PixelFormats.Pbgra32);
+            // The adorner layer lives outside MainWindow's Viewbox, in real window pixels, while the
+            // element is measured in the Viewbox's fixed design units — so the ghost (and the grab
+            // offset that keeps it anchored under the cursor) has to be scaled by however much the
+            // window is currently scaling the board, or it stays default-sized when the window
+            // shrinks/grows.
+            var origin = element.TransformToVisual(adornerRoot).Transform(new Point(0, 0));
+            var unitX = element.TransformToVisual(adornerRoot).Transform(new Point(1, 0));
+            var scale = Math.Max(0.01, (unitX - origin).Length);
+
+            var ghostWidth = element.ActualWidth * scale;
+            var ghostHeight = element.ActualHeight * scale;
+            var pixelWidth = Math.Max(1, (int)Math.Ceiling(ghostWidth));
+            var pixelHeight = Math.Max(1, (int)Math.Ceiling(ghostHeight));
+            var renderTarget = new RenderTargetBitmap(pixelWidth, pixelHeight, 96 * scale, 96 * scale, PixelFormats.Pbgra32);
             renderTarget.Render(element);
             renderTarget.Freeze();
 
             var snapshot = new Rectangle
             {
-                Width = element.ActualWidth,
-                Height = element.ActualHeight,
-                Fill = new ImageBrush(renderTarget) { Stretch = Stretch.None },
+                Width = ghostWidth,
+                Height = ghostHeight,
+                Fill = new ImageBrush(renderTarget) { Stretch = Stretch.Fill },
                 Opacity = 0.85,
                 IsHitTestVisible = false,
             };
 
-            adorner = new DragAdorner(adornerRoot, snapshot, _grabOffsetInElement);
+            var scaledGrabOffset = new Point(_grabOffsetInElement.X * scale, _grabOffsetInElement.Y * scale);
+            adorner = new DragAdorner(adornerRoot, snapshot, scaledGrabOffset);
             adornerLayer.Add(adorner);
 
             System.Diagnostics.Debug.WriteLine($"[DragDrop] Adorner added. IsVisible={adorner.IsVisible} ActualWidth={adorner.ActualWidth} ActualHeight={adorner.ActualHeight}");
