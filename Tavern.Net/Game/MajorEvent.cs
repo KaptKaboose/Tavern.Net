@@ -1,3 +1,5 @@
+using System.ComponentModel;
+
 namespace Tavern.Net.Game;
 
 /// <summary>
@@ -18,9 +20,29 @@ public enum MajorEventKind
 /// streak updates the same entry in place — its Description/NetDelta/Snapshot change as more
 /// same-direction changes arrive, rather than piling up a new entry per click.
 /// </summary>
-public sealed class MajorEvent
+public sealed class MajorEvent : INotifyPropertyChanged
 {
-    public required string Description { get; set; }
+    private string _description = "";
+
+    /// <summary>Raises PropertyChanged so the Play Log list re-renders when a coalescing streak
+    /// rewrites this in place — without it, the list kept showing the first click's text
+    /// ("1 damage") while the review panel (which reads it fresh on open) showed the real total.</summary>
+    public required string Description
+    {
+        get => _description;
+        set
+        {
+            if (_description == value)
+            {
+                return;
+            }
+
+            _description = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Description)));
+        }
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
 
     public required MajorEventKind Kind { get; init; }
 
