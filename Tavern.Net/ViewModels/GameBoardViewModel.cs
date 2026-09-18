@@ -1779,6 +1779,12 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         }
     }
 
+    private void StartActionFromKey(ArmedChord action)
+    {
+        OpenActionsMenu();
+        SelectAction(action);
+    }
+
     /// <summary>Resets the board for a fresh game — solo's 'N' key (see HandleKey, which routes
     /// online instead to RequestNewGameOnline), and also called directly from the constructor for a
     /// brand-new solo game (see isFreshSoloGame) so the player doesn't have to remember to press it
@@ -1915,16 +1921,49 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
                 }
                 return true;
             case Key.D:
-                if (DrawCardCommand.CanExecute(null))
+                // Shift+D reads as "D, but into Memory" — checked here rather than a separate case
+                // since both share the same key.
+                if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0)
+                {
+                    if (DrawCardIntoMemoryCommand.CanExecute(null))
+                    {
+                        DrawCardIntoMemoryCommand.Execute(null);
+                    }
+                }
+                else if (DrawCardCommand.CanExecute(null))
                 {
                     DrawCardCommand.Execute(null);
                 }
+
                 return true;
             case Key.S:
-                if (DrawCardIntoMemoryCommand.CanExecute(null))
+                // Same as picking Shuffle from the Actions menu — no count, runs immediately (with Undo).
+                SelectAction(ArmedChord.Shuffle);
+                return true;
+            // Same flow as picking the action from the Actions menu — opens the count overlay for
+            // it directly (type a number/Enter, or +/-), rather than arming anything silently.
+            case Key.B:
+                StartActionFromKey(ArmedChord.Banish);
+                return true;
+            case Key.G:
+                StartActionFromKey(ArmedChord.Glimpse);
+                return true;
+            case Key.M:
+                StartActionFromKey(ArmedChord.Mill);
+                return true;
+            case Key.R:
+                if (CanUseOnlineAction)
                 {
-                    DrawCardIntoMemoryCommand.Execute(null);
+                    StartActionFromKey(ArmedChord.Reveal);
                 }
+
+                return true;
+            case Key.P:
+                if (CanUseOnlineAction)
+                {
+                    StartActionFromKey(ArmedChord.Give);
+                }
+
                 return true;
             case Key.N:
                 if (IsOnline)

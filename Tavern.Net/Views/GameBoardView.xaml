@@ -971,7 +971,7 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <Grid.RowDefinitions>
-                            <RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/>
+                            <RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition Height="14"/><RowDefinition/><RowDefinition/>
                         </Grid.RowDefinitions>
 
                         <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource ShortcutKeyStyle}">
@@ -985,7 +985,7 @@
                         <TextBlock Grid.Row="1" Grid.Column="1" Text="Draw a card" Style="{StaticResource ShortcutLabelStyle}"/>
 
                         <Border Grid.Row="2" Grid.Column="0" Style="{StaticResource ShortcutKeyStyle}">
-                            <TextBlock Text="S" Style="{StaticResource ShortcutKeyTextStyle}"/>
+                            <TextBlock Text="Shift+D" Style="{StaticResource ShortcutKeyTextStyle}"/>
                         </Border>
                         <TextBlock Grid.Row="2" Grid.Column="1" Text="Draw a card into Memory" Style="{StaticResource ShortcutLabelStyle}"/>
 
@@ -995,15 +995,44 @@
                         <TextBlock Grid.Row="3" Grid.Column="1" Text="Banish that many cards, at random" Style="{StaticResource ShortcutLabelStyle}"/>
 
                         <Border Grid.Row="4" Grid.Column="0" Style="{StaticResource ShortcutKeyStyle}">
-                            <TextBlock Text="N" Style="{StaticResource ShortcutKeyTextStyle}"/>
+                            <TextBlock Text="B" Style="{StaticResource ShortcutKeyTextStyle}"/>
                         </Border>
-                        <TextBlock Grid.Row="4" Grid.Column="1" Text="New Game (online: opens a ready-up prompt for both players)"
-                                   Style="{StaticResource ShortcutLabelStyle}"/>
+                        <TextBlock Grid.Row="4" Grid.Column="1" Text="Banish" Style="{StaticResource ShortcutLabelStyle}"/>
 
                         <Border Grid.Row="5" Grid.Column="0" Style="{StaticResource ShortcutKeyStyle}">
+                            <TextBlock Text="G" Style="{StaticResource ShortcutKeyTextStyle}"/>
+                        </Border>
+                        <TextBlock Grid.Row="5" Grid.Column="1" Text="Glimpse" Style="{StaticResource ShortcutLabelStyle}"/>
+
+                        <Border Grid.Row="6" Grid.Column="0" Style="{StaticResource ShortcutKeyStyle}">
+                            <TextBlock Text="M" Style="{StaticResource ShortcutKeyTextStyle}"/>
+                        </Border>
+                        <TextBlock Grid.Row="6" Grid.Column="1" Text="Mill" Style="{StaticResource ShortcutLabelStyle}"/>
+
+                        <Border Grid.Row="7" Grid.Column="0" Style="{StaticResource ShortcutKeyStyle}">
+                            <TextBlock Text="R" Style="{StaticResource ShortcutKeyTextStyle}"/>
+                        </Border>
+                        <TextBlock Grid.Row="7" Grid.Column="1" Text="Reveal top cards to opponent (online only)" Style="{StaticResource ShortcutLabelStyle}"/>
+
+                        <Border Grid.Row="8" Grid.Column="0" Style="{StaticResource ShortcutKeyStyle}">
+                            <TextBlock Text="P" Style="{StaticResource ShortcutKeyTextStyle}"/>
+                        </Border>
+                        <TextBlock Grid.Row="8" Grid.Column="1" Text="Give top cards to opponent (online only)" Style="{StaticResource ShortcutLabelStyle}"/>
+
+                        <Border Grid.Row="9" Grid.Column="0" Style="{StaticResource ShortcutKeyStyle}">
+                            <TextBlock Text="S" Style="{StaticResource ShortcutKeyTextStyle}"/>
+                        </Border>
+                        <TextBlock Grid.Row="9" Grid.Column="1" Text="Shuffle Main Deck" Style="{StaticResource ShortcutLabelStyle}"/>
+
+                        <Border Grid.Row="11" Grid.Column="0" Style="{StaticResource ShortcutKeyStyle}">
+                            <TextBlock Text="N" Style="{StaticResource ShortcutKeyTextStyle}"/>
+                        </Border>
+                        <TextBlock Grid.Row="11" Grid.Column="1" Text="New Game" Style="{StaticResource ShortcutLabelStyle}"/>
+
+                        <Border Grid.Row="12" Grid.Column="0" Style="{StaticResource ShortcutKeyStyle}">
                             <TextBlock Text="F11" Style="{StaticResource ShortcutKeyTextStyle}"/>
                         </Border>
-                        <TextBlock Grid.Row="5" Grid.Column="1" Text="Toggle full screen" Style="{StaticResource ShortcutLabelStyle}"/>
+                        <TextBlock Grid.Row="12" Grid.Column="1" Text="Toggle full screen" Style="{StaticResource ShortcutLabelStyle}"/>
                     </Grid>
 
                     <TextBlock Text="None of these work while any overlay/panel is open." Foreground="#A0AEC0" FontSize="12"
