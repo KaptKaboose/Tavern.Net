@@ -175,7 +175,9 @@ public sealed partial class DeckImportViewModel : ObservableObject
     private void SaveDeck()
     {
         var entries = new List<SavedDeckEntry>();
-        foreach (var line in ResolvedLines.Where(l => l.EffectiveSection != DeckSection.Sideboard))
+        // Sideboard lines are saved too — DeckSessionBuilder keeps them in the player's
+        // DeckArrangement (never in a zone) so they're available for sideboarding.
+        foreach (var line in ResolvedLines)
         {
             var card = line.SelectedCard!;
 

@@ -97,10 +97,25 @@ public static class CardDropBehavior
     {
         System.Diagnostics.Debug.WriteLine($"[DragDrop] DragEnter zone={(sender is DependencyObject d1 ? GetTargetZone(d1) : null)} hasPayload={e.Data.GetDataPresent(typeof(CardDragPayload))}");
 
-        if (e.Data.GetDataPresent(typeof(CardDragPayload)))
+        // Only a zone that would actually accept this card gets the highlight — an illegal target
+        // (e.g. a Material card over Hand) stays unlit, so the highlight itself says "you can drop here".
+        if (e.Data.GetDataPresent(typeof(CardDragPayload)) && CanAccept(sender, e))
         {
             SetHighlight(sender, HighlightBrush);
         }
+    }
+
+    private static bool CanAccept(object sender, DragEventArgs e)
+    {
+        if (sender is not DependencyObject target
+            || GetTargetZone(target) is not { } zone
+            || GetMoveCommand(target) is not { } command
+            || e.Data.GetData(typeof(CardDragPayload)) is not CardDragPayload payload)
+        {
+            return false;
+        }
+
+        return command.CanExecute(new MoveCardRequest(payload.Card, zone));
     }
 
     private static void OnDragLeave(object sender, DragEventArgs e)

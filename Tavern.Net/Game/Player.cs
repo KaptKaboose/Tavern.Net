@@ -21,6 +21,11 @@ public sealed partial class Player : ObservableObject
 
     public GameStats Stats { get; } = new();
 
+    /// <summary>This player's deck lists (Main/Material/sideboard, plus the registered arrangement
+    /// for resets) — see <see cref="DeckArrangement"/>. Null for the local mirror of an online
+    /// opponent, whose deck is never sent over the wire.</summary>
+    public DeckArrangement? Deck { get; set; }
+
     public Dictionary<ZoneType, Zone> Zones { get; } = Enum.GetValues<ZoneType>()
         .ToDictionary(z => z, z => new Zone(z));
 

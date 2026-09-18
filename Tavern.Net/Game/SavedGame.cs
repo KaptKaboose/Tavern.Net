@@ -73,6 +73,19 @@ public sealed record SavedGameStats(
     List<string> PlayLog,
     List<SavedMajorEvent> MajorEvents);
 
+/// <summary>A <see cref="DeckArrangement"/> by slug, one entry per card copy — the registered deck
+/// and the current (possibly sideboarded) lists.</summary>
+public sealed record SavedDeckArrangement(
+    List<string> RegisteredMain,
+    List<string> RegisteredMaterial,
+    List<string> RegisteredSideboard,
+    List<string> Main,
+    List<string> Material,
+    List<string> Sideboard);
+
+/// <param name="Deck">Only set for a whole-game save (GameSessionSerializer.Capture) — never for
+/// the ~300ms online broadcast, which shares this DTO but must not carry (or leak) the player's
+/// sideboard. Null also for saves made before sideboarding existed.</param>
 public sealed record SavedPlayer(
     string Name,
     int PlayerNumber,
@@ -80,7 +93,8 @@ public sealed record SavedPlayer(
     int StartingHandSize,
     bool StartsInMemory,
     List<SavedCardInstance> Cards,
-    SavedGameStats Stats);
+    SavedGameStats Stats,
+    SavedDeckArrangement? Deck = null);
 
 /// <summary>A named, resumable snapshot of an entire GameSession — every player's zones, stats and
 /// full Play Log/Major Event history. Built by GameSessionSerializer.Capture and rebuilt by

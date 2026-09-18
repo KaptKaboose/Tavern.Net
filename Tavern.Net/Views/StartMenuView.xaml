@@ -34,7 +34,7 @@
             <!-- Prominent, since which deck is active is easy to forget between sessions and
                  directly determines what Solo/Online actually start you with. -->
             <Border Visibility="{Binding HasActiveDeck, Converter={StaticResource BoolToVisibility}}"
-                    Background="#2D3748" BorderBrush="#F6E05E" BorderThickness="2" CornerRadius="10"
+                    Background="#2D3748" BorderBrush="#99F6E05E" BorderThickness="2" CornerRadius="10" Effect="{StaticResource GoldGlow}"
                     Padding="24,10" Margin="0,0,0,32">
                 <StackPanel HorizontalAlignment="Center">
                     <TextBlock Text="ACTIVE DECK" FontSize="11" FontWeight="Bold" Foreground="#F6E05E"

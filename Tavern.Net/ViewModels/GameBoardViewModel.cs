@@ -1012,7 +1012,8 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         GameConnection? connection = null,
         Player? opponentPlayer = null,
         TimeSpan? loadedElapsedTime = null,
-        bool isFreshSoloGame = false)
+        bool isFreshSoloGame = false,
+        int? onlineFirstPlayerNumber = null)
     {
         _session = session;
         _apiClient = apiClient;
@@ -1021,7 +1022,10 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         Player = player;
         OpponentPlayer = opponentPlayer;
         _currentPhase = session.CurrentPhase;
-        _isMyTurn = !IsOnline || session.ActivePlayer == player;
+        // Before an online game has started nobody is active yet: treat it as "mine" so that the
+        // player who ends up NOT going first sees the turn-handoff transition (and the opponent panel
+        // opening with it) once the game actually starts — see UpdateIsMyTurn.
+        _isMyTurn = !IsOnline || session.ActivePlayer is null || session.ActivePlayer == player;
 
         if (loadedElapsedTime is { } elapsed)
         {
@@ -1077,7 +1081,15 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         // flow) don't pass this.
         if (isFreshSoloGame)
         {
-            TriggerNewGame();
+            OpenSideboardPanel(canCancel: false);
+        }
+
+        // A brand-new online game (straight from the lobby): sideboard first, and the game starts
+        // once both players are Ready and the host hits Start. Defaults the first-player pick to the
+        // lobby's dice-roll result.
+        if (onlineFirstPlayerNumber is { } lobbyFirstPlayer)
+        {
+            OpenNewGameReadyUp(canCancel: false, firstPlayerNumber: lobbyFirstPlayer);
         }
     }
 
@@ -1132,7 +1144,10 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
                 ShowToast(message.UndoActionLabel is { } label ? $"Opponent used Undo ({label})." : "Opponent used Undo.");
                 break;
             case OnlineMessageKind.NewGameRequest:
-                OpenNewGameReadyUp();
+                ReceiveNewGameRequest();
+                break;
+            case OnlineMessageKind.NewGameAgree:
+                ReceiveNewGameAgree();
                 break;
             case OnlineMessageKind.NewGameReady:
                 IsOpponentNewGameReady = message.Ready;
@@ -1141,6 +1156,12 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
                 PerformOnlineNewGame(message.FirstPlayerNumber);
                 break;
             case OnlineMessageKind.NewGameCancel:
+                if (IsNewGameAgreementOpen || SideboardPanel is not null)
+                {
+                    ShowToast("Opponent cancelled the new game.");
+                }
+
+                CloseNewGameAgreement();
                 CloseNewGameReadyUp();
                 break;
         }
@@ -1651,11 +1672,13 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
 
     public bool IsGuest => !IsHost;
 
-    [ObservableProperty]
-    private bool _isNewGameReadyUpOpen;
+    // Online, the ready-up IS the sideboarding panel (see the Sideboarding region below): it shows
+    // both players' ready state, the host's first-player pick and Start button, and locks a
+    // player's own edits while they're Ready. This region owns the handshake state behind it.
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartNewGameOnlineCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ToggleNewGameReadyCommand))]
     private bool _isNewGameReady;
 
     [ObservableProperty]
@@ -1671,24 +1694,24 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
 
     public bool IsMeChosenFirstForNewGame => NewGameFirstPlayerNumber == Player.PlayerNumber;
 
-    partial void OnIsNewGameReadyUpOpenChanged(bool value)
+    /// <summary>Opens the online sideboarding/ready-up panel locally — for the player who pressed 'N'
+    /// (see RequestNewGameOnline), for the other side on receiving their NewGameRequest, and for
+    /// both at the very start of an online game (no Cancel then — there's no game to go back to).
+    /// Already open (e.g. both pressed N at once) is a no-op, so an incoming request can't wipe
+    /// swaps someone's already made. The first player defaults to the host (PlayerNumber 0, see
+    /// IsHost) — or, for a game's first round, whoever the lobby's dice roll picked — until the host
+    /// chooses otherwise.</summary>
+    private void OpenNewGameReadyUp(bool canCancel = true, int firstPlayerNumber = 0)
     {
-        if (value)
+        if (SideboardPanel is not null)
         {
-            CloseActionsMenu();
+            return;
         }
-    }
 
-    /// <summary>Opens the ready-up prompt locally — called both for the player who pressed 'N'
-    /// (see RequestNewGameOnline) and for the other side on receiving their NewGameRequest, so
-    /// either player can be the one to initiate. Defaults to the host going first — PlayerNumber 0
-    /// is always the host (see IsHost) — until the host picks otherwise.</summary>
-    private void OpenNewGameReadyUp()
-    {
         IsNewGameReady = false;
         IsOpponentNewGameReady = false;
-        NewGameFirstPlayerNumber = 0;
-        IsNewGameReadyUpOpen = true;
+        NewGameFirstPlayerNumber = firstPlayerNumber;
+        OpenSideboardPanel(canCancel);
     }
 
     [RelayCommand]
@@ -1697,22 +1720,148 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     [RelayCommand]
     private void ChooseOpponentFirstForNewGame() => NewGameFirstPlayerNumber = OpponentPlayer!.PlayerNumber;
 
+    // --- New Game agreement: before anyone sideboards, both players have to agree to start a new
+    // game at all (pressing N mid-game shouldn't drop a sideboard panel on the other player without
+    // asking). The player who pressed N has implicitly agreed; the other is asked. Once both have
+    // agreed, both go on to the sideboard panel. Not shown for a session's very first game — the
+    // lobby already was that agreement.
+
+    [ObservableProperty]
+    private bool _isNewGameAgreementOpen;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowAgreeButton), nameof(AgreementMessage), nameof(AgreementCancelLabel))]
+    private bool _hasAgreedToNewGame;
+
+    private bool _hasOpponentAgreedToNewGame;
+
+    public bool ShowAgreeButton => !HasAgreedToNewGame;
+
+    public string AgreementMessage => HasAgreedToNewGame
+        ? "Waiting for your opponent to agree..."
+        : "Your opponent wants to start a new game. Both boards will reset.";
+
+    public string AgreementCancelLabel => HasAgreedToNewGame ? "Cancel" : "Decline";
+
+    partial void OnIsNewGameAgreementOpenChanged(bool value)
+    {
+        if (value)
+        {
+            CloseActionsMenu();
+        }
+    }
+
+    private void OpenNewGameAgreement(bool selfAgreed, bool opponentAgreed)
+    {
+        HasAgreedToNewGame = selfAgreed;
+        _hasOpponentAgreedToNewGame = opponentAgreed;
+        IsNewGameAgreementOpen = true;
+    }
+
+    private void CloseNewGameAgreement()
+    {
+        IsNewGameAgreementOpen = false;
+        HasAgreedToNewGame = false;
+        _hasOpponentAgreedToNewGame = false;
+    }
+
     private void RequestNewGameOnline()
     {
-        OpenNewGameReadyUp();
+        if (IsNewGameAgreementOpen || SideboardPanel is not null)
+        {
+            return;
+        }
+
+        OpenNewGameAgreement(selfAgreed: true, opponentAgreed: false);
         _ = _connection!.SendAsync(new OnlineMessage { Kind = OnlineMessageKind.NewGameRequest });
     }
 
+    private void ReceiveNewGameRequest()
+    {
+        // Already sideboarding (or in a session's first-game panel): nothing to ask.
+        if (SideboardPanel is not null)
+        {
+            return;
+        }
+
+        if (IsNewGameAgreementOpen)
+        {
+            // Both pressed N at once — each already agreed by pressing it, so that's agreement.
+            if (HasAgreedToNewGame)
+            {
+                _hasOpponentAgreedToNewGame = true;
+                ProceedToSideboardAfterAgreement();
+            }
+
+            return;
+        }
+
+        OpenNewGameAgreement(selfAgreed: false, opponentAgreed: true);
+    }
+
+    private void ReceiveNewGameAgree()
+    {
+        if (!IsNewGameAgreementOpen)
+        {
+            return;
+        }
+
+        _hasOpponentAgreedToNewGame = true;
+        if (HasAgreedToNewGame)
+        {
+            ProceedToSideboardAfterAgreement();
+        }
+    }
+
     [RelayCommand]
+    private void AgreeToNewGame()
+    {
+        if (!IsNewGameAgreementOpen || HasAgreedToNewGame)
+        {
+            return;
+        }
+
+        HasAgreedToNewGame = true;
+        _ = _connection!.SendAsync(new OnlineMessage { Kind = OnlineMessageKind.NewGameAgree });
+        if (_hasOpponentAgreedToNewGame)
+        {
+            ProceedToSideboardAfterAgreement();
+        }
+    }
+
+    /// <summary>Decline (as the asked player) or cancel (as the asker) — either way it ends for both.</summary>
+    [RelayCommand]
+    private void CancelNewGameAgreement()
+    {
+        CloseNewGameAgreement();
+        _ = _connection!.SendAsync(new OnlineMessage { Kind = OnlineMessageKind.NewGameCancel });
+    }
+
+    private void ProceedToSideboardAfterAgreement()
+    {
+        CloseNewGameAgreement();
+        OpenNewGameReadyUp();
+    }
+
+    /// <summary>Ready/Not Ready — Ready is only allowed with a Level 0 champion in Material, same as
+    /// solo's Ready; un-readying is always allowed. Being Ready locks the panel's own edits.</summary>
+    [RelayCommand(CanExecute = nameof(CanToggleNewGameReady))]
     private void ToggleNewGameReady()
     {
         IsNewGameReady = !IsNewGameReady;
+        if (SideboardPanel is { } panel)
+        {
+            panel.IsLocked = IsNewGameReady;
+        }
+
         _ = _connection!.SendAsync(new OnlineMessage { Kind = OnlineMessageKind.NewGameReady, Ready = IsNewGameReady });
     }
 
+    private bool CanToggleNewGameReady() => IsNewGameReady || SideboardPanel?.HasLevelZeroChampion != false;
+
     private void CloseNewGameReadyUp()
     {
-        IsNewGameReadyUpOpen = false;
+        SideboardPanel = null;
         IsNewGameReady = false;
         IsOpponentNewGameReady = false;
     }
@@ -1760,6 +1909,19 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         // counting up from zero.
         ElapsedTime = TimeSpan.Zero;
 
+        // The opponent's first post-reset broadcast is their game-start setup (fresh "Game started."
+        // entry, cleared log) — automated, not something they did, so it shouldn't glow the Opponent
+        // button or flash their Life; re-seed instead of comparing (see _hasSeenInitialOpponentState).
+        _hasSeenInitialOpponentState = false;
+        _lastSeenOpponentMajorEventCount = 0;
+
+        // Rebuild Main/Material from this player's current (possibly sideboarded) deck lists first —
+        // StartNewGameForPlayer then resets everything as usual.
+        if (Player.Deck is not null)
+        {
+            Decklists.DeckSessionBuilder.ApplyArrangement(Player);
+        }
+
         var glimpsedOnNewGame = _session.StartNewGameForPlayer(Player);
 
         var firstPlayer = firstPlayerNumber == Player.PlayerNumber ? Player : OpponentPlayer!;
@@ -1767,6 +1929,11 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         _session.SetFirstTurnTarget(Player, firstPlayer == Player ? TurnPhase.Main : TurnPhase.Draw);
         CurrentPhase = _session.CurrentPhase;
         UpdateIsMyTurn();
+
+        // UpdateIsMyTurn only toggles the opponent panel on an actual turn *transition* — but a new
+        // game is a fresh start, so it has to be right regardless of whose turn it was before:
+        // whoever isn't going first watches the opponent's board, whoever is going first doesn't.
+        IsOpponentPanelOpen = !IsMyTurn;
 
         if (glimpsedOnNewGame.Count > 0)
         {
@@ -1783,6 +1950,84 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     {
         OpenActionsMenu();
         SelectAction(action);
+    }
+
+    // --- Sideboarding: every new game (solo: the first one included) starts from this panel, where
+    // the player can swap cards between their sideboard and their Material/Main decks before
+    // pressing Ready. See SideboardViewModel for the panel itself; the swaps live in Player.Deck and
+    // carry from game to game until Reset. The panel being non-null IS the "open" state.
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsSideboardPanelOpen))]
+    private SideboardViewModel? _sideboardPanel;
+
+    public bool IsSideboardPanelOpen => SideboardPanel is not null;
+
+    partial void OnSideboardPanelChanged(SideboardViewModel? value)
+    {
+        if (value is not null)
+        {
+            CloseActionsMenu();
+        }
+    }
+
+    private void OpenSideboardPanel(bool canCancel)
+    {
+        if (Player.Deck is null)
+        {
+            // Older saves (made before decks were tracked) have no deck lists to sideboard from —
+            // solo just starts the game directly, exactly as before.
+            if (!IsOnline)
+            {
+                TriggerNewGame();
+                return;
+            }
+
+            // Online always has one (the lobby loads it), but never leave the ready-up without a
+            // panel: treat whatever's in Main/Material right now as the registered deck.
+            Player.Deck = new DeckArrangement(
+                Player.GetZone(ZoneType.MainDeck).Cards.Select(c => c.Card),
+                Player.GetZone(ZoneType.MaterialDeck).Cards.Select(c => c.Card),
+                Array.Empty<CardDto>());
+        }
+
+        // Online, the panel's own Ready/Start controls run through this board (the New Game region
+        // above) and Cancel also tells the opponent; solo's Ready just starts the game. With no game
+        // to cancel back to (a session's first game) the panel offers Back to Menu instead.
+        Action? onCancel = null;
+        if (canCancel)
+        {
+            onCancel = IsOnline ? CancelNewGameReadyUp : () => SideboardPanel = null;
+        }
+
+        var panel = new SideboardViewModel(
+            Player.Deck,
+            onReady: StartGameFromSideboard,
+            onCancel: onCancel,
+            apiClient: _apiClient,
+            board: IsOnline ? this : null,
+            onBackToMenu: BackToMenu);
+
+        // Ready is gated on a Level 0 champion, which changes as cards move.
+        panel.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(SideboardViewModel.HasLevelZeroChampion))
+            {
+                ToggleNewGameReadyCommand.NotifyCanExecuteChanged();
+            }
+        };
+
+        SideboardPanel = panel;
+        ToggleNewGameReadyCommand.NotifyCanExecuteChanged();
+    }
+
+    private void StartGameFromSideboard()
+    {
+        SideboardPanel = null;
+
+        // Rebuild Main/Material from the arrangement the player just set up, then the normal reset.
+        Decklists.DeckSessionBuilder.ApplyArrangement(Player);
+        TriggerNewGame();
     }
 
     /// <summary>Resets the board for a fresh game — solo's 'N' key (see HandleKey, which routes
@@ -1822,6 +2067,12 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         if (IsGlimpsing)
         {
             return true;
+        }
+
+        // The sideboard panel's "move how many?" prompt takes digits/Backspace/Enter/Escape itself.
+        if (SideboardPanel is { IsPromptingMoveCount: true } sideboardPanel)
+        {
+            return sideboardPanel.HandleKey(key);
         }
 
         // While the Actions menu's counter is showing, digits/Backspace type directly into
@@ -1972,7 +2223,7 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
                 }
                 else
                 {
-                    TriggerNewGame();
+                    OpenSideboardPanel(canCancel: true);
                 }
 
                 return true;
@@ -1987,11 +2238,11 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     /// half-configured action can't go stale if some other overlay opens first).</summary>
     private bool IsAnyOverlayOpen() =>
         IsOpponentPanelOpen || IsRollingDice || IsSavingGame || IsSealedPanelOpen || IsGiveTargetPickerOpen || IsActionsMenuOpen ||
-        IsGenerateSearchOpen || IsGenerateCountOpen || IsNewGameReadyUpOpen || IsHelpOpen ||
+        IsGenerateSearchOpen || IsGenerateCountOpen || IsHelpOpen || IsSideboardPanelOpen || IsNewGameAgreementOpen ||
         ZoomedCard is not null || PeekedZone is not null || ViewedMajorEvent is not null ||
         ViewedSnapshotPile is not null || ZoomedSnapshotCard is not null || ActiveReveal is not null;
 
-    private static bool TryGetDigit(Key key, out int digit)
+    internal static bool TryGetDigit(Key key, out int digit)
     {
         if (key is >= Key.D0 and <= Key.D9)
         {
@@ -2146,7 +2397,7 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     }
 
     /// <summary>Single entry point for drag-and-drop moves, which carry their destination (and, for the Field, a drop position) as data rather than a fixed command per destination.</summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanMoveCardTo))]
     private void MoveCardTo(MoveCardRequest? request)
     {
         if (request is not null)
@@ -2154,6 +2405,23 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
             Move(request.Card, request.Destination, request.FieldX, request.FieldY);
         }
     }
+
+    /// <summary>Whether the dragged card may go to that zone at all (GameSession.CanMove) — what
+    /// CardDropBehavior asks while a drag is hovering, so a zone that would refuse the drop isn't
+    /// highlighted as a target.</summary>
+    private bool CanMoveCardTo(MoveCardRequest? request)
+    {
+        if (request is null)
+        {
+            return false;
+        }
+
+        var from = ZoneOfCard(request.Card);
+        return from is not null && _session.CanMove(request.Card.Instance, from.Value, request.Destination);
+    }
+
+    private ZoneType? ZoneOfCard(CardViewModel card) =>
+        Player.Zones.FirstOrDefault(kv => kv.Value.Cards.Contains(card.Instance)).Value?.Type;
 
     /// <summary>
     /// Tap state only means something on the Field, so a click anywhere else is a no-op — this

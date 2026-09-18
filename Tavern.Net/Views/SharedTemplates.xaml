@@ -7,6 +7,10 @@
     <conv:NullToVisibilityConverter x:Key="NullToVisibility"/>
     <conv:IntToVisibilityConverter x:Key="IntToVisibility"/>
     <conv:BoolToCheckMarkConverter x:Key="BoolToCheckMark"/>
+
+    <!-- The app's "active/selected" highlight: a soft gold glow (paired with a faint gold edge)
+         instead of a solid gold border. -->
+    <DropShadowEffect x:Key="GoldGlow" Color="#F6E05E" BlurRadius="16" ShadowDepth="0" Opacity="0.9"/>
     <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
 
     <!-- Ready indicator: a colored check/x instead of the raw True/False text — originally the

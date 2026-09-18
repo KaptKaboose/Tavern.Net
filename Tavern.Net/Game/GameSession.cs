@@ -356,6 +356,35 @@ public sealed class GameSession
         return true;
     }
 
+    /// <summary>
+    /// Whether <paramref name="card"/> may go from <paramref name="from"/> to <paramref name="to"/> —
+    /// the one rulebook MoveCard enforces (silently, on a rejected move) and the board's drag-and-drop
+    /// consults up front, so a zone that would refuse the drop isn't offered as a target. Same-zone
+    /// "moves" only mean something on the Field (repositioning).
+    /// </summary>
+    public bool CanMove(CardInstance card, ZoneType from, ZoneType to)
+    {
+        if (from == to)
+        {
+            return to == ZoneType.Field;
+        }
+
+        if (card.Card.IsToken)
+        {
+            return (from == ZoneType.Tokens && to == ZoneType.Field) || (from == ZoneType.Field && to == ZoneType.Tokens);
+        }
+
+        return CanMove(card, to);
+    }
+
+    // The destination-only half, for ordinary (non-token) cards: one-way zone barriers (e.g.
+    // MaterialDeck -> Hand), only Champion cards may enter the Champion zone, and nothing but a
+    // token may ever enter the Tokens zone (tokens are handled separately in CanMove above).
+    private static bool CanMove(CardInstance card, ZoneType to) =>
+        !ZoneBarriers.Contains((card.HomeZone, to))
+        && !(to == ZoneType.Champion && !card.Card.IsChampion)
+        && to != ZoneType.Tokens;
+
     /// <param name="toBottom">For a stack zone (Insert(0, ...) by default, i.e. the top), append to
     /// the end instead — the Zoom overlay's "Bottom of Main" action.</param>
     public void MoveCard(Player player, CardInstance card, ZoneType from, ZoneType to, double? fieldX = null, double? fieldY = null, bool toBottom = false)
@@ -367,15 +396,10 @@ public sealed class GameSession
             return;
         }
 
-        // Silently ignore a move across a one-way zone barrier (e.g. MaterialDeck -> Hand) —
-        // rather than throw, since a drag-drop that lands on a blocked zone shouldn't crash.
-        if (ZoneBarriers.Contains((card.HomeZone, to)))
-        {
-            return;
-        }
-
-        // Only Champion cards may enter the Champion zone.
-        if (to == ZoneType.Champion && !card.Card.IsChampion)
+        // Silently ignore an illegal destination (a one-way zone barrier, or a non-champion into
+        // Champion — see CanMove) rather than throw, since a drag-drop that lands on a blocked zone
+        // shouldn't crash.
+        if (!CanMove(card, to))
         {
             return;
         }

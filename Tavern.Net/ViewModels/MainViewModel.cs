@@ -65,17 +65,19 @@ public sealed partial class MainViewModel : ObservableObject
     private OnlineLobbyViewModel CreateOnlineLobbyViewModel()
     {
         var onlineLobbyViewModel = new OnlineLobbyViewModel(_apiClient, _deckStorage, _gameStorage, _playerNameStorage);
-        onlineLobbyViewModel.GameStarted += (session, player, connection) => CurrentView = CreateGameBoardViewModel(session, player, connection);
+        onlineLobbyViewModel.GameStarted += (session, player, connection, firstPlayerNumber) =>
+            CurrentView = CreateGameBoardViewModel(session, player, connection, onlineFirstPlayerNumber: firstPlayerNumber);
         onlineLobbyViewModel.BackRequested += () => CurrentView = ReturnToStartMenu();
         return onlineLobbyViewModel;
     }
 
     private GameBoardViewModel CreateGameBoardViewModel(
-        GameSession session, Player player, GameConnection? connection = null, TimeSpan? loadedElapsedTime = null, bool isFreshSoloGame = false)
+        GameSession session, Player player, GameConnection? connection = null, TimeSpan? loadedElapsedTime = null, bool isFreshSoloGame = false,
+        int? onlineFirstPlayerNumber = null)
     {
         var opponentPlayer = connection is not null ? session.Players.First(p => p != player) : null;
         var gameBoardViewModel = new GameBoardViewModel(
-            session, player, _apiClient, _gameStorage, connection, opponentPlayer, loadedElapsedTime, isFreshSoloGame);
+            session, player, _apiClient, _gameStorage, connection, opponentPlayer, loadedElapsedTime, isFreshSoloGame, onlineFirstPlayerNumber);
         gameBoardViewModel.BackToMenuRequested += () => CurrentView = ReturnToStartMenu();
         return gameBoardViewModel;
     }

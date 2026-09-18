@@ -32,16 +32,16 @@
         <Style x:Key="ChooseMeFirstButtonStyle" TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
             <Style.Triggers>
                 <DataTrigger Binding="{Binding IsMeChosenFirst}" Value="True">
-                    <Setter Property="BorderBrush" Value="#F6E05E"/>
-                    <Setter Property="BorderThickness" Value="3"/>
+                    <Setter Property="BorderBrush" Value="#99F6E05E"/>
+                    <Setter Property="Effect" Value="{StaticResource GoldGlow}"/>
                 </DataTrigger>
             </Style.Triggers>
         </Style>
         <Style x:Key="ChooseOpponentFirstButtonStyle" TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
             <Style.Triggers>
                 <DataTrigger Binding="{Binding IsOpponentChosenFirst}" Value="True">
-                    <Setter Property="BorderBrush" Value="#F6E05E"/>
-                    <Setter Property="BorderThickness" Value="3"/>
+                    <Setter Property="BorderBrush" Value="#99F6E05E"/>
+                    <Setter Property="Effect" Value="{StaticResource GoldGlow}"/>
                 </DataTrigger>
             </Style.Triggers>
         </Style>

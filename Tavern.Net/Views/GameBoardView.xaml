@@ -20,6 +20,7 @@
         <conv:DieFaceToImageConverter x:Key="DieFaceToImage"/>
         <conv:BoolToPlayerLabelConverter x:Key="BoolToPlayerLabel"/>
         <conv:LowLifeToBrushConverter x:Key="LowLifeToBrush"/>
+        <conv:CopyCountToBrushConverter x:Key="CopyCountToBrush"/>
 
         <!-- One pile box — real card art (or an empty dark box, via IntToVisibility, when the zone
              has no cards) plus a count badge that always shows, including 0. Click opens the full
@@ -59,7 +60,8 @@
             <Setter Property="BorderThickness" Value="2"/>
             <Style.Triggers>
                 <Trigger Property="IsChecked" Value="True">
-                    <Setter Property="BorderBrush" Value="#F6E05E"/>
+                    <Setter Property="BorderBrush" Value="#99F6E05E"/>
+                    <Setter Property="Effect" Value="{StaticResource GoldGlow}"/>
                     <Setter Property="Background" Value="#4A5568"/>
                 </Trigger>
             </Style.Triggers>
@@ -119,22 +121,64 @@
             <Setter Property="TextWrapping" Value="Wrap"/>
         </Style>
 
+        <!-- Sideboard panel: one row per distinct card in a list ("x3 Name  Element · Type").
+             Draggable between the panel's three lists, or double-click to move a single copy —
+             see DeckListBehavior. Hover shows the card's effect text. -->
+        <DataTemplate x:Key="DeckCardRowTemplate" DataType="{x:Type vm:DeckCardGroup}">
+            <Border Padding="8,4" Margin="0,0,0,2" CornerRadius="4" Cursor="Hand"
+                    behaviors:DeckListBehavior.IsRowDragSource="True">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Background" Value="#2D3748"/>
+                        <Style.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#4A5568"/>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <!-- Hover shows the card itself (fetched the first time it's hovered — see
+                     DeckCardGroup.Artwork); the name stays visible behind it until the image arrives. -->
+                <Border.ToolTip>
+                    <ToolTip Background="Transparent" BorderThickness="0" Padding="0" HasDropShadow="False">
+                        <Border Width="260" Height="363" CornerRadius="10" Background="#2D3748" ClipToBounds="True">
+                            <Grid>
+                                <TextBlock Text="{Binding Name}" Foreground="#A0AEC0" TextAlignment="Center" TextWrapping="Wrap"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center" Margin="16"/>
+                                <Image Source="{Binding Artwork}" Stretch="Uniform"/>
+                            </Grid>
+                        </Border>
+                    </ToolTip>
+                </Border.ToolTip>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="34"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="{Binding Count, StringFormat='x{0}'}" Foreground="{Binding Count, Converter={StaticResource CopyCountToBrush}}" FontWeight="Bold"/>
+                    <TextBlock Grid.Column="1" Text="{Binding Name}" Foreground="#F7FAFC" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Grid.Column="2" Text="{Binding Detail}" Foreground="#A0AEC0" FontSize="11" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
         <!-- Snapshot viewer's tab buttons — gold-bordered while active, same highlight color used
              everywhere else in the app for an active/selected state (StatusToggleStyle, the online
              lobby's turn-order choice). -->
         <Style x:Key="PrimaryTabButtonStyle" TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
             <Style.Triggers>
                 <DataTrigger Binding="{Binding IsShowingOtherPlayerTab}" Value="False">
-                    <Setter Property="BorderBrush" Value="#F6E05E"/>
-                    <Setter Property="BorderThickness" Value="3"/>
+                    <Setter Property="BorderBrush" Value="#99F6E05E"/>
+                    <Setter Property="Effect" Value="{StaticResource GoldGlow}"/>
                 </DataTrigger>
             </Style.Triggers>
         </Style>
         <Style x:Key="OtherPlayerTabButtonStyle" TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
             <Style.Triggers>
                 <DataTrigger Binding="{Binding IsShowingOtherPlayerTab}" Value="True">
-                    <Setter Property="BorderBrush" Value="#F6E05E"/>
-                    <Setter Property="BorderThickness" Value="3"/>
+                    <Setter Property="BorderBrush" Value="#99F6E05E"/>
+                    <Setter Property="Effect" Value="{StaticResource GoldGlow}"/>
                 </DataTrigger>
             </Style.Triggers>
         </Style>
@@ -145,13 +189,50 @@
              screen away from whatever the player's doing just by moving a card. Clears the instant
              the panel is actually opened, by any means (see GameBoardViewModel.
              OnIsOpponentPanelOpenChanged). -->
+        <!-- Light orange by default (it's clicked constantly, so it should be easy to pick out of the
+             header). While they've done something since the panel was last open it blinks — flips
+             between that orange as a solid fill with dark text and the normal outlined look — until
+             the panel is opened (see HasUnseenOpponentActivity). The flip is a discrete key-frame
+             swap rather than a color fade: the base brushes come from this style and are frozen, so
+             they can't be animated in place. -->
         <Style x:Key="OpponentButtonStyle" TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+            <Setter Property="Foreground" Value="#F6AD55"/>
+            <Setter Property="BorderBrush" Value="#F6AD55"/>
             <Style.Triggers>
                 <DataTrigger Binding="{Binding HasUnseenOpponentActivity}" Value="True">
-                    <Setter Property="BorderBrush" Value="#F6E05E"/>
                     <Setter Property="BorderThickness" Value="3"/>
+                    <DataTrigger.EnterActions>
+                        <BeginStoryboard x:Name="OpponentBlink">
+                            <Storyboard RepeatBehavior="Forever">
+                                <ObjectAnimationUsingKeyFrames Storyboard.TargetProperty="Background" Duration="0:0:1.2">
+                                    <DiscreteObjectKeyFrame KeyTime="0:0:0" Value="{x:Static Brushes.Transparent}"/>
+                                    <DiscreteObjectKeyFrame KeyTime="0:0:0.6">
+                                        <DiscreteObjectKeyFrame.Value><SolidColorBrush Color="#F6AD55"/></DiscreteObjectKeyFrame.Value>
+                                    </DiscreteObjectKeyFrame>
+                                </ObjectAnimationUsingKeyFrames>
+                                <ObjectAnimationUsingKeyFrames Storyboard.TargetProperty="Foreground" Duration="0:0:1.2">
+                                    <DiscreteObjectKeyFrame KeyTime="0:0:0">
+                                        <DiscreteObjectKeyFrame.Value><SolidColorBrush Color="#F6AD55"/></DiscreteObjectKeyFrame.Value>
+                                    </DiscreteObjectKeyFrame>
+                                    <DiscreteObjectKeyFrame KeyTime="0:0:0.6">
+                                        <DiscreteObjectKeyFrame.Value><SolidColorBrush Color="#1A202C"/></DiscreteObjectKeyFrame.Value>
+                                    </DiscreteObjectKeyFrame>
+                                </ObjectAnimationUsingKeyFrames>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </DataTrigger.EnterActions>
+                    <DataTrigger.ExitActions>
+                        <StopStoryboard BeginStoryboardName="OpponentBlink"/>
+                    </DataTrigger.ExitActions>
                 </DataTrigger>
             </Style.Triggers>
+        </Style>
+
+        <!-- Header's Actions button — light blue, same reasoning as the Opponent button: a
+             frequently used, always-needed control that should stand out from the rest of the row. -->
+        <Style x:Key="ActionsButtonStyle" TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+            <Setter Property="Foreground" Value="#90CDF4"/>
+            <Setter Property="BorderBrush" Value="#90CDF4"/>
         </Style>
     </UserControl.Resources>
     <Grid>
@@ -182,7 +263,7 @@
                     <Button Style="{StaticResource CompactButtonStyle}" Content="?" Command="{Binding OpenHelpCommand}"
                             ToolTip="Keyboard shortcuts"/>
 
-                    <TextBlock Text="{Binding ConnectionLostMessage}" Foreground="IndianRed" VerticalAlignment="Center"
+                    <TextBlock Text="{Binding ConnectionLostMessage}" Foreground="IndianRed" VerticalAlignment="Center" Margin="12,0,0,0"
                                Visibility="{Binding ConnectionLostMessage, Converter={StaticResource NullToVisibility}}"/>
                 </StackPanel>
 
@@ -306,9 +387,9 @@
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                     <!-- Online only: opens the read-only opponent panel (also auto-opens/closes on
-                         each turn handoff — see GameBoardViewModel.UpdateIsMyTurn). Glows gold
-                         (OpponentButtonStyle) when they've done something since the panel was last
-                         open. -->
+                         each turn handoff — see GameBoardViewModel.UpdateIsMyTurn). Light orange
+                         (OpponentButtonStyle), filling solid when they've done something since the
+                         panel was last open. -->
                     <Button Style="{StaticResource OpponentButtonStyle}" Content="Opponent" Margin="0,0,16,0"
                             Command="{Binding ToggleOpponentPanelCommand}"
                             Visibility="{Binding IsOnline, Converter={StaticResource BoolToVisibility}}"/>
@@ -331,9 +412,21 @@
 
                     <!-- Banish/Reveal/Glimpse/Mill/Give — click to open a menu instead of the old
                          invisible keyboard chords, per GameBoardViewModel's own ArmedChord family. -->
-                    <Button Style="{StaticResource ActionButtonStyle}" Content="Actions" Margin="0,0,16,0" Command="{Binding OpenActionsMenuCommand}"/>
+                    <Button Style="{StaticResource ActionsButtonStyle}" Content="Actions" Margin="0,0,16,0" Command="{Binding OpenActionsMenuCommand}"/>
 
-                    <Button Style="{StaticResource ActionButtonStyle}" Content="Roll" Margin="0,0,16,0" Command="{Binding OpenDicePanelCommand}"/>
+                    <Button Style="{StaticResource ActionButtonStyle}" Margin="0,0,16,0" Padding="10,4"
+                            Command="{Binding OpenDicePanelCommand}" ToolTip="Roll dice">
+                        <!-- A drawn die (rounded outline + five pips) rather than an image, so it stays
+                             crisp and matches the button's text color. -->
+                        <Grid Width="24" Height="24">
+                            <Border BorderBrush="#F7FAFC" BorderThickness="2" CornerRadius="6"/>
+                            <Ellipse Width="4" Height="4" Fill="#F7FAFC" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="5,5,0,0"/>
+                            <Ellipse Width="4" Height="4" Fill="#F7FAFC" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,5,5,0"/>
+                            <Ellipse Width="4" Height="4" Fill="#F7FAFC" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <Ellipse Width="4" Height="4" Fill="#F7FAFC" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="5,0,0,5"/>
+                            <Ellipse Width="4" Height="4" Fill="#F7FAFC" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,5,5"/>
+                        </Grid>
+                    </Button>
 
                     <!-- Solo only: with a real opponent, their own Life (visible in the Opponent
                          panel) is the meaningful running total — see GameBoardViewModel's own note
@@ -1288,7 +1381,8 @@
                                             <Setter Property="BorderBrush" Value="Transparent"/>
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding IsSettled}" Value="True">
-                                                    <Setter Property="BorderBrush" Value="#F6E05E"/>
+                                                    <Setter Property="BorderBrush" Value="#99F6E05E"/>
+                                                    <Setter Property="Effect" Value="{StaticResource GoldGlow}"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
@@ -1665,92 +1759,254 @@
             </StackPanel>
         </Grid>
 
-        <!-- New Game ready-up (online only): pressing 'N' opens this for both players instead of
-             solo's immediate reset — same "both ready, host commits" shape as the online lobby's
-             own Ready/Start handshake (ReadyMarkStyle/BoolToCheckMark are shared with it). Placed
-             last of all so an incoming request always surfaces on top, even over whatever overlay
-             the other player happened to have open locally. No scrim-click-to-close — Cancel is the
-             only way out, since closing it silently would leave the other side stuck waiting. -->
+        <!-- Sideboard panel: opens at the start of every game (and on 'N'). Sideboard on the left,
+             Material over Main on the right; drag a row between lists (or double-click it) to move
+             one copy — Material cards only fit in Material, everything else only in Main or the
+             sideboard. Ready builds the game from whatever the lists hold; Reset puts everything back
+             to the registered deck. See SideboardViewModel. -->
         <Grid Grid.Column="0" Grid.ColumnSpan="2"
-              Visibility="{Binding IsNewGameReadyUpOpen, Converter={StaticResource BoolToVisibility}}"
+              Visibility="{Binding IsSideboardPanelOpen, Converter={StaticResource BoolToVisibility}}"
               d:IsHidden="True">
-            <Border Background="#CC000000"/>
+            <Border Background="#E6000000"/>
 
-            <Border MinWidth="320" Padding="24" HorizontalAlignment="Center" VerticalAlignment="Center"
-                    Background="#2D3748" BorderBrush="White" BorderThickness="2" CornerRadius="10">
-                <StackPanel>
-                    <TextBlock Text="Start a new game?" FontSize="18" FontWeight="Bold" Foreground="White" Margin="0,0,0,4"/>
-                    <TextBlock Text="Both players' boards will fully reset — decks reshuffled, new hands drawn, logs cleared."
-                               Foreground="#A0AEC0" TextWrapping="Wrap" MaxWidth="280" Margin="0,0,0,16"/>
+            <Border MaxWidth="1240" MaxHeight="880" Margin="24" Padding="20"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Background="#1A202C" BorderBrush="White" BorderThickness="2" CornerRadius="10">
+                <Grid DataContext="{Binding SideboardPanel}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
 
-                    <Border Background="#1A202C" CornerRadius="8" Padding="16,12" Margin="0,0,0,16">
-                        <StackPanel Orientation="Horizontal">
-                            <Button Style="{StaticResource ActionButtonStyle}" Command="{Binding ToggleNewGameReadyCommand}">
-                                <TextBlock>
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="Text" Value="Ready Up"/>
+                    <StackPanel Grid.Row="0" Margin="0,0,0,12">
+                        <DockPanel>
+                            <!-- Shown while Ready online: the lists below are dimmed and can't be changed
+                                 until Not Ready is pressed. -->
+                            <Border DockPanel.Dock="Right" Background="#F6E05E" CornerRadius="6" Padding="10,3" VerticalAlignment="Center"
+                                    Visibility="{Binding IsLocked, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="DECKS LOCKED — press Not Ready to make changes" Foreground="#1A202C" FontWeight="Bold" FontSize="12"/>
+                            </Border>
+                            <TextBlock Text="Sideboarding" FontSize="22" FontWeight="Bold" Foreground="White"/>
+                        </DockPanel>
+                        <TextBlock Foreground="#A0AEC0" Margin="0,4,0,0" TextWrapping="Wrap"
+                                   Text="Drag a card between lists (or double-click it) to move one copy. Material cards can only go in Material; everything else in Main or the sideboard. Ready starts the game with these decks."/>
+                    </StackPanel>
+
+                    <Grid Grid.Row="1">
+                        <Grid.Style>
+                            <Style TargetType="Grid">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsLocked}" Value="True">
+                                        <Setter Property="Opacity" Value="0.5"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Grid.Style>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="16"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Sideboard -->
+                        <DockPanel Grid.Column="0">
+                            <TextBlock DockPanel.Dock="Top" Foreground="White" FontWeight="Bold" FontSize="16" Margin="0,0,0,6">
+                                <Run Text="Sideboard"/>
+                                <Run Text="{Binding SideboardCount, StringFormat=' ({0})'}" Foreground="#A0AEC0"/>
+                            </TextBlock>
+                            <Border Background="#171923" BorderBrush="#4A5568" BorderThickness="1" CornerRadius="8" Padding="8"
+                                    behaviors:DeckListBehavior.ListKind="Sideboard"
+                                    behaviors:DeckListBehavior.MoveCommand="{Binding MoveDeckCardCommand}">
+                                <Grid>
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                        <ItemsControl ItemsSource="{Binding SideboardCards}" ItemTemplate="{StaticResource DeckCardRowTemplate}"/>
+                                    </ScrollViewer>
+                                    <TextBlock Text="No sideboard cards" Foreground="#718096" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                               IsHitTestVisible="False"
+                                               Visibility="{Binding IsSideboardEmpty, Converter={StaticResource BoolToVisibility}}"/>
+                                </Grid>
+                            </Border>
+                        </DockPanel>
+
+                        <!-- Material over Main -->
+                        <Grid Grid.Column="2">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="2*"/>
+                                <RowDefinition Height="12"/>
+                                <RowDefinition Height="5*"/>
+                            </Grid.RowDefinitions>
+
+                            <DockPanel Grid.Row="0">
+                                <TextBlock DockPanel.Dock="Top" Foreground="White" FontWeight="Bold" FontSize="16" Margin="0,0,0,6">
+                                    <Run Text="Material"/>
+                                    <Run Text="{Binding MaterialCount, StringFormat=' ({0})'}" Foreground="#A0AEC0"/>
+                                </TextBlock>
+                                <Border Background="#171923" BorderBrush="#4A5568" BorderThickness="1" CornerRadius="8" Padding="8"
+                                        behaviors:DeckListBehavior.ListKind="Material"
+                                        behaviors:DeckListBehavior.MoveCommand="{Binding MoveDeckCardCommand}">
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                        <ItemsControl ItemsSource="{Binding MaterialCards}" ItemTemplate="{StaticResource DeckCardRowTemplate}"/>
+                                    </ScrollViewer>
+                                </Border>
+                            </DockPanel>
+
+                            <DockPanel Grid.Row="2">
+                                <TextBlock DockPanel.Dock="Top" Foreground="White" FontWeight="Bold" FontSize="16" Margin="0,0,0,6">
+                                    <Run Text="Main"/>
+                                    <Run Text="{Binding MainCount, StringFormat=' ({0})'}" Foreground="#A0AEC0"/>
+                                </TextBlock>
+                                <Border Background="#171923" BorderBrush="#4A5568" BorderThickness="1" CornerRadius="8" Padding="8"
+                                        behaviors:DeckListBehavior.ListKind="Main"
+                                        behaviors:DeckListBehavior.MoveCommand="{Binding MoveDeckCardCommand}">
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                        <ItemsControl ItemsSource="{Binding MainCards}" ItemTemplate="{StaticResource DeckCardRowTemplate}"/>
+                                    </ScrollViewer>
+                                </Border>
+                            </DockPanel>
+                        </Grid>
+                    </Grid>
+
+                    <StackPanel Grid.Row="2" Margin="0,14,0,0">
+                        <!-- Online only: both players' ready state (edits lock while you're Ready) and,
+                             for the host, who goes first. The host's Start (below) enables once both
+                             are Ready; the guest just waits for it. -->
+                        <DockPanel Margin="0,0,0,12" Visibility="{Binding IsOnline, Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal"
+                                        Visibility="{Binding ShowFirstPlayerChoice, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="Who goes first?" Foreground="#A0AEC0" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                <Button Content="You" Margin="0,0,8,0" Command="{Binding Board.ChooseSelfFirstForNewGameCommand}">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
                                             <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsNewGameReady}" Value="True">
-                                                    <Setter Property="Text" Value="Not Ready"/>
+                                                <DataTrigger Binding="{Binding Board.IsMeChosenFirstForNewGame}" Value="True">
+                                                    <Setter Property="BorderBrush" Value="#99F6E05E"/>
+                                                    <Setter Property="Effect" Value="{StaticResource GoldGlow}"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
-                            </Button>
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
+                                    </Button.Style>
+                                </Button>
+                                <Button Content="Opponent" Command="{Binding Board.ChooseOpponentFirstForNewGameCommand}">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Board.IsMeChosenFirstForNewGame}" Value="False">
+                                                    <Setter Property="BorderBrush" Value="#99F6E05E"/>
+                                                    <Setter Property="Effect" Value="{StaticResource GoldGlow}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                 <TextBlock Text="You:" Foreground="#A0AEC0" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                                <TextBlock DataContext="{Binding IsNewGameReady}" Text="{Binding Converter={StaticResource BoolToCheckMark}}"
+                                <TextBlock DataContext="{Binding Board.IsNewGameReady}" Text="{Binding Converter={StaticResource BoolToCheckMark}}"
                                            Style="{StaticResource ReadyMarkStyle}"/>
                                 <TextBlock Text="Opponent:" Foreground="#A0AEC0" VerticalAlignment="Center" Margin="16,0,6,0"/>
-                                <TextBlock DataContext="{Binding IsOpponentNewGameReady}" Text="{Binding Converter={StaticResource BoolToCheckMark}}"
+                                <TextBlock DataContext="{Binding Board.IsOpponentNewGameReady}" Text="{Binding Converter={StaticResource BoolToCheckMark}}"
                                            Style="{StaticResource ReadyMarkStyle}"/>
                             </StackPanel>
-                        </StackPanel>
-                    </Border>
+                        </DockPanel>
 
-                    <!-- Host only — no dice-roll step for a mid-game reset, so the host just picks
-                         directly rather than the lobby's roll-then-choose flow. Defaults to the
-                         host (see GameBoardViewModel.OpenNewGameReadyUp). -->
-                    <StackPanel Visibility="{Binding IsHost, Converter={StaticResource BoolToVisibility}}" Margin="0,0,0,16">
-                        <TextBlock Text="Who goes first?" Foreground="#A0AEC0" Margin="0,0,0,6"/>
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <Button Content="You" Margin="0,0,8,0" Command="{Binding ChooseSelfFirstForNewGameCommand}">
-                                <Button.Style>
-                                    <Style TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsMeChosenFirstForNewGame}" Value="True">
-                                                <Setter Property="BorderBrush" Value="#F6E05E"/>
-                                                <Setter Property="BorderThickness" Value="3"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Button.Style>
-                            </Button>
-                            <Button Content="Opponent" Command="{Binding ChooseOpponentFirstForNewGameCommand}">
-                                <Button.Style>
-                                    <Style TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsMeChosenFirstForNewGame}" Value="False">
-                                                <Setter Property="BorderBrush" Value="#F6E05E"/>
-                                                <Setter Property="BorderThickness" Value="3"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Button.Style>
-                            </Button>
-                        </StackPanel>
+                        <DockPanel>
+                            <!-- Left side of the row: the way out (first game only) and the guest's wait
+                                 notice — kept apart from the deck/ready controls on the right. -->
+                            <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Margin="0,0,16,0">
+                                <Button Style="{StaticResource ActionButtonStyle}" Content="Back to Menu"
+                                        Command="{Binding BackToMenuCommand}"
+                                        Visibility="{Binding CanBackToMenu, Converter={StaticResource BoolToVisibility}}"/>
+                                <Button Style="{StaticResource ActionButtonStyle}" Content="Cancel"
+                                        Command="{Binding CancelCommand}"
+                                        Visibility="{Binding CanCancel, Converter={StaticResource BoolToVisibility}}"/>
+                                <TextBlock Text="Waiting for the host to start..." Foreground="#A0AEC0" VerticalAlignment="Center" Margin="16,0,0,0"
+                                           Visibility="{Binding ShowWaitingForHost, Converter={StaticResource BoolToVisibility}}"/>
+                            </StackPanel>
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                <Button Style="{StaticResource ActionButtonStyle}" Content="Reset to registered deck" Margin="0,0,8,0"
+                                        Command="{Binding ResetCommand}"/>
+
+                                <!-- Solo: Ready just starts the game. -->
+                                <Button Style="{StaticResource ActionButtonStyle}" Content="Ready" Command="{Binding ReadyCommand}"
+                                        Visibility="{Binding IsSolo, Converter={StaticResource BoolToVisibility}}"/>
+
+                                <!-- Online: Ready toggles; the host's Start commits once both are Ready. -->
+                                <StackPanel Orientation="Horizontal" Visibility="{Binding IsOnline, Converter={StaticResource BoolToVisibility}}">
+                                    <Button Style="{StaticResource ActionButtonStyle}" Command="{Binding Board.ToggleNewGameReadyCommand}">
+                                        <TextBlock>
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Text" Value="Ready"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Board.IsNewGameReady}" Value="True">
+                                                            <Setter Property="Text" Value="Not Ready"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Button>
+                                    <Button Style="{StaticResource ActionButtonStyle}" Content="Start Game" Margin="8,0,0,0"
+                                            Command="{Binding Board.StartNewGameOnlineCommand}"
+                                            Visibility="{Binding Board.IsHost, Converter={StaticResource BoolToVisibility}}"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <TextBlock Text="{Binding ValidationMessage}" Foreground="IndianRed" VerticalAlignment="Center" TextWrapping="Wrap"
+                                       Visibility="{Binding ValidationMessage, Converter={StaticResource NullToVisibility}}"/>
+                        </DockPanel>
                     </StackPanel>
 
-                    <Button Style="{StaticResource ActionButtonStyle}" Content="Start New Game" Margin="0,0,0,8"
-                            Command="{Binding StartNewGameOnlineCommand}"
-                            Visibility="{Binding IsHost, Converter={StaticResource BoolToVisibility}}"/>
-                    <TextBlock Text="Waiting for the host to start..." Foreground="#A0AEC0" HorizontalAlignment="Center" Margin="0,0,0,8"
-                               Visibility="{Binding IsGuest, Converter={StaticResource BoolToVisibility}}"/>
+                    <!-- "Move how many?" — opened by double-clicking a row with several copies. The
+                         scrim absorbs clicks/drops so nothing underneath can be touched meanwhile;
+                         digits/Backspace/Enter/Escape work too (SideboardViewModel.HandleKey). -->
+                    <Grid Grid.RowSpan="3" Visibility="{Binding IsPromptingMoveCount, Converter={StaticResource BoolToVisibility}}">
+                        <Border Background="#B3000000" CornerRadius="10"/>
+                        <Border MinWidth="300" Padding="20" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                Background="#2D3748" BorderBrush="White" BorderThickness="2" CornerRadius="10">
+                            <StackPanel>
+                                <TextBlock Text="{Binding MovePromptTitle}" FontSize="18" FontWeight="Bold" Foreground="White" TextWrapping="Wrap" MaxWidth="320"/>
+                                <TextBlock Text="{Binding MovePromptTarget}" Foreground="#A0AEC0" Margin="0,2,0,12"/>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,16">
+                                    <Button Style="{StaticResource CounterButtonStyle}" Content="-" Command="{Binding DecreaseMoveCountCommand}"/>
+                                    <TextBlock Text="{Binding MoveCount}" FontSize="20" FontWeight="Bold" Foreground="#F7FAFC"
+                                               Width="44" TextAlignment="Center" VerticalAlignment="Center"/>
+                                    <Button Style="{StaticResource CounterButtonStyle}" Content="+" Command="{Binding IncreaseMoveCountCommand}"/>
+                                    <TextBlock Text="{Binding MoveCountMax, StringFormat='of {0}'}" Foreground="#A0AEC0" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                    <Button Style="{StaticResource ActionButtonStyle}" Content="Cancel" Margin="0,0,8,0" Command="{Binding CancelMoveCommand}"/>
+                                    <Button Style="{StaticResource ActionButtonStyle}" Content="Move" Command="{Binding ConfirmMoveCommand}"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
 
-                    <Button Style="{StaticResource ActionButtonStyle}" Content="Cancel" HorizontalAlignment="Center"
-                            Command="{Binding CancelNewGameReadyUpCommand}"/>
+        <!-- New Game agreement (online): pressing 'N' asks the other player first — the asker has
+             already agreed by pressing it, the other player sees Agree/Decline. Once both agree, both
+             move on to the sideboard panel. Placed after the panel and last of the modals so an
+             incoming request always surfaces on top of whatever else is open. No scrim-click to
+             dismiss — Cancel/Decline tells the other side. -->
+        <Grid Grid.Column="0" Grid.ColumnSpan="2"
+              Visibility="{Binding IsNewGameAgreementOpen, Converter={StaticResource BoolToVisibility}}"
+              d:IsHidden="True">
+            <Border Background="#CC000000"/>
+
+            <Border MinWidth="340" MaxWidth="420" Padding="24" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Background="#2D3748" BorderBrush="White" BorderThickness="2" CornerRadius="10">
+                <StackPanel>
+                    <TextBlock Text="Start a new game?" FontSize="18" FontWeight="Bold" Foreground="White" Margin="0,0,0,8"/>
+                    <TextBlock Text="{Binding AgreementMessage}" Foreground="#A0AEC0" TextWrapping="Wrap" Margin="0,0,0,16"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <Button Style="{StaticResource ActionButtonStyle}" Content="Agree" Margin="0,0,8,0"
+                                Command="{Binding AgreeToNewGameCommand}"
+                                Visibility="{Binding ShowAgreeButton, Converter={StaticResource BoolToVisibility}}"/>
+                        <Button Style="{StaticResource ActionButtonStyle}" Content="{Binding AgreementCancelLabel}"
+                                Command="{Binding CancelNewGameAgreementCommand}"/>
+                    </StackPanel>
                 </StackPanel>
             </Border>
         </Grid>

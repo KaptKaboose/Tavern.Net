@@ -112,7 +112,9 @@ public sealed partial class OnlineLobbyViewModel : ObservableObject
 
     /// <summary>Raised once this side's local GameSession is built and ready — MainViewModel hands
     /// off to the game board, passing the same GameConnection through so it can keep broadcasting.</summary>
-    public event Action<GameSession, Player, GameConnection>? GameStarted;
+    /// <summary>Raised with the loaded (but not yet started) session, the local player, the live
+    /// connection, and the first player the lobby's dice roll settled on (a PlayerNumber).</summary>
+    public event Action<GameSession, Player, GameConnection, int>? GameStarted;
 
     public event Action? BackRequested;
 
@@ -357,18 +359,17 @@ public sealed partial class OnlineLobbyViewModel : ObservableObject
             me = session.AddPlayer(PlayerName.Trim());
         }
 
+        // Only loads the deck — the game itself doesn't start here. The board opens on the
+        // sideboarding panel, and the game begins (StartNewGameForPlayer, first player, ...) once both
+        // players are Ready there and the host hits Start — see GameBoardViewModel's New Game
+        // region. firstPlayerNumber (the lobby's dice-roll result) just becomes that panel's default.
         DeckSessionBuilder.LoadDeckIntoPlayer(me, entries);
         session.Shuffle(me, ZoneType.MainDeck);
-        session.StartNewGameForPlayer(me);
-
-        var firstPlayer = firstPlayerNumber == me.PlayerNumber ? me : opponent;
-        session.ApplyRemoteGameState(TurnPhase.Materialization, firstPlayer);
-        session.SetFirstTurnTarget(me, firstPlayer == me ? TurnPhase.Main : TurnPhase.Draw);
 
         _connection!.MessageReceived -= OnMessageReceived;
         _connection.Disconnected -= OnDisconnected;
 
-        GameStarted?.Invoke(session, me, _connection);
+        GameStarted?.Invoke(session, me, _connection, firstPlayerNumber);
         return true;
     }
 

@@ -22,6 +22,10 @@ public enum OnlineMessageKind
     NewGameReady,
     NewGameStart,
     NewGameCancel,
+
+    /// <summary>The other player agreeing to a NewGameRequest — both then move on to the sideboard
+    /// panel. (Appended last so the existing kinds' wire values don't shift.)</summary>
+    NewGameAgree,
 }
 
 /// <summary>One revealed card in a RevealCards message — just enough to resolve and display it on

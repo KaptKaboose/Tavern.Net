@@ -35,28 +35,58 @@ public static class DeckSessionBuilder
     /// </summary>
     public static void LoadDeckIntoPlayer(Player player, IEnumerable<Entry> entries)
     {
-        var mainOrder = 0;
-        var materialOrder = 0;
+        var main = new List<CardDto>();
+        var material = new List<CardDto>();
+        var sideboard = new List<CardDto>();
 
         foreach (var entry in entries)
         {
-            // Sideboards aren't meaningful in a goldfish/online session — parsed and shown, not played.
-            if (entry.Section == DeckSection.Sideboard)
-            {
-                continue;
-            }
-
             // Champions start in the Material Deck alongside Regalia, same as Omnidex decklists —
             // materialize your starting champion onto the Field yourself once the game begins.
-            var zoneType = entry.Section == DeckSection.Main ? ZoneType.MainDeck : ZoneType.MaterialDeck;
+            var target = entry.Section switch
+            {
+                DeckSection.Sideboard => sideboard,
+                DeckSection.Main => main,
+                _ => material,
+            };
 
             for (var i = 0; i < entry.Quantity; i++)
             {
-                // HomeOrder records this copy's place in the original decklist so
-                // GameSession.StartNewGame can rebuild Material in its original order later.
-                var homeOrder = zoneType == ZoneType.MainDeck ? mainOrder++ : materialOrder++;
-                player.GetZone(zoneType).Cards.Add(new CardInstance(entry.Card, zoneType, homeOrder));
+                target.Add(entry.Card);
             }
+        }
+
+        player.Deck = new DeckArrangement(main, material, sideboard);
+        ApplyArrangement(player);
+    }
+
+    /// <summary>
+    /// Rebuilds the player's Main and Material zones from their <see cref="Player.Deck"/>'s
+    /// current lists — clearing every other zone too (except the static Tokens catalog), since this
+    /// is only ever called to set up a fresh game (initial load, or after sideboarding, right before
+    /// StartNewGame). The sideboard itself never enters any zone.
+    /// </summary>
+    public static void ApplyArrangement(Player player)
+    {
+        var deck = player.Deck ?? throw new InvalidOperationException("This player has no deck arrangement to apply.");
+
+        foreach (var zone in player.Zones.Values.Where(zone => zone.Type != ZoneType.Tokens))
+        {
+            zone.Cards.Clear();
+        }
+
+        // HomeOrder records each copy's place in the arrangement so GameSession.StartNewGame can
+        // rebuild Material in that order later.
+        var mainZone = player.GetZone(ZoneType.MainDeck);
+        for (var i = 0; i < deck.Main.Count; i++)
+        {
+            mainZone.Cards.Add(new CardInstance(deck.Main[i], ZoneType.MainDeck, i));
+        }
+
+        var materialZone = player.GetZone(ZoneType.MaterialDeck);
+        for (var i = 0; i < deck.Material.Count; i++)
+        {
+            materialZone.Cards.Add(new CardInstance(deck.Material[i], ZoneType.MaterialDeck, i));
         }
     }
 

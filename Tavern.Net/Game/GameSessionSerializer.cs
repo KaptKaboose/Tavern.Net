@@ -14,7 +14,7 @@ public static class GameSessionSerializer
 {
     public static SavedGame Capture(string name, GameSession session, TimeSpan? elapsedTime = null)
     {
-        var players = session.Players.Select(CapturePlayer).ToList();
+        var players = session.Players.Select(p => CapturePlayer(p, includeDeck: true)).ToList();
         var first = session.Players.FirstOrDefault();
         var summary = first is null ? "Empty game" : $"Turn {first.Stats.TurnCount + 1} · {first.Life} life";
 
@@ -37,7 +37,11 @@ public static class GameSessionSerializer
             .SelectMany(e => e.Snapshot.Cards)
             .Select(c => c.Card);
 
-        foreach (var card in zoneCards.Concat(snapshotCards).DistinctBy(c => c.Slug))
+        var deckCards = session.Players
+            .Where(p => p.Deck is not null)
+            .SelectMany(p => p.Deck!.AllCards);
+
+        foreach (var card in zoneCards.Concat(snapshotCards).Concat(deckCards).DistinctBy(c => c.Slug))
         {
             apiClient.CacheCard(card);
         }
@@ -46,7 +50,9 @@ public static class GameSessionSerializer
     /// <summary>Captures one player's full live state as a <see cref="SavedPlayer"/> — used both for
     /// a whole-game save (<see cref="Capture"/>) and, in an online game, to serialize just the local
     /// player for broadcast to the opponent.</summary>
-    public static SavedPlayer CapturePlayer(Player player)
+    /// <param name="includeDeck">True only for a whole-game save — the broadcast must never carry the
+    /// player's sideboard/deck lists.</param>
+    public static SavedPlayer CapturePlayer(Player player, bool includeDeck = false)
     {
         var cards = player.Zones.Values
             .Where(zone => zone.Type != ZoneType.Tokens)
@@ -74,8 +80,17 @@ public static class GameSessionSerializer
             player.StartingHandSize,
             player.StartsInMemory,
             cards,
-            savedStats);
+            savedStats,
+            includeDeck && player.Deck is not null ? CaptureDeck(player.Deck) : null);
     }
+
+    private static SavedDeckArrangement CaptureDeck(DeckArrangement deck) => new(
+        deck.RegisteredMain.Select(c => c.Slug).ToList(),
+        deck.RegisteredMaterial.Select(c => c.Slug).ToList(),
+        deck.RegisteredSideboard.Select(c => c.Slug).ToList(),
+        deck.Main.Select(c => c.Slug).ToList(),
+        deck.Material.Select(c => c.Slug).ToList(),
+        deck.Sideboard.Select(c => c.Slug).ToList());
 
     private static SavedCardInstance CaptureCardInstance(CardInstance card, ZoneType zone) => new(
         card.Card.Slug,
@@ -179,6 +194,35 @@ public static class GameSessionSerializer
         }
 
         await ApplyStatsAsync(target.Stats, saved.Stats, apiClient, cardCache);
+
+        // Only a whole-game save carries the deck lists; an online broadcast leaves the mirror's
+        // Deck untouched (null) rather than clearing anything.
+        if (saved.Deck is not null)
+        {
+            target.Deck = await RestoreDeckAsync(saved.Deck, apiClient, cardCache);
+        }
+    }
+
+    private static async Task<DeckArrangement> RestoreDeckAsync(SavedDeckArrangement saved, GrandArchiveApiClient apiClient, Dictionary<string, CardDto> cardCache)
+    {
+        async Task<List<CardDto>> ResolveAllAsync(IEnumerable<string> slugs)
+        {
+            var cards = new List<CardDto>();
+            foreach (var slug in slugs)
+            {
+                cards.Add(await ResolveCardAsync(slug, apiClient, cardCache));
+            }
+
+            return cards;
+        }
+
+        return new DeckArrangement(
+            await ResolveAllAsync(saved.RegisteredMain),
+            await ResolveAllAsync(saved.RegisteredMaterial),
+            await ResolveAllAsync(saved.RegisteredSideboard),
+            await ResolveAllAsync(saved.Main),
+            await ResolveAllAsync(saved.Material),
+            await ResolveAllAsync(saved.Sideboard));
     }
 
     private static async Task ApplyStatsAsync(GameStats stats, SavedGameStats saved, GrandArchiveApiClient apiClient, Dictionary<string, CardDto> cardCache)

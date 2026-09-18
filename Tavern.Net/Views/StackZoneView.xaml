@@ -41,6 +41,11 @@
                  currently ever sets IsTapped on a card sitting in a StackZoneView pile (Material/
                  Main/Graveyard/Banishment cards get untapped by MoveCard the moment they land in
                  a non-Field/Champion zone), so this is a no-op everywhere else. -->
+            <!-- The zone's outline (ShowBorder), drawn beneath the card art rather than on the
+                 click/drop overlay further down — otherwise it renders on top of the card image. -->
+            <Border CornerRadius="4" BorderBrush="#55000000" BorderThickness="1" IsHitTestVisible="False"
+                    Visibility="{Binding ShowBorder, ElementName=Root, Converter={StaticResource BoolToVisibility}}"/>
+
             <Border CornerRadius="4" ClipToBounds="True" RenderTransformOrigin="0.5,0.5">
                 <Border.Style>
                     <Style TargetType="Border">
@@ -154,10 +159,6 @@
                         <Setter Property="CornerRadius" Value="4"/>
                         <Setter Property="BorderThickness" Value="0"/>
                         <Style.Triggers>
-                            <DataTrigger Binding="{Binding ShowBorder, ElementName=Root}" Value="True">
-                                <Setter Property="BorderThickness" Value="1"/>
-                                <Setter Property="BorderBrush" Value="#55000000"/>
-                            </DataTrigger>
                             <!-- ShowOverlay=False (Champion): keep the Border for hit-testing/drop,
                                  but drop the scrim so the top card art shows through plainly. -->
                             <DataTrigger Binding="{Binding ShowOverlay, ElementName=Root}" Value="False">
