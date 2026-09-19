@@ -39,10 +39,23 @@
                         <Border Background="#1A202C" CornerRadius="4"/>
                         <ContentControl Content="{Binding Cards[0]}" ContentTemplate="{StaticResource CardSnapshotTemplate}" IsHitTestVisible="False"
                                         Visibility="{Binding Cards.Count, Converter={StaticResource IntToVisibility}}"/>
+                        <!-- Redacted (a live opponent's Material/Main): a face-down back instead,
+                             and not clickable. -->
+                        <Image Source="pack://application:,,,/GameData/Images/Grand%20Archive%20Back.jpg" Stretch="UniformToFill"
+                               Visibility="{Binding IsRedacted, Converter={StaticResource BoolToVisibility}}"/>
                         <Border Background="#CC000000" CornerRadius="8" Padding="6,2" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,6">
-                            <TextBlock Foreground="White" FontWeight="Bold" Text="{Binding Cards.Count}"/>
+                            <TextBlock Foreground="White" FontWeight="Bold" Text="{Binding Count}"/>
                         </Border>
                     </Grid>
+                    <Button.Style>
+                        <Style TargetType="Button">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsRedacted}" Value="True">
+                                    <Setter Property="IsHitTestVisible" Value="False"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
                 </Button>
             </StackPanel>
         </DataTemplate>
@@ -748,7 +761,7 @@
                      view of the board exactly as it was at that moment. -->
                 <TextBlock DockPanel.Dock="Top" Text="Play log" FontWeight="Bold" Foreground="#F7FAFC" Margin="0,4,0,4"/>
                 <ListBox ItemsSource="{Binding Stats.MajorEvents}" ScrollViewer.VerticalScrollBarVisibility="Auto"
-                         Visibility="{Binding IsSolo, Converter={StaticResource BoolToVisibility}}"
+                         Visibility="{Binding ShowSoloLog, Converter={StaticResource BoolToVisibility}}"
                          behaviors:AutoScrollToBottomBehavior.IsEnabled="True">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
@@ -756,13 +769,14 @@
                                     CommandParameter="{Binding}"
                                     HorizontalContentAlignment="Left" Padding="4,2"
                                     Background="Transparent" BorderThickness="0" Foreground="#F7FAFC" Cursor="Hand">
-                                <TextBlock TextWrapping="Wrap">
-                                    <TextBlock.Text>
-                                        <MultiBinding StringFormat="Turn {0}: {1}">
-                                            <Binding Path="Turn" Converter="{StaticResource TurnCountDisplay}"/>
-                                            <Binding Path="Description"/>
-                                        </MultiBinding>
-                                    </TextBlock.Text>
+                                <TextBlock TextWrapping="Wrap"
+                                           behaviors:BoldSubstring.Text="{Binding Description}"
+                                           behaviors:BoldSubstring.Bold="{Binding CardName}"
+                                           behaviors:BoldSubstring.PrefixBrush="#48BB78"
+                                           behaviors:BoldSubstring.BoldBrush="#90CDF4">
+                                    <behaviors:BoldSubstring.Prefix>
+                                        <Binding Path="Turn" Converter="{StaticResource TurnCountDisplay}" StringFormat="Turn {0}: "/>
+                                    </behaviors:BoldSubstring.Prefix>
                                 </TextBlock>
                             </Button>
                         </DataTemplate>
@@ -775,7 +789,7 @@
                      happened. Reuses ViewMajorEventCommand as-is (CommandParameter is just the
                      underlying MajorEvent). -->
                 <ListBox ItemsSource="{Binding MergedLog}" ScrollViewer.VerticalScrollBarVisibility="Auto"
-                         Visibility="{Binding IsOnline, Converter={StaticResource BoolToVisibility}}"
+                         Visibility="{Binding ShowMergedLog, Converter={StaticResource BoolToVisibility}}"
                          behaviors:AutoScrollToBottomBehavior.IsEnabled="True">
                     <ListBox.ItemTemplate>
                         <DataTemplate DataType="{x:Type vm:MergedLogEntry}">
@@ -783,14 +797,26 @@
                                     CommandParameter="{Binding Event}"
                                     HorizontalContentAlignment="Left" Padding="4,2"
                                     Background="Transparent" BorderThickness="0" Foreground="#F7FAFC" Cursor="Hand">
-                                <TextBlock TextWrapping="Wrap">
-                                    <TextBlock.Text>
-                                        <MultiBinding StringFormat="{}{0} · Turn {1}: {2}">
+                                <TextBlock TextWrapping="Wrap"
+                                           behaviors:BoldSubstring.Text="{Binding Event.Description}"
+                                           behaviors:BoldSubstring.Bold="{Binding Event.CardName}"
+                                           behaviors:BoldSubstring.BoldBrush="#90CDF4">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="behaviors:BoldSubstring.PrefixBrush" Value="#F6AD55"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsOwn}" Value="True">
+                                                    <Setter Property="behaviors:BoldSubstring.PrefixBrush" Value="#48BB78"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                    <behaviors:BoldSubstring.Prefix>
+                                        <MultiBinding StringFormat="{}{0} · Turn {1}: ">
                                             <Binding Path="IsOwn" Converter="{StaticResource BoolToPlayerLabel}"/>
                                             <Binding Path="Event.Turn" Converter="{StaticResource TurnCountDisplay}"/>
-                                            <Binding Path="Event.Description"/>
                                         </MultiBinding>
-                                    </TextBlock.Text>
+                                    </behaviors:BoldSubstring.Prefix>
                                 </TextBlock>
                             </Button>
                         </DataTemplate>
@@ -887,22 +913,45 @@
                     </StackPanel>
 
                     <TextBlock DockPanel.Dock="Top" Foreground="White" FontSize="20" FontWeight="Bold" Margin="0,0,0,4"
-                               TextWrapping="Wrap">
-                        <TextBlock.Text>
-                            <MultiBinding StringFormat="Turn {0}: {1}">
-                                <Binding Path="CurrentlyViewedEvent.Turn" Converter="{StaticResource TurnCountDisplay}"/>
-                                <Binding Path="CurrentlyViewedEvent.Description"/>
-                            </MultiBinding>
-                        </TextBlock.Text>
+                               TextWrapping="Wrap"
+                               behaviors:BoldSubstring.Text="{Binding CurrentlyViewedEvent.Description}"
+                               behaviors:BoldSubstring.Bold="{Binding CurrentlyViewedEvent.CardName}"
+                               behaviors:BoldSubstring.BoldBrush="#90CDF4">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="behaviors:BoldSubstring.PrefixBrush" Value="#F6AD55"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding CurrentlyViewedEventIsOwn}" Value="True">
+                                        <Setter Property="behaviors:BoldSubstring.PrefixBrush" Value="#48BB78"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                        <behaviors:BoldSubstring.Prefix>
+                            <Binding Path="CurrentlyViewedEvent.Turn" Converter="{StaticResource TurnCountDisplay}" StringFormat="Turn {0}: "/>
+                        </behaviors:BoldSubstring.Prefix>
                     </TextBlock>
-                    <TextBlock DockPanel.Dock="Top" Foreground="#A0AEC0" Margin="0,0,0,12"
-                               Visibility="{Binding CurrentlyViewedEvent, Converter={StaticResource NullToVisibility}}">
-                        <Run Text="{Binding CurrentlyViewedEvent.Snapshot.Life, StringFormat='Life: {0}'}"/>
-                        <Run Text="   "/>
-                        <Run Text="{Binding CurrentlyViewedEvent.Snapshot.DamageDealtCount, StringFormat='Damage dealt: {0}'}"/>
-                        <Run Text="   "/>
-                        <Run Text="{Binding CurrentlyViewedEvent.Snapshot.Phase, StringFormat='Phase: {0}'}"/>
-                    </TextBlock>
+                    <!-- Life is colored per tab (green = yours, orange = theirs, matching the log);
+                         Phase always comes from the clicked entry (ViewedPhase) so both tabs agree. -->
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,12"
+                                Visibility="{Binding CurrentlyViewedEvent, Converter={StaticResource NullToVisibility}}">
+                        <TextBlock Text="Life:" FontSize="16" FontWeight="Bold" VerticalAlignment="Center">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="#F6AD55"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding CurrentlyViewedEventIsOwn}" Value="True">
+                                            <Setter Property="Foreground" Value="#48BB78"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <TextBlock Text="{Binding CurrentlyViewedEvent.Snapshot.Life}" FontSize="16" FontWeight="Bold"
+                                   Foreground="#F7FAFC" VerticalAlignment="Center" Margin="6,0,0,0"/>
+                        <TextBlock Text="{Binding ViewedPhase, StringFormat='Phase: {0}'}" FontSize="16" Foreground="#F7FAFC"
+                                   VerticalAlignment="Center" Margin="32,0,0,0"/>
+                    </StackPanel>
                     <TextBlock DockPanel.Dock="Top" Text="No recorded state for them yet at this point." Foreground="#A0AEC0" Margin="0,0,0,12"
                                Visibility="{Binding CurrentlyViewedEvent, Converter={StaticResource NullToVisibility}, ConverterParameter=Invert}"/>
 
@@ -935,6 +984,30 @@
                                         </ItemsControl.ItemsPanel>
                                     </ItemsControl>
                                 </Border>
+
+                                <!-- Live opponent's board: Memory/Hand as face-down counts, same as the
+                                     Opponent panel (see HideViewedPrivateZones). -->
+                                <StackPanel Orientation="Horizontal"
+                                            Visibility="{Binding HideViewedPrivateZones, Converter={StaticResource BoolToVisibility}}">
+                                    <StackPanel Margin="0,0,16,0" HorizontalAlignment="Center">
+                                        <TextBlock Text="Memory" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                                        <Grid Width="125" Height="175">
+                                            <Image Source="pack://application:,,,/GameData/Images/Grand%20Archive%20Back.jpg" Stretch="UniformToFill"/>
+                                            <Border Background="#CC000000" CornerRadius="8" Padding="6,2" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,6">
+                                                <TextBlock Foreground="White" FontWeight="Bold" Text="{Binding ViewedMemoryCount}"/>
+                                            </Border>
+                                        </Grid>
+                                    </StackPanel>
+                                    <StackPanel HorizontalAlignment="Center">
+                                        <TextBlock Text="Hand" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                                        <Grid Width="125" Height="175">
+                                            <Image Source="pack://application:,,,/GameData/Images/Grand%20Archive%20Back.jpg" Stretch="UniformToFill"/>
+                                            <Border Background="#CC000000" CornerRadius="8" Padding="6,2" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,6">
+                                                <TextBlock Foreground="White" FontWeight="Bold" Text="{Binding ViewedHandCount}"/>
+                                            </Border>
+                                        </Grid>
+                                    </StackPanel>
+                                </StackPanel>
 
                                 <!-- Memory -->
                                 <StackPanel Margin="0,0,0,12"

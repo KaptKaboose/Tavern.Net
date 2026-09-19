@@ -75,7 +75,9 @@ public sealed partial class MainViewModel : ObservableObject
         GameSession session, Player player, GameConnection? connection = null, TimeSpan? loadedElapsedTime = null, bool isFreshSoloGame = false,
         int? onlineFirstPlayerNumber = null)
     {
-        var opponentPlayer = connection is not null ? session.Players.First(p => p != player) : null;
+        // Also for a loaded save of an online game (two players, no connection): the board is then
+        // a read-only review, but the Play Log and event viewer still need the second player.
+        var opponentPlayer = session.Players.Count > 1 ? session.Players.First(p => p != player) : null;
         var gameBoardViewModel = new GameBoardViewModel(
             session, player, _apiClient, _gameStorage, connection, opponentPlayer, loadedElapsedTime, isFreshSoloGame, onlineFirstPlayerNumber);
         gameBoardViewModel.BackToMenuRequested += () => CurrentView = ReturnToStartMenu();

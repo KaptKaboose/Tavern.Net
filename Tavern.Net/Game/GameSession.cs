@@ -1,4 +1,4 @@
-using Tavern.Net.GameData.Models;
+﻿using Tavern.Net.GameData.Models;
 
 namespace Tavern.Net.Game;
 
@@ -155,7 +155,7 @@ public sealed class GameSession
         var card = new CardInstance(cardDto, ZoneType.MainDeck, isSessionGenerated: true);
         player.GetZone(ZoneType.MainDeck).Cards.Add(card);
         player.Stats.Log($"Generated a copy of {cardDto.Name} into the Main Deck.");
-        RecordMajorEvent(player, $"Generated a copy of {cardDto.Name} into the Main Deck.");
+        RecordMajorEvent(player, $"Generated a copy of {cardDto.Name} into the Main Deck.", cardName: cardDto.Name);
         return card;
     }
 
@@ -507,7 +507,7 @@ public sealed class GameSession
         switch (to)
         {
             case ZoneType.Field:
-                RecordMajorEvent(player, $"Played {card.Card.Name} to the Field.");
+                RecordMajorEvent(player, $"Played {card.Card.Name} to the Field.", cardName: card.Card.Name);
                 if (from == ZoneType.Hand)
                 {
                     player.Stats.PlayedCardThisTurn = true;
@@ -516,7 +516,7 @@ public sealed class GameSession
 
                 break;
             case ZoneType.Graveyard:
-                RecordMajorEvent(player, $"{card.Card.Name} went to the Graveyard.");
+                RecordMajorEvent(player, $"{card.Card.Name} went to the Graveyard.", cardName: card.Card.Name);
                 break;
             case ZoneType.Banishment:
                 if (from == ZoneType.Memory)
@@ -524,10 +524,10 @@ public sealed class GameSession
                     player.Stats.CardsLostToMemoryDecayCount++;
                 }
 
-                RecordMajorEvent(player, $"Banished {card.Card.Name}.");
+                RecordMajorEvent(player, $"Banished {card.Card.Name}.", cardName: card.Card.Name);
                 break;
             case ZoneType.Champion:
-                RecordMajorEvent(player, $"{card.Card.Name} materialized as Champion.");
+                RecordMajorEvent(player, $"{card.Card.Name} materialized as Champion.", cardName: card.Card.Name);
                 break;
         }
     }
@@ -551,7 +551,7 @@ public sealed class GameSession
             };
             player.GetZone(ZoneType.Field).Cards.Add(spawned);
             player.Stats.Log($"Summoned {card.Card.Name} token.");
-            RecordMajorEvent(player, $"Summoned {card.Card.Name} token.");
+            RecordMajorEvent(player, $"Summoned {card.Card.Name} token.", cardName: card.Card.Name);
             return;
         }
 
@@ -560,7 +560,7 @@ public sealed class GameSession
             if (player.GetZone(ZoneType.Field).Cards.Remove(card))
             {
                 player.Stats.Log($"Discarded {card.Card.Name} token.");
-                RecordMajorEvent(player, $"Discarded {card.Card.Name} token.");
+                RecordMajorEvent(player, $"Discarded {card.Card.Name} token.", cardName: card.Card.Name);
             }
         }
     }
@@ -789,7 +789,7 @@ public sealed class GameSession
 
         if (destination == ZoneType.Field)
         {
-            RecordMajorEvent(player, $"{cardDto.Name} arrived on the Field via Give.");
+            RecordMajorEvent(player, $"{cardDto.Name} arrived on the Field via Give.", cardName: cardDto.Name);
         }
 
         return instance;
@@ -898,12 +898,15 @@ public sealed class GameSession
     /// snapshot still has to be taken after the base champion materializes and the opening hand is
     /// drawn (otherwise it'd show an empty board), but the entry itself needs to read first in the
     /// log, ahead of the materialization event that setup incidentally records along the way.
+    /// <paramref name="cardName"/> is the card the description is about, if any — only so the Play
+    /// Log can bold it (see MajorEvent.CardName).
     /// </summary>
-    private void RecordMajorEvent(Player player, string description, bool insertAtStart = false)
+    private void RecordMajorEvent(Player player, string description, bool insertAtStart = false, string? cardName = null)
     {
         var majorEvent = new MajorEvent
         {
             Description = description,
+            CardName = cardName,
             Kind = MajorEventKind.Other,
             Turn = player.Stats.TurnCount,
             Snapshot = TakeSnapshot(player),

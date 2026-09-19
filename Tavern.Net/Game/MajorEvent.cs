@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 
 namespace Tavern.Net.Game;
 
@@ -43,6 +43,10 @@ public sealed class MajorEvent : INotifyPropertyChanged
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
+
+    /// <summary>The card this event is about, if any — a substring of <see cref="Description"/> the
+    /// Play Log shows in bold. Null for events with no single card (life, turns, game start).</summary>
+    public string? CardName { get; init; }
 
     public required MajorEventKind Kind { get; init; }
 

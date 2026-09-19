@@ -1,4 +1,4 @@
-namespace Tavern.Net.Game;
+﻿namespace Tavern.Net.Game;
 
 /// <summary>One card, wherever it currently sits, in a saved game — enough to reconstruct the exact
 /// CardInstance (via GameData.GrandArchiveApiClient.GetCardBySlugAsync, disk-cached by
@@ -55,7 +55,8 @@ public sealed record SavedMajorEvent(
     int NetDelta,
     int Turn,
     DateTime Timestamp,
-    SavedGameSnapshot Snapshot);
+    SavedGameSnapshot Snapshot,
+    string? CardName = null);
 
 /// <summary>The full GameStats for one player — including PlayLog and MajorEvents (with their own
 /// snapshots), not just the current board. The whole point of saving a game here is resuming into

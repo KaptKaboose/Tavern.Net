@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Windows.Input;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -599,14 +599,14 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     /// null when it's closed. Viewing never mutates the live game — see GameSession.TakeSnapshot's
     /// own doc comment on why this is a display-only feature, not a rollback.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasViewedMemoryCards), nameof(HasViewedHandCards), nameof(CurrentlyViewedEvent))]
+    [NotifyPropertyChangedFor(nameof(HasViewedMemoryCards), nameof(HasViewedHandCards), nameof(CurrentlyViewedEvent), nameof(ViewedPhase))]
     private MajorEvent? _viewedMajorEvent;
 
     /// <summary>Online only: whether ViewedMajorEvent belongs to this player (true) or the opponent
     /// (false) — decides the "Your Board"/"Opponent's Board" tab labels and which side
     /// ViewedOtherPlayerEvent searches on. Meaningless (and unused) for solo.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(PrimaryTabLabel), nameof(OtherTabLabel))]
+    [NotifyPropertyChangedFor(nameof(PrimaryTabLabel), nameof(OtherTabLabel), nameof(CurrentlyViewedEventIsOwn), nameof(HideViewedPrivateZones))]
     private bool _primaryEntryIsOwn = true;
 
     /// <summary>The other player's own most recent MajorEvent at or before ViewedMajorEvent's
@@ -620,10 +620,16 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     /// <summary>Whether the review popup is currently showing ViewedOtherPlayerEvent's board instead
     /// of ViewedMajorEvent's — see PopulateViewedCollections, re-run on every toggle.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CurrentlyViewedEvent))]
+    [NotifyPropertyChangedFor(nameof(CurrentlyViewedEvent), nameof(CurrentlyViewedEventIsOwn), nameof(HideViewedPrivateZones))]
     private bool _isShowingOtherPlayerTab;
 
     public bool HasOtherPlayerTab => OpponentPlayer is not null;
+
+    /// <summary>Which Play Log to show: the merged two-player one whenever there's a second player
+    /// (live online, or a loaded save of an online game), otherwise the solo one.</summary>
+    public bool ShowMergedLog => OpponentPlayer is not null;
+
+    public bool ShowSoloLog => OpponentPlayer is null;
 
     public string PrimaryTabLabel => PrimaryEntryIsOwn ? "Your Board" : "Opponent's Board";
 
@@ -633,6 +639,27 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     /// Turn/Description/Life/Phase line, which needs to follow the active tab the same way the
     /// card collections below it do.</summary>
     public MajorEvent? CurrentlyViewedEvent => IsShowingOtherPlayerTab ? ViewedOtherPlayerEvent : ViewedMajorEvent;
+
+    /// <summary>Whether <see cref="CurrentlyViewedEvent"/> is this player's own (always true solo) —
+    /// colors the header's "Turn X:" green vs. orange, matching the Play Log.</summary>
+    public bool CurrentlyViewedEventIsOwn => IsShowingOtherPlayerTab ? !PrimaryEntryIsOwn : PrimaryEntryIsOwn;
+
+    /// <summary>True while the review panel is showing the opponent's board in a live online game —
+    /// their Hand/Memory/Material/Main show as face-down counts, same as the Opponent panel, since
+    /// the snapshots hold the real cards. A game reviewed later from a save (not online) shows
+    /// everything.</summary>
+    public bool HideViewedPrivateZones => IsOnline && !CurrentlyViewedEventIsOwn;
+
+    /// <summary>The phase for the review header — always the clicked entry's own snapshot, so both
+    /// tabs agree. (The other tab's own event is just that player's nearest earlier event, whose
+    /// snapshot phase is from whenever they last did something.)</summary>
+    public TurnPhase? ViewedPhase => ViewedMajorEvent?.Snapshot.Phase;
+
+    [ObservableProperty]
+    private int _viewedHandCount;
+
+    [ObservableProperty]
+    private int _viewedMemoryCount;
 
     /// <summary>Which zone's full contents are currently drilled into from the snapshot viewer's
     /// pile boxes (Champion, Graveyard, Banishment, Material, Main — the same zones StackZoneView
@@ -897,20 +924,27 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         }
 
         var cardsByZone = snapshot.Cards.ToLookup(c => c.Zone);
+        var hide = HideViewedPrivateZones;
 
         foreach (var card in cardsByZone[ZoneType.Field])
         {
             ViewedFieldCards.Add(new CardSnapshotViewModel(card, _apiClient, this));
         }
 
-        foreach (var card in cardsByZone[ZoneType.Hand])
-        {
-            ViewedHandCards.Add(new CardSnapshotViewModel(card, _apiClient, this));
-        }
+        ViewedHandCount = cardsByZone[ZoneType.Hand].Count();
+        ViewedMemoryCount = cardsByZone[ZoneType.Memory].Count();
 
-        foreach (var card in cardsByZone[ZoneType.Memory])
+        if (!hide)
         {
-            ViewedMemoryCards.Add(new CardSnapshotViewModel(card, _apiClient, this));
+            foreach (var card in cardsByZone[ZoneType.Hand])
+            {
+                ViewedHandCards.Add(new CardSnapshotViewModel(card, _apiClient, this));
+            }
+
+            foreach (var card in cardsByZone[ZoneType.Memory])
+            {
+                ViewedMemoryCards.Add(new CardSnapshotViewModel(card, _apiClient, this));
+            }
         }
 
         // Always all 5 piles, even ones with no cards (a "0" box rather than the pile vanishing) —
@@ -918,6 +952,12 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         // fixed order regardless of which zones the snapshot happens to have cards in.
         foreach (var zone in SnapshotPileOrder)
         {
+            if (hide && zone is ZoneType.MaterialDeck or ZoneType.MainDeck)
+            {
+                ViewedSnapshotPiles.Add(new SnapshotZoneGroup(zone, Array.Empty<CardSnapshotViewModel>(), IsRedacted: true, RedactedCount: cardsByZone[zone].Count()));
+                continue;
+            }
+
             var cards = cardsByZone[zone].Select(c => new CardSnapshotViewModel(c, _apiClient, this)).ToList();
             ViewedSnapshotPiles.Add(new SnapshotZoneGroup(zone, cards));
         }
@@ -1054,6 +1094,12 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
             // RefreshMergedLog) — this is the one side of that merge that isn't already covered by
             // RefreshOpponentPanel running on every incoming broadcast.
             Player.Stats.MajorEvents.CollectionChanged += (_, _) => RefreshMergedLog();
+        }
+        else
+        {
+            // A loaded save of an online game: both logs are already complete and nothing will
+            // ever refresh them, so build the merged log once.
+            RefreshMergedLog();
         }
 
         Hand = new ZoneViewModel(player.GetZone(ZoneType.Hand), apiClient, this);

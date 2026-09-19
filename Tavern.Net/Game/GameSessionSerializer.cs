@@ -1,4 +1,4 @@
-using Tavern.Net.GameData;
+﻿using Tavern.Net.GameData;
 using Tavern.Net.GameData.Models;
 
 namespace Tavern.Net.Game;
@@ -130,7 +130,7 @@ public static class GameSessionSerializer
 
         var savedSnapshot = new SavedGameSnapshot(snapshot.Life, snapshot.DamageDealtCount, snapshot.TurnCount, snapshot.Phase, cards);
 
-        return new SavedMajorEvent(majorEvent.Description, majorEvent.Kind, majorEvent.NetDelta, majorEvent.Turn, majorEvent.Timestamp, savedSnapshot);
+        return new SavedMajorEvent(majorEvent.Description, majorEvent.Kind, majorEvent.NetDelta, majorEvent.Turn, majorEvent.Timestamp, savedSnapshot, majorEvent.CardName);
     }
 
     /// <summary>Rebuilds a full GameSession from a save. Throws if a card's slug can no longer be
@@ -281,6 +281,7 @@ public static class GameSessionSerializer
             stats.MajorEvents.Add(new MajorEvent
             {
                 Description = savedEvent.Description,
+                CardName = savedEvent.CardName,
                 Kind = savedEvent.Kind,
                 NetDelta = savedEvent.NetDelta,
                 Turn = savedEvent.Turn,
