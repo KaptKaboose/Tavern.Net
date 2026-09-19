@@ -22,6 +22,19 @@
         <conv:LowLifeToBrushConverter x:Key="LowLifeToBrush"/>
         <conv:CopyCountToBrushConverter x:Key="CopyCountToBrush"/>
 
+
+        <!-- A face-down stack with its count, styled like the main board's piles (StackZoneView): the
+             generic card back under a translucent scrim with a big centered number. Content is the
+             count (an int); the caller supplies the label above it. Used for every hidden stack on the
+             opponent panel and the review panel. -->
+        <DataTemplate x:Key="FaceDownCountTemplate">
+            <Grid Width="125" Height="175">
+                <Image Source="pack://application:,,,/GameData/Images/Grand%20Archive%20Back.jpg" Stretch="UniformToFill"/>
+                <Border Background="#99222222" CornerRadius="4"/>
+                <TextBlock Text="{Binding}" Foreground="White" FontSize="20" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Grid>
+        </DataTemplate>
+
         <!-- One pile box — real card art (or an empty dark box, via IntToVisibility, when the zone
              has no cards) plus a count badge that always shows, including 0. Click opens the full
              contents (ViewSnapshotPileCommand/ViewedSnapshotPile). Shared by the snapshot viewer's
@@ -31,7 +44,7 @@
              OpponentGraveyardPile/OpponentBanishmentPile). -->
         <DataTemplate x:Key="PileBoxTemplate">
             <StackPanel Margin="0,0,0,8" HorizontalAlignment="Center">
-                <TextBlock Text="{Binding Zone}" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                <TextBlock Text="{Binding DisplayName}" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,4"/>
                 <Button Padding="0" Background="Transparent" BorderThickness="0" Cursor="Hand"
                         Command="{Binding DataContext.ViewSnapshotPileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                         CommandParameter="{Binding}">
@@ -41,9 +54,10 @@
                                         Visibility="{Binding Cards.Count, Converter={StaticResource IntToVisibility}}"/>
                         <!-- Redacted (a live opponent's Material/Main): a face-down back instead,
                              and not clickable. -->
-                        <Image Source="pack://application:,,,/GameData/Images/Grand%20Archive%20Back.jpg" Stretch="UniformToFill"
-                               Visibility="{Binding IsRedacted, Converter={StaticResource BoolToVisibility}}"/>
-                        <Border Background="#CC000000" CornerRadius="8" Padding="6,2" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,6">
+                        <ContentControl Content="{Binding Count}" ContentTemplate="{StaticResource FaceDownCountTemplate}"
+                                        Visibility="{Binding IsRedacted, Converter={StaticResource BoolToVisibility}}"/>
+                        <Border Background="#CC000000" CornerRadius="8" Padding="6,2" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,6"
+                                Visibility="{Binding IsNotRedacted, Converter={StaticResource BoolToVisibility}}">
                             <TextBlock Foreground="White" FontWeight="Bold" Text="{Binding Count}"/>
                         </Border>
                     </Grid>
@@ -56,6 +70,30 @@
                             </Style.Triggers>
                         </Style>
                     </Button.Style>
+                </Button>
+            </StackPanel>
+        </DataTemplate>
+
+        
+
+        <!-- The Champion pile, on a row of its own: a 175x175 cell instead of the usual 125x175, so a
+             tapped (90-degree rotated) champion fits inside it rather than spilling into its
+             neighbors or getting clipped. Otherwise the same as PileBoxTemplate. -->
+        <DataTemplate x:Key="ChampionPileTemplate">
+            <StackPanel Margin="0,0,0,8" HorizontalAlignment="Center">
+                <TextBlock Text="{Binding DisplayName}" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                <Button Padding="0" Background="Transparent" BorderThickness="0" Cursor="Hand"
+                        Command="{Binding DataContext.ViewSnapshotPileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                        CommandParameter="{Binding}">
+                    <Grid Width="175" Height="175">
+                        <Border Background="#1A202C" CornerRadius="4" Width="125" HorizontalAlignment="Center"/>
+                        <ContentControl Content="{Binding Cards[0]}" ContentTemplate="{StaticResource CardSnapshotTemplate}" IsHitTestVisible="False"
+                                        HorizontalAlignment="Center" VerticalAlignment="Center"
+                                        Visibility="{Binding Cards.Count, Converter={StaticResource IntToVisibility}}"/>
+                        <Border Background="#CC000000" CornerRadius="8" Padding="6,2" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,6">
+                            <TextBlock Foreground="White" FontWeight="Bold" Text="{Binding Count}"/>
+                        </Border>
+                    </Grid>
                 </Button>
             </StackPanel>
         </DataTemplate>
@@ -277,47 +315,11 @@
             <Setter Property="Foreground" Value="#90CDF4"/>
             <Setter Property="BorderBrush" Value="#90CDF4"/>
         </Style>
-    </UserControl.Resources>
-    <Grid>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="260"/>
-        </Grid.ColumnDefinitions>
-
-        <Grid Grid.Column="0" Margin="12">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
-
-            <!-- Meta-action bar: Menu/Save Game (left, CompactButtonStyle) and the turn-phase
-                 tracker (centered) — moved up here so the stats/actions row below isn't crowded. -->
-            <Grid Grid.Row="0" Margin="0,0,0,6">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-
-                <StackPanel Grid.Column="0" Orientation="Horizontal">
-                    <Button Style="{StaticResource CompactButtonStyle}" Content="Menu" Margin="0,0,8,0" Command="{Binding BackToMenuCommand}"/>
-                    <Button Style="{StaticResource CompactButtonStyle}" Content="Save Game" Margin="0,0,8,0" Command="{Binding OpenSaveGamePanelCommand}"/>
-                    <Button Style="{StaticResource CompactButtonStyle}" Content="?" Command="{Binding OpenHelpCommand}"
-                            ToolTip="Keyboard shortcuts"/>
-
-                    <TextBlock Text="{Binding ConnectionLostMessage}" Foreground="IndianRed" VerticalAlignment="Center" Margin="12,0,0,0"
-                               Visibility="{Binding ConnectionLostMessage, Converter={StaticResource NullToVisibility}}"/>
-                </StackPanel>
-
-                <!-- Wake Up => Materialization => Recollection => Draw => Main => End, with the
-                     current phase highlighted. A fixed set of 6, so written out directly rather
-                     than templated from TurnPhase's values. The right-only margin nudges the
-                     centered group left of true-center (a right margin still counts toward what
-                     gets centered, so it shifts the visible content left without needing a mirrored
-                     spacer column). -->
-                <Button Grid.Column="1" Style="{StaticResource PhaseBarButtonStyle}" Command="{Binding NextPhaseCommand}"
-                        HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,100,0">
+    
+        <!-- The turn-phase tracker (also the Advance Phase button), shared by the meta-action bar and the
+             copy layered over the Opponent panel so it stays visible there — see PhaseBarTemplate uses. -->
+        <DataTemplate x:Key="PhaseBarTemplate">
+            <Button Style="{StaticResource PhaseBarButtonStyle}" Command="{Binding NextPhaseCommand}">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="Wake Up" FontSize="16" VerticalAlignment="Center"
                                FontWeight="{Binding CurrentPhase, Converter={StaticResource PhaseToFontWeight}, ConverterParameter=WakeUp}">
@@ -350,6 +352,54 @@
                            </TextBlock>
                 </StackPanel>
                 </Button>
+        </DataTemplate>
+    </UserControl.Resources>
+    <!-- Shared size scope: the copy of the phase bar layered over the Opponent panel borrows the
+         meta-action bar's row height and left-column width (SharedSizeGroup below), so it lands
+         exactly on top of the real one. -->
+    <Grid Grid.IsSharedSizeScope="True">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="260"/>
+        </Grid.ColumnDefinitions>
+
+        <Grid Grid.Column="0" Margin="12">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- Meta-action bar: Menu/Save Game (left, CompactButtonStyle) and the turn-phase
+                 tracker (centered) — moved up here so the stats/actions row below isn't crowded. -->
+            <Grid Grid.Row="0" Margin="0,0,0,6">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" SharedSizeGroup="MetaBarRow"/>
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" SharedSizeGroup="MetaBarLeft"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto" SharedSizeGroup="MetaBarRight"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <Button Style="{StaticResource CompactButtonStyle}" Content="Menu" Margin="0,0,8,0" Command="{Binding BackToMenuCommand}"/>
+                    <Button Style="{StaticResource CompactButtonStyle}" Content="Save Game" Margin="0,0,8,0" Command="{Binding OpenSaveGamePanelCommand}"/>
+                    <Button Style="{StaticResource CompactButtonStyle}" Content="?" Command="{Binding OpenHelpCommand}"
+                            ToolTip="Keyboard shortcuts"/>
+
+                    <TextBlock Text="{Binding ConnectionLostMessage}" Foreground="IndianRed" VerticalAlignment="Center" Margin="12,0,0,0"
+                               Visibility="{Binding ConnectionLostMessage, Converter={StaticResource NullToVisibility}}"/>
+                </StackPanel>
+
+                <!-- Wake Up => Materialization => Recollection => Draw => Main => End, with the
+                     current phase highlighted. A fixed set of 6, so written out directly rather
+                     than templated from TurnPhase's values. The right-only margin nudges the
+                     centered group left of true-center (a right margin still counts toward what
+                     gets centered, so it shifts the visible content left without needing a mirrored
+                     spacer column). -->
+                <ContentControl Grid.Column="1" Content="{Binding}" ContentTemplate="{StaticResource PhaseBarTemplate}"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,100,0"/>
             </Grid>
 
             <!-- Stats/actions row: the Life/Turn/opponent stats box (left), Roll/Opponent/Damage
@@ -982,6 +1032,15 @@
                                         <ItemsControl.ItemsPanel>
                                             <ItemsPanelTemplate><WrapPanel Margin="3"/></ItemsPanelTemplate>
                                         </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemContainerStyle>
+                                            <Style TargetType="ContentPresenter">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding StartsNewGroup}" Value="True">
+                                                        <Setter Property="Margin" Value="22,0,0,0"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </ItemsControl.ItemContainerStyle>
                                     </ItemsControl>
                                 </Border>
 
@@ -991,21 +1050,11 @@
                                             Visibility="{Binding HideViewedPrivateZones, Converter={StaticResource BoolToVisibility}}">
                                     <StackPanel Margin="0,0,16,0" HorizontalAlignment="Center">
                                         <TextBlock Text="Memory" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,4"/>
-                                        <Grid Width="125" Height="175">
-                                            <Image Source="pack://application:,,,/GameData/Images/Grand%20Archive%20Back.jpg" Stretch="UniformToFill"/>
-                                            <Border Background="#CC000000" CornerRadius="8" Padding="6,2" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,6">
-                                                <TextBlock Foreground="White" FontWeight="Bold" Text="{Binding ViewedMemoryCount}"/>
-                                            </Border>
-                                        </Grid>
+                                        <ContentControl Content="{Binding ViewedMemoryCount}" ContentTemplate="{StaticResource FaceDownCountTemplate}"/>
                                     </StackPanel>
                                     <StackPanel HorizontalAlignment="Center">
                                         <TextBlock Text="Hand" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,4"/>
-                                        <Grid Width="125" Height="175">
-                                            <Image Source="pack://application:,,,/GameData/Images/Grand%20Archive%20Back.jpg" Stretch="UniformToFill"/>
-                                            <Border Background="#CC000000" CornerRadius="8" Padding="6,2" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,6">
-                                                <TextBlock Foreground="White" FontWeight="Bold" Text="{Binding ViewedHandCount}"/>
-                                            </Border>
-                                        </Grid>
+                                        <ContentControl Content="{Binding ViewedHandCount}" ContentTemplate="{StaticResource FaceDownCountTemplate}"/>
                                     </StackPanel>
                                 </StackPanel>
 
@@ -1031,18 +1080,19 @@
                                 </StackPanel>
                             </StackPanel>
 
-                            <!-- Right: piles — Champion, Graveyard, Banishment, Material, Main.
-                                 Click one to open its full contents (ViewSnapshotPileCommand,
-                                 below). Two per row (UniformGrid, not a width-dependent WrapPanel,
-                                 so it's always exactly 2 regardless of pile count). VerticalAlignment
-                                 Top keeps it sized to its own content instead of stretching to
-                                 match the left column's height. -->
-                            <ItemsControl Grid.Column="1" VerticalAlignment="Top" ItemsSource="{Binding ViewedSnapshotPiles}"
-                                          ItemTemplate="{StaticResource PileBoxTemplate}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate><UniformGrid Columns="2"/></ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                            </ItemsControl>
+                            <!-- Right: piles — Champion on a row of its own, then Graveyard/Banishment and Main/Material
+                                 (same layout and names as the Opponent panel). Click one to open its full
+                                 contents (ViewSnapshotPileCommand, below). Two per row (UniformGrid, not
+                                 a width-dependent WrapPanel). VerticalAlignment Top keeps it sized to its
+                                 own content instead of stretching to match the left column's height. -->
+                            <StackPanel Grid.Column="1" VerticalAlignment="Top">
+                                <ContentControl Content="{Binding ViewedChampionPile}" ContentTemplate="{StaticResource ChampionPileTemplate}"/>
+                                <ItemsControl ItemsSource="{Binding ViewedSnapshotPiles}" ItemTemplate="{StaticResource PileBoxTemplate}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate><UniformGrid Columns="2"/></ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                </ItemsControl>
+                            </StackPanel>
                         </Grid>
                     </ScrollViewer>
                 </DockPanel>
@@ -1266,6 +1316,9 @@
              redacted to a plain face-down count instead — no per-card data, no drag/tap/peek/zoom,
              since those are private zones. Auto-opens/closes on each turn handoff (IsMyTurn) but
              can also be toggled manually at any time via the header's Opponent button. -->
+        <!-- The phase tracker is layered back on top of the scrim at the end of this grid (an opaque copy of
+             the same template, aligned via the shared-size meta bar), so the phases stay fully visible —
+             and clickable on your turn — while this panel is open. The panel's top margin clears it. -->
         <Grid Grid.Column="0" Grid.ColumnSpan="2"
               Visibility="{Binding IsOpponentPanelOpen, Converter={StaticResource BoolToVisibility}}"
               d:IsHidden="True">
@@ -1277,26 +1330,31 @@
                 </Button.Template>
             </Button>
 
-            <Border Width="1360" MaxHeight="820" Margin="40" Padding="16"
+            <Border Width="1360" MaxHeight="820" Margin="40,64,40,40" Padding="16"
                     HorizontalAlignment="Center" VerticalAlignment="Center"
                     Background="#2D3748" BorderBrush="White" BorderThickness="2" CornerRadius="10">
                 <DockPanel>
-                    <TextBlock DockPanel.Dock="Top" Text="Opponent's board" Foreground="White" FontSize="20" FontWeight="Bold" Margin="0,0,0,4"/>
-                    <TextBlock DockPanel.Dock="Top" Foreground="#A0AEC0" Margin="0,0,0,12">
-                        <Run Text="{Binding OpponentLife, StringFormat='Life: {0}'}"/>
-                        <Run Text="   "/>
-                        <Run Text="{Binding OpponentTurnCount, Converter={StaticResource TurnCountDisplay}, StringFormat='Turn: {0}'}"/>
-                    </TextBlock>
+                    <TextBlock DockPanel.Dock="Top" Text="Opponent" Foreground="#F6AD55" FontSize="20" FontWeight="Bold" Margin="0,0,0,4"/>
 
-                    <!-- Own life, adjustable right here — most damage lands on the opponent's own
-                         turn, while this panel is open, so reacting to it shouldn't mean closing
-                         the panel first. Same DecreaseLifeCommand/IncreaseLifeCommand as the header. -->
-                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,12">
-                        <Button Style="{StaticResource CounterButtonStyle}" Content="-" Command="{Binding DecreaseLifeCommand}"/>
-                        <TextBlock Text="{Binding Player.Life, StringFormat='Your Life: {0}'}" FontSize="16" FontWeight="Bold"
-                                   Foreground="{Binding Player.Life, Converter={StaticResource LowLifeToBrush}}" VerticalAlignment="Center" Margin="8,0"/>
-                        <Button Style="{StaticResource CounterButtonStyle}" Content="+" Command="{Binding IncreaseLifeCommand}"/>
-                    </StackPanel>
+                    <!-- One line: the opponent's Life on the left, your own on the right (adjustable
+                         right here — most damage lands on the opponent's own turn, while this panel
+                         is open, so reacting to it shouldn't mean closing the panel first; same
+                         DecreaseLifeCommand/IncreaseLifeCommand as the header). Only the labels are
+                         color-coded (orange = theirs, green = yours), as in the review panel. -->
+                    <Grid DockPanel.Dock="Top" Margin="0,0,0,12">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">
+                            <TextBlock Text="Life:" FontSize="16" FontWeight="Bold" Foreground="#F6AD55" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding OpponentLife}" FontSize="16" FontWeight="Bold" Margin="6,0,0,0" VerticalAlignment="Center"
+                                       Foreground="{Binding OpponentLife, Converter={StaticResource LowLifeToBrush}}"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button Style="{StaticResource CounterButtonStyle}" Content="-" Command="{Binding DecreaseLifeCommand}"/>
+                            <TextBlock Text="Life:" FontSize="16" FontWeight="Bold" Foreground="#48BB78" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                            <TextBlock Text="{Binding Player.Life}" FontSize="16" FontWeight="Bold" Margin="6,0,10,0" VerticalAlignment="Center"
+                                       Foreground="{Binding Player.Life, Converter={StaticResource LowLifeToBrush}}"/>
+                            <Button Style="{StaticResource CounterButtonStyle}" Content="+" Command="{Binding IncreaseLifeCommand}"/>
+                        </StackPanel>
+                    </Grid>
 
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <Grid>
@@ -1315,77 +1373,89 @@
                                         <ItemsControl.ItemsPanel>
                                             <ItemsPanelTemplate><WrapPanel Margin="3"/></ItemsPanelTemplate>
                                         </ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemContainerStyle>
+                                            <Style TargetType="ContentPresenter">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding StartsNewGroup}" Value="True">
+                                                        <Setter Property="Margin" Value="22,0,0,0"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </ItemsControl.ItemContainerStyle>
                                     </ItemsControl>
                                 </Border>
 
                                 <StackPanel Orientation="Horizontal">
                                     <StackPanel Margin="0,0,16,0" HorizontalAlignment="Center">
                                         <TextBlock Text="Memory" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,4"/>
-                                        <Grid Width="125" Height="175">
-                                            <Image Source="pack://application:,,,/GameData/Images/Grand%20Archive%20Back.jpg" Stretch="UniformToFill"/>
-                                            <Border Background="#CC000000" CornerRadius="8" Padding="6,2" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,6">
-                                                <TextBlock Foreground="White" FontWeight="Bold" Text="{Binding OpponentMemoryCount}"/>
-                                            </Border>
-                                        </Grid>
+                                        <ContentControl Content="{Binding OpponentMemoryCount}" ContentTemplate="{StaticResource FaceDownCountTemplate}"/>
                                     </StackPanel>
                                     <StackPanel HorizontalAlignment="Center">
                                         <TextBlock Text="Hand" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,4"/>
-                                        <Grid Width="125" Height="175">
-                                            <Image Source="pack://application:,,,/GameData/Images/Grand%20Archive%20Back.jpg" Stretch="UniformToFill"/>
-                                            <Border Background="#CC000000" CornerRadius="8" Padding="6,2" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,6">
-                                                <TextBlock Foreground="White" FontWeight="Bold" Text="{Binding OpponentHandCount}"/>
-                                            </Border>
-                                        </Grid>
+                                        <ContentControl Content="{Binding OpponentHandCount}" ContentTemplate="{StaticResource FaceDownCountTemplate}"/>
                                     </StackPanel>
                                 </StackPanel>
                             </StackPanel>
 
-                            <!-- Right: Champion/Material, Graveyard/Banishment, Main — same order and
-                                 pairing as the snapshot viewer's own SnapshotPileOrder. Champion/
-                                 Graveyard/Banishment are real, browsable piles (PileBoxTemplate,
-                                 always showing a count even at 0 — see its own comment); Material/Main
-                                 are the same redacted face-down + count boxes as Hand/Memory. -->
-                            <UniformGrid Grid.Column="1" Columns="2" VerticalAlignment="Top">
-                                <ContentControl Content="{Binding OpponentChampionPile}" ContentTemplate="{StaticResource PileBoxTemplate}"/>
+                            <!-- Right: Champion on a row of its own (a tapped champion needs the room), then Graveyard/
+                                 Banishment, then Main/Material (and Sealed, when they have any). Champion/
+                                 Graveyard/Banishment are real, browsable piles (ChampionPileTemplate/
+                                 PileBoxTemplate, always showing a count even at 0); Main/Material/Sealed
+                                 are face-down + count boxes, like Hand/Memory. -->
+                            <StackPanel Grid.Column="1" VerticalAlignment="Top">
+                                <ContentControl Content="{Binding OpponentChampionPile}" ContentTemplate="{StaticResource ChampionPileTemplate}"/>
 
-                                <StackPanel Margin="0,0,0,8" HorizontalAlignment="Center">
-                                    <TextBlock Text="Material" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,4"/>
-                                    <Grid Width="125" Height="175">
-                                        <Image Source="pack://application:,,,/GameData/Images/Grand%20Archive%20Back.jpg" Stretch="UniformToFill"/>
-                                        <Border Background="#CC000000" CornerRadius="8" Padding="6,2" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,6">
-                                            <TextBlock Foreground="White" FontWeight="Bold" Text="{Binding OpponentMaterialDeckCount}"/>
-                                        </Border>
-                                    </Grid>
-                                </StackPanel>
+                                <UniformGrid Columns="2">
+                                    <ContentControl Content="{Binding OpponentGraveyardPile}" ContentTemplate="{StaticResource PileBoxTemplate}"/>
+                                    <ContentControl Content="{Binding OpponentBanishmentPile}" ContentTemplate="{StaticResource PileBoxTemplate}"/>
 
-                                <ContentControl Content="{Binding OpponentGraveyardPile}" ContentTemplate="{StaticResource PileBoxTemplate}"/>
-                                <ContentControl Content="{Binding OpponentBanishmentPile}" ContentTemplate="{StaticResource PileBoxTemplate}"/>
+                                    <StackPanel Margin="0,0,0,8" HorizontalAlignment="Center">
+                                        <TextBlock Text="Main" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                                        <ContentControl Content="{Binding OpponentMainDeckCount}" ContentTemplate="{StaticResource FaceDownCountTemplate}"/>
+                                    </StackPanel>
 
-                                <StackPanel Margin="0,0,0,8" HorizontalAlignment="Center"
-                                            Visibility="{Binding OpponentSealedCount, Converter={StaticResource IntToVisibility}}">
-                                    <TextBlock Text="Sealed" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,4"/>
-                                    <Grid Width="125" Height="175">
-                                        <Image Source="pack://application:,,,/GameData/Images/Grand%20Archive%20Back.jpg" Stretch="UniformToFill"/>
-                                        <Border Background="#CC000000" CornerRadius="8" Padding="6,2" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,6">
-                                            <TextBlock Foreground="White" FontWeight="Bold" Text="{Binding OpponentSealedCount}"/>
-                                        </Border>
-                                    </Grid>
-                                </StackPanel>
+                                    <StackPanel Margin="0,0,0,8" HorizontalAlignment="Center">
+                                        <TextBlock Text="Material" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                                        <ContentControl Content="{Binding OpponentMaterialDeckCount}" ContentTemplate="{StaticResource FaceDownCountTemplate}"/>
+                                    </StackPanel>
 
-                                <StackPanel Margin="0,0,0,8" HorizontalAlignment="Center">
-                                    <TextBlock Text="Main" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,4"/>
-                                    <Grid Width="125" Height="175">
-                                        <Image Source="pack://application:,,,/GameData/Images/Grand%20Archive%20Back.jpg" Stretch="UniformToFill"/>
-                                        <Border Background="#CC000000" CornerRadius="8" Padding="6,2" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,6">
-                                            <TextBlock Foreground="White" FontWeight="Bold" Text="{Binding OpponentMainDeckCount}"/>
-                                        </Border>
-                                    </Grid>
-                                </StackPanel>
-                            </UniformGrid>
+                                    <StackPanel Margin="0,0,0,8" HorizontalAlignment="Center"
+                                                Visibility="{Binding OpponentSealedCount, Converter={StaticResource IntToVisibility}}">
+                                        <TextBlock Text="Sealed" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                                        <ContentControl Content="{Binding OpponentSealedCount}" ContentTemplate="{StaticResource FaceDownCountTemplate}"/>
+                                    </StackPanel>
+                                </UniformGrid>
+                            </StackPanel>
                         </Grid>
                     </ScrollViewer>
                 </DockPanel>
             </Border>
+
+            <!-- Copy of the meta-action bar's phase tracker, on top of the scrim: same column split and
+                 margins as the real row, row height/left width shared with it, opaque backing so the
+                 dimmed original underneath doesn't show through. -->
+            <Grid VerticalAlignment="Top">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="260"/>
+                </Grid.ColumnDefinitions>
+                <Grid Grid.Column="0" Margin="12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" SharedSizeGroup="MetaBarRow"/>
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" SharedSizeGroup="MetaBarLeft"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto" SharedSizeGroup="MetaBarRight"/>
+                    </Grid.ColumnDefinitions>
+                    <!-- Bordered like the other panels and only as wide as the bar itself; the opaque
+                         background hides the dimmed original underneath. Same alignment as the real one. -->
+                    <Border Grid.Column="1" Background="#2D3748" BorderBrush="White" BorderThickness="2" CornerRadius="10"
+                            HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,100,0">
+                        <ContentControl Content="{Binding}" ContentTemplate="{StaticResource PhaseBarTemplate}"/>
+                    </Border>
+                </Grid>
+            </Grid>
         </Grid>
 
         <!-- Snapshot pile popup: full contents of a clicked pile box (Champion/Graveyard/
@@ -1408,7 +1478,7 @@
                     HorizontalAlignment="Center" VerticalAlignment="Center"
                     Background="#2D3748" BorderBrush="White" BorderThickness="2" CornerRadius="10">
                 <DockPanel>
-                    <TextBlock DockPanel.Dock="Top" Text="{Binding ViewedSnapshotPile.Zone}"
+                    <TextBlock DockPanel.Dock="Top" Text="{Binding ViewedSnapshotPile.DisplayName}"
                                Foreground="White" FontSize="20" FontWeight="Bold" Margin="0,0,0,12"/>
                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <ItemsControl ItemsSource="{Binding ViewedSnapshotPile.Cards}" ItemTemplate="{StaticResource CardSnapshotTemplate}">

@@ -24,6 +24,10 @@ public sealed partial class CardSnapshotViewModel : ObservableObject
 
     public CardSnapshot Snapshot { get; }
 
+    /// <summary>True on the first card of each type group when a Field is laid out by type (see
+    /// GameBoardViewModel.OrderFieldByType) — the view puts a little extra space before it.</summary>
+    public bool StartsNewGroup { get; set; }
+
     /// <summary>The board this snapshot belongs to, so CardZoomBehavior can reach
     /// ZoomSnapshotCardCommand — parallel to <see cref="CardViewModel.Board"/>.</summary>
     public GameBoardViewModel Board { get; }

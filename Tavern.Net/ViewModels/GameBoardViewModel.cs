@@ -646,8 +646,8 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
 
     /// <summary>True while the review panel is showing the opponent's board in a live online game —
     /// their Hand/Memory/Material/Main show as face-down counts, same as the Opponent panel, since
-    /// the snapshots hold the real cards. A game reviewed later from a save (not online) shows
-    /// everything.</summary>
+    /// the snapshots hold the real cards. (Your own Main is hidden too in a live online game — see
+    /// PopulateViewedCollections.) A game reviewed later from a save (not online) shows everything.</summary>
     public bool HideViewedPrivateZones => IsOnline && !CurrentlyViewedEventIsOwn;
 
     /// <summary>The phase for the review header — always the clicked entry's own snapshot, so both
@@ -692,17 +692,56 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     // Display order for the snapshot viewer's pile boxes — not the ZoneType enum's declaration
     // order, which reads oddly here. Field/Hand/Memory aren't included: they're spread out
     // directly (see ViewedFieldCards/ViewedHandCards/ViewedMemoryCards) rather than shown as
-    // click-to-open piles, matching how the live board renders them. Paired to match the
-    // UniformGrid's 2-per-row layout: Champion+Material, then Graveyard+Banishment, then Main
-    // alone.
+    // click-to-open piles, matching how the live board renders them. Champion isn't here — it gets
+    // a row to itself (ViewedChampionPile), since a tapped champion needs the room. The rest pair
+    // up to match the UniformGrid's 2-per-row layout: Graveyard+Banishment, then Main+Material.
     private static readonly ZoneType[] SnapshotPileOrder =
     {
-        ZoneType.Champion,
-        ZoneType.MaterialDeck,
         ZoneType.Graveyard,
         ZoneType.Banishment,
         ZoneType.MainDeck,
+        ZoneType.MaterialDeck,
     };
+
+    private static SnapshotZoneGroup EmptyChampionPile() => new(ZoneType.Champion, Array.Empty<CardSnapshotViewModel>());
+
+    /// <summary>The snapshot viewer's Champion pile, shown centered on its own row above the rest.</summary>
+    [ObservableProperty]
+    private SnapshotZoneGroup _viewedChampionPile = EmptyChampionPile();
+
+    // Card types in the order a Field is laid out by — anything not listed sorts after, alphabetically.
+    private static readonly string[] FieldTypeOrder = { "ally", "weapon", "item", "domain", "phantasia", "regalia", "action", "attack" };
+
+    /// <summary>Orders a Field's cards by type (a fixed preference order, then alphabetical for
+    /// anything unlisted) — keeping each type's cards in their original order — and flags the first
+    /// card of every group after the first so the view can leave a little space between groups.</summary>
+    private static List<CardSnapshotViewModel> OrderFieldByType(IEnumerable<CardSnapshotViewModel> cards)
+    {
+        // Any kind of Ally (plain, Unique, ...) shares one group.
+        static string GroupKey(CardSnapshotViewModel c)
+        {
+            var type = DeckSorting.PrimaryType(c.Snapshot.Card).ToLowerInvariant();
+            return type.Contains("ally") ? "ally" : type;
+        }
+
+        static int Rank(CardSnapshotViewModel c)
+        {
+            var index = Array.IndexOf(FieldTypeOrder, GroupKey(c));
+            return index < 0 ? int.MaxValue : index;
+        }
+
+        var ordered = cards
+            .OrderBy(Rank)
+            .ThenBy(GroupKey, StringComparer.Ordinal)
+            .ToList();
+
+        for (var i = 1; i < ordered.Count; i++)
+        {
+            ordered[i].StartsNewGroup = GroupKey(ordered[i]) != GroupKey(ordered[i - 1]);
+        }
+
+        return ordered;
+    }
 
     /// <summary>The pile boxes shown in the snapshot viewer (empty ones omitted) — click one to
     /// open ViewedSnapshotPile. Rebuilt whenever ViewedMajorEvent changes.</summary>
@@ -811,7 +850,7 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         }
 
         OpponentFieldCards.Clear();
-        foreach (var card in BuildOpponentCardSnapshots(ZoneType.Field))
+        foreach (var card in OrderFieldByType(BuildOpponentCardSnapshots(ZoneType.Field)))
         {
             OpponentFieldCards.Add(card);
         }
@@ -915,6 +954,7 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         ViewedFieldCards.Clear();
         ViewedHandCards.Clear();
         ViewedMemoryCards.Clear();
+        ViewedChampionPile = EmptyChampionPile();
         ViewedSnapshotPile = null;
         ZoomedSnapshotCard = null;
 
@@ -924,12 +964,20 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         }
 
         var cardsByZone = snapshot.Cards.ToLookup(c => c.Zone);
-        var hide = HideViewedPrivateZones;
 
-        foreach (var card in cardsByZone[ZoneType.Field])
+        // Hand/Memory/Material are hidden on the opponent's board in a live online game; Main is
+        // hidden for both players in one (knowing your own draw order is off-limits online — see
+        // CanPeekZone), and only becomes viewable when reviewing a saved game later.
+        var hide = HideViewedPrivateZones;
+        var hideMain = IsOnline;
+
+        foreach (var card in OrderFieldByType(cardsByZone[ZoneType.Field].Select(c => new CardSnapshotViewModel(c, _apiClient, this))))
         {
-            ViewedFieldCards.Add(new CardSnapshotViewModel(card, _apiClient, this));
+            ViewedFieldCards.Add(card);
         }
+
+        ViewedChampionPile = new SnapshotZoneGroup(
+            ZoneType.Champion, cardsByZone[ZoneType.Champion].Select(c => new CardSnapshotViewModel(c, _apiClient, this)).ToList());
 
         ViewedHandCount = cardsByZone[ZoneType.Hand].Count();
         ViewedMemoryCount = cardsByZone[ZoneType.Memory].Count();
@@ -947,12 +995,12 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
             }
         }
 
-        // Always all 5 piles, even ones with no cards (a "0" box rather than the pile vanishing) —
+        // Always all four piles, even ones with no cards (a "0" box rather than the pile vanishing) —
         // walking SnapshotPileOrder directly rather than grouping+reordering also guarantees that
         // fixed order regardless of which zones the snapshot happens to have cards in.
         foreach (var zone in SnapshotPileOrder)
         {
-            if (hide && zone is ZoneType.MaterialDeck or ZoneType.MainDeck)
+            if ((zone == ZoneType.MaterialDeck && hide) || (zone == ZoneType.MainDeck && hideMain))
             {
                 ViewedSnapshotPiles.Add(new SnapshotZoneGroup(zone, Array.Empty<CardSnapshotViewModel>(), IsRedacted: true, RedactedCount: cardsByZone[zone].Count()));
                 continue;
