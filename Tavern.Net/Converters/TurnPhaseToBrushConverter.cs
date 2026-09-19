@@ -5,20 +5,26 @@ using Tavern.Net.Game;
 
 namespace Tavern.Net.Converters;
 
-/// <summary>Highlights a phase label in the turn tracker when it's the current phase. ConverterParameter is the TurnPhase name to match.</summary>
-public sealed class TurnPhaseToBrushConverter : IValueConverter
+/// <summary>Colors a phase label in the turn tracker: green while it's the current phase of your own
+/// turn, orange during the opponent's (matching the Your Turn / Opp Turn badge), plain gray otherwise.
+/// Bindings are (CurrentPhase, IsMyTurn); ConverterParameter is the TurnPhase name to match.</summary>
+public sealed class TurnPhaseToBrushConverter : IMultiValueConverter
 {
-    // Matches the app's dark background (#1A202C) — plain Black/Gray read fine on a light
-    // background but Black disappears entirely once the background is dark.
-    private static readonly Brush CurrentBrush = new SolidColorBrush(Color.FromRgb(0xF7, 0xFA, 0xFC));
+    private static readonly Brush MyTurnBrush = new SolidColorBrush(Color.FromRgb(0x48, 0xBB, 0x78));
+    private static readonly Brush OpponentTurnBrush = new SolidColorBrush(Color.FromRgb(0xF6, 0xAD, 0x55));
     private static readonly Brush OtherBrush = new SolidColorBrush(Color.FromRgb(0xA0, 0xAE, 0xC0));
 
-    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    public object Convert(object[] values, Type targetType, object? parameter, CultureInfo culture)
     {
-        var isCurrent = value is TurnPhase phase && parameter is string name && phase.ToString() == name;
-        return isCurrent ? CurrentBrush : OtherBrush;
+        var isCurrent = values.Length > 1 && values[0] is TurnPhase phase && parameter is string name && phase.ToString() == name;
+        if (!isCurrent)
+        {
+            return OtherBrush;
+        }
+
+        return values[1] is true ? MyTurnBrush : OpponentTurnBrush;
     }
 
-    public object ConvertBack(object value, Type targetType, object? parameter, CultureInfo culture)
+    public object[] ConvertBack(object value, Type[] targetTypes, object? parameter, CultureInfo culture)
         => throw new NotSupportedException();
 }

@@ -1389,14 +1389,15 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     [RelayCommand(CanExecute = nameof(CanAdvancePhase))]
     private void NextPhase()
     {
-        var previousActivePlayer = _session.ActivePlayer;
         _session.AdvancePhase(Player);
         CurrentPhase = _session.CurrentPhase;
 
         // CurrentPhase/ActivePlayer are shared session state, not part of either player's own
-        // broadcast Player — only whoever just changed them (the handoff at End) sends this
-        // one-shot update; the passive side never echoes it back (see ApplyRemoteGameState).
-        if (IsOnline && _session.ActivePlayer != previousActivePlayer)
+        // broadcast Player — whoever just advanced (only ever the active player, see
+        // CanAdvancePhase) sends this one-shot update on every phase change, not just the End
+        // handoff, so the other side's tracker follows along; the passive side never echoes it back
+        // (see ApplyRemoteGameState).
+        if (IsOnline)
         {
             _ = _connection!.SendAsync(new OnlineMessage
             {

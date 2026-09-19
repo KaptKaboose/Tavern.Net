@@ -1,4 +1,4 @@
-<UserControl x:Class="Tavern.Net.Views.GameBoardView"
+﻿<UserControl x:Class="Tavern.Net.Views.GameBoardView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -275,28 +275,34 @@
                      spacer column). -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,100,0">
                     <TextBlock Text="Wake Up" FontSize="16" VerticalAlignment="Center"
-                               Foreground="{Binding CurrentPhase, Converter={StaticResource PhaseToBrush}, ConverterParameter=WakeUp}"
-                               FontWeight="{Binding CurrentPhase, Converter={StaticResource PhaseToFontWeight}, ConverterParameter=WakeUp}"/>
+                               FontWeight="{Binding CurrentPhase, Converter={StaticResource PhaseToFontWeight}, ConverterParameter=WakeUp}">
+                               <TextBlock.Foreground><MultiBinding Converter="{StaticResource PhaseToBrush}" ConverterParameter="WakeUp"><Binding Path="CurrentPhase"/><Binding Path="IsMyTurn"/></MultiBinding></TextBlock.Foreground>
+                           </TextBlock>
                     <TextBlock Text=" ➤ " FontSize="16" Foreground="#A0AEC0" VerticalAlignment="Center"/>
                     <TextBlock Text="Materialization" FontSize="16" VerticalAlignment="Center"
-                               Foreground="{Binding CurrentPhase, Converter={StaticResource PhaseToBrush}, ConverterParameter=Materialization}"
-                               FontWeight="{Binding CurrentPhase, Converter={StaticResource PhaseToFontWeight}, ConverterParameter=Materialization}"/>
+                               FontWeight="{Binding CurrentPhase, Converter={StaticResource PhaseToFontWeight}, ConverterParameter=Materialization}">
+                               <TextBlock.Foreground><MultiBinding Converter="{StaticResource PhaseToBrush}" ConverterParameter="Materialization"><Binding Path="CurrentPhase"/><Binding Path="IsMyTurn"/></MultiBinding></TextBlock.Foreground>
+                           </TextBlock>
                     <TextBlock Text=" ➤ " FontSize="16" Foreground="#A0AEC0" VerticalAlignment="Center"/>
                     <TextBlock Text="Recollection" FontSize="16" VerticalAlignment="Center"
-                               Foreground="{Binding CurrentPhase, Converter={StaticResource PhaseToBrush}, ConverterParameter=Recollection}"
-                               FontWeight="{Binding CurrentPhase, Converter={StaticResource PhaseToFontWeight}, ConverterParameter=Recollection}"/>
+                               FontWeight="{Binding CurrentPhase, Converter={StaticResource PhaseToFontWeight}, ConverterParameter=Recollection}">
+                               <TextBlock.Foreground><MultiBinding Converter="{StaticResource PhaseToBrush}" ConverterParameter="Recollection"><Binding Path="CurrentPhase"/><Binding Path="IsMyTurn"/></MultiBinding></TextBlock.Foreground>
+                           </TextBlock>
                     <TextBlock Text=" ➤ " FontSize="16" Foreground="#A0AEC0" VerticalAlignment="Center"/>
                     <TextBlock Text="Draw" FontSize="16" VerticalAlignment="Center"
-                               Foreground="{Binding CurrentPhase, Converter={StaticResource PhaseToBrush}, ConverterParameter=Draw}"
-                               FontWeight="{Binding CurrentPhase, Converter={StaticResource PhaseToFontWeight}, ConverterParameter=Draw}"/>
+                               FontWeight="{Binding CurrentPhase, Converter={StaticResource PhaseToFontWeight}, ConverterParameter=Draw}">
+                               <TextBlock.Foreground><MultiBinding Converter="{StaticResource PhaseToBrush}" ConverterParameter="Draw"><Binding Path="CurrentPhase"/><Binding Path="IsMyTurn"/></MultiBinding></TextBlock.Foreground>
+                           </TextBlock>
                     <TextBlock Text=" ➤ " FontSize="16" Foreground="#A0AEC0" VerticalAlignment="Center"/>
                     <TextBlock Text="Main" FontSize="16" VerticalAlignment="Center"
-                               Foreground="{Binding CurrentPhase, Converter={StaticResource PhaseToBrush}, ConverterParameter=Main}"
-                               FontWeight="{Binding CurrentPhase, Converter={StaticResource PhaseToFontWeight}, ConverterParameter=Main}"/>
+                               FontWeight="{Binding CurrentPhase, Converter={StaticResource PhaseToFontWeight}, ConverterParameter=Main}">
+                               <TextBlock.Foreground><MultiBinding Converter="{StaticResource PhaseToBrush}" ConverterParameter="Main"><Binding Path="CurrentPhase"/><Binding Path="IsMyTurn"/></MultiBinding></TextBlock.Foreground>
+                           </TextBlock>
                     <TextBlock Text=" ➤ " FontSize="16" Foreground="#A0AEC0" VerticalAlignment="Center"/>
                     <TextBlock Text="End" FontSize="16" VerticalAlignment="Center"
-                               Foreground="{Binding CurrentPhase, Converter={StaticResource PhaseToBrush}, ConverterParameter=End}"
-                               FontWeight="{Binding CurrentPhase, Converter={StaticResource PhaseToFontWeight}, ConverterParameter=End}"/>
+                               FontWeight="{Binding CurrentPhase, Converter={StaticResource PhaseToFontWeight}, ConverterParameter=End}">
+                               <TextBlock.Foreground><MultiBinding Converter="{StaticResource PhaseToBrush}" ConverterParameter="End"><Binding Path="CurrentPhase"/><Binding Path="IsMyTurn"/></MultiBinding></TextBlock.Foreground>
+                           </TextBlock>
                 </StackPanel>
             </Grid>
 
@@ -333,18 +339,19 @@
                                 Visibility="{Binding IsOnline, Converter={StaticResource BoolToVisibility}}">
                             <Border.Style>
                                 <Style TargetType="Border">
-                                    <Setter Property="Background" Value="#4A5568"/>
+                                    <Setter Property="Background" Value="#F6AD55"/>
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding IsMyTurn}" Value="True">
-                                            <Setter Property="Background" Value="#2F855A"/>
+                                            <Setter Property="Background" Value="#48BB78"/>
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
                             </Border.Style>
-                            <TextBlock FontSize="13" FontWeight="Bold" Foreground="#F7FAFC" VerticalAlignment="Center">
+                            <TextBlock FontSize="13" FontWeight="Bold" VerticalAlignment="Center">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
                                         <Setter Property="Text" Value="Opp Turn"/>
+                                        <Setter Property="Foreground" Value="#1A202C"/>
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding IsMyTurn}" Value="True">
                                                 <Setter Property="Text" Value="Your Turn"/>
