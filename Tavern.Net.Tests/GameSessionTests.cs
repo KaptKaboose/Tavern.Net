@@ -1,4 +1,4 @@
-using Tavern.Net.Game;
+﻿using Tavern.Net.Game;
 using Tavern.Net.GameData.Models;
 
 namespace Tavern.Net.Tests;
@@ -1255,6 +1255,28 @@ public class GameSessionTests
         // materialization/opening hand — not the empty board at the instant zones were cleared.
         var gameStarted = player.Stats.MajorEvents[0];
         Assert.Contains(gameStarted.Snapshot.Cards, c => c.Card.Name == baseChampion.Card.Name && c.Zone == ZoneType.Champion);
+    }
+
+    [Fact]
+    public void MainCardPutIntoMaterial_IsLogged_AndReturnsToItsOwnDeckOnNewGame()
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        player.GetZone(ZoneType.MaterialDeck).Cards.Add(MakeBaseChampion());
+        var preserved = new CardInstance(new CardDto { Name = "Preserved" }, ZoneType.MainDeck);
+        player.GetZone(ZoneType.Field).Cards.Add(preserved);
+
+        session.MoveCard(player, preserved, ZoneType.Field, ZoneType.MaterialDeck);
+
+        Assert.Contains(preserved, player.GetZone(ZoneType.MaterialDeck).Cards);
+        Assert.Contains(player.Stats.MajorEvents, e => e.Description == "Preserved was put into the Material Deck." && e.CardName == "Preserved");
+
+        session.StartNewGame();
+
+        // Its home is Main, so the reset rebuilds it there (or it was drawn into the opening hand),
+        // never left in Material.
+        Assert.DoesNotContain(preserved, player.GetZone(ZoneType.MaterialDeck).Cards);
+        Assert.Contains(preserved, player.Zones.Values.SelectMany(z => z.Cards));
     }
 
     [Fact]

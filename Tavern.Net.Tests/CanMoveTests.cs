@@ -1,4 +1,4 @@
-using Tavern.Net.Game;
+﻿using Tavern.Net.Game;
 using Tavern.Net.GameData.Models;
 
 namespace Tavern.Net.Tests;
@@ -30,6 +30,21 @@ public class CanMoveTests
     {
         Assert.True(Session.CanMove(Card(ZoneType.MaterialDeck), ZoneType.MaterialDeck, ZoneType.Field));
         Assert.True(Session.CanMove(Card(ZoneType.MaterialDeck), ZoneType.Field, ZoneType.Banishment));
+    }
+
+    [Theory]
+    [InlineData(ZoneType.Field)]
+    [InlineData(ZoneType.Hand)]
+    [InlineData(ZoneType.Graveyard)]
+    public void MainCard_MayGoIntoMaterial_ForEffectsLikePreserve(ZoneType from)
+    {
+        Assert.True(Session.CanMove(Card(), from, ZoneType.MaterialDeck));
+    }
+
+    [Fact]
+    public void Token_CannotGoIntoMaterial()
+    {
+        Assert.False(Session.CanMove(Card(ZoneType.Tokens, token: true), ZoneType.Field, ZoneType.MaterialDeck));
     }
 
     [Fact]

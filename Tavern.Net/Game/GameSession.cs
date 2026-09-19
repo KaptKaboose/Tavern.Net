@@ -25,7 +25,6 @@ public sealed class GameSession
         (ZoneType.MaterialDeck, ZoneType.Graveyard),
         (ZoneType.MaterialDeck, ZoneType.Hand),
         (ZoneType.MaterialDeck, ZoneType.Memory),
-        (ZoneType.MainDeck, ZoneType.MaterialDeck),
     };
 
     // Stack zones: a new arrival goes on top (index 0), matching how a physical pile works and
@@ -528,6 +527,11 @@ public sealed class GameSession
                 break;
             case ZoneType.Champion:
                 RecordMajorEvent(player, $"{card.Card.Name} materialized as Champion.", cardName: card.Card.Name);
+                break;
+            case ZoneType.MaterialDeck:
+                // Face-down and easy to miss, so worth an entry — e.g. a Main card going in via an
+                // effect like Preserve, or a misdrop.
+                RecordMajorEvent(player, $"{card.Card.Name} was put into the Material Deck.", cardName: card.Card.Name);
                 break;
         }
     }
