@@ -2171,6 +2171,21 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
             }
         }
 
+        // O toggles the opponent panel — checked ahead of the general overlay guard below because
+        // that guard would otherwise swallow the key while the panel itself is the open overlay (so
+        // O could never close it). It only acts when nothing else is open, though: the panel sits
+        // beneath most other modals, so opening it behind one would leave it invisible while still
+        // blocking every other shortcut.
+        if (key == Key.O && IsOnline)
+        {
+            if (!IsAnyOverlayOpen(ignoreOpponentPanel: true))
+            {
+                ToggleOpponentPanel();
+            }
+
+            return true;
+        }
+
         // Every other overlay (Zoom, Peek, Dice, Save Game, Opponent panel, the Actions menu's own
         // list view, the snapshot viewer and its pile popup, ...) blocks shortcuts the same way
         // Glimpsing already did above — a key meant for the board shouldn't reach through a modal
@@ -2261,8 +2276,10 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     /// why that blocks every keyboard shortcut. Extend this alongside each new overlay-flag
     /// property (and give that property an OnXChanged hook calling CloseActionsMenu(), so a
     /// half-configured action can't go stale if some other overlay opens first).</summary>
-    private bool IsAnyOverlayOpen() =>
-        IsOpponentPanelOpen || IsRollingDice || IsSavingGame || IsSealedPanelOpen || IsGiveTargetPickerOpen || IsActionsMenuOpen ||
+    /// <param name="ignoreOpponentPanel">True to ask "is anything *else* open" — what the O shortcut
+    /// needs, since it toggles the opponent panel itself.</param>
+    private bool IsAnyOverlayOpen(bool ignoreOpponentPanel = false) =>
+        (IsOpponentPanelOpen && !ignoreOpponentPanel) || IsRollingDice || IsSavingGame || IsSealedPanelOpen || IsGiveTargetPickerOpen || IsActionsMenuOpen ||
         IsGenerateSearchOpen || IsGenerateCountOpen || IsHelpOpen || IsSideboardPanelOpen || IsNewGameAgreementOpen ||
         ZoomedCard is not null || PeekedZone is not null || ViewedMajorEvent is not null ||
         ViewedSnapshotPile is not null || ZoomedSnapshotCard is not null || ActiveReveal is not null;
