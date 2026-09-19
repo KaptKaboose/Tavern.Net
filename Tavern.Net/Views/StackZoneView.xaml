@@ -1,4 +1,4 @@
-<UserControl x:Class="Tavern.Net.Views.StackZoneView"
+﻿<UserControl x:Class="Tavern.Net.Views.StackZoneView"
              x:Name="Root"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -121,28 +121,28 @@
                          which is Visible, not Collapsed — so without this wrapper every badge (and
                          an empty counter pill) showed up on a pile with no cards in it at all. -->
                     <Grid Visibility="{Binding Zone.Cards.Count, ElementName=Root, Converter={StaticResource IntToVisibility}}">
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Top" HorizontalAlignment="Left"
+                        <StackPanel Orientation="Vertical" VerticalAlignment="Top" HorizontalAlignment="Left"
                                     Margin="3" IsHitTestVisible="False">
-                            <Image Width="16" Height="16" Margin="0,0,1,0" Source="/GameData/Images/Tokens/ephemeral.png"
+                            <Image Width="22" Height="22" Margin="0,0,0,1" Source="/GameData/Images/Tokens/ephemeral.png"
                                    Visibility="{Binding Zone.Cards[0].Instance.IsEphemeral, ElementName=Root, Converter={StaticResource BoolToVisibility}}"/>
-                            <Image Width="16" Height="16" Margin="0,0,1,0" Source="/GameData/Images/Tokens/ignited.png"
+                            <Image Width="22" Height="22" Margin="0,0,0,1" Source="/GameData/Images/Tokens/ignited.png"
                                    Visibility="{Binding Zone.Cards[0].Instance.IsIgnited, ElementName=Root, Converter={StaticResource BoolToVisibility}}"/>
-                            <Image Width="16" Height="16" Margin="0,0,1,0" Source="/GameData/Images/Tokens/imbued.png"
+                            <Image Width="22" Height="22" Margin="0,0,0,1" Source="/GameData/Images/Tokens/imbued.png"
                                    Visibility="{Binding Zone.Cards[0].Instance.IsImbued, ElementName=Root, Converter={StaticResource BoolToVisibility}}"/>
-                            <Image Width="16" Height="16" Margin="0,0,1,0" Source="/GameData/Images/Tokens/ranged.png"
+                            <Image Width="22" Height="22" Margin="0,0,0,1" Source="/GameData/Images/Tokens/ranged.png"
                                    Visibility="{Binding Zone.Cards[0].Instance.IsRanged, ElementName=Root, Converter={StaticResource BoolToVisibility}}"/>
-                            <Image Width="16" Height="16" Margin="0,0,1,0" Source="/GameData/Images/Tokens/rooted.png"
+                            <Image Width="22" Height="22" Margin="0,0,0,1" Source="/GameData/Images/Tokens/rooted.png"
                                    Visibility="{Binding Zone.Cards[0].Instance.IsRooted, ElementName=Root, Converter={StaticResource BoolToVisibility}}"/>
-                            <Image Width="16" Height="16" Source="/GameData/Images/Tokens/warded.png"
+                            <Image Width="22" Height="22" Source="/GameData/Images/Tokens/warded.png"
                                    Visibility="{Binding Zone.Cards[0].Instance.IsWarded, ElementName=Root, Converter={StaticResource BoolToVisibility}}"/>
                         </StackPanel>
 
-                        <Border Background="#CC000000" CornerRadius="8" Padding="5,1" HorizontalAlignment="Right" VerticalAlignment="Top"
+                        <Border Background="#E6000000" CornerRadius="10" Padding="7,1" HorizontalAlignment="Right" VerticalAlignment="Top"
                                 Margin="3" IsHitTestVisible="False">
                             <Border.Visibility>
                                 <Binding Path="Zone.Cards[0].Instance.Counter" ElementName="Root" Converter="{StaticResource IntToVisibility}"/>
                             </Border.Visibility>
-                            <TextBlock Text="{Binding Zone.Cards[0].Instance.Counter, ElementName=Root}" Foreground="White" FontSize="11" FontWeight="Bold"/>
+                            <TextBlock Text="{Binding Zone.Cards[0].Instance.Counter, ElementName=Root}" Foreground="#F6E05E" FontSize="16" FontWeight="Bold"/>
                         </Border>
                     </Grid>
                 </Grid>

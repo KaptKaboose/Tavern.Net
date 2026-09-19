@@ -1,4 +1,4 @@
-<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:vm="clr-namespace:Tavern.Net.ViewModels"
                     xmlns:conv="clr-namespace:Tavern.Net.Converters"
@@ -310,26 +310,26 @@
                 <!-- Status/counter badges: tiny and non-interactive (IsHitTestVisible=False) — only
                      ever populated on a Field/Champion card, since GameSession.MoveCard clears
                      both the instant a card goes anywhere else (CardInstance.ResetCounterAndStatuses). -->
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Top" HorizontalAlignment="Left"
+                <StackPanel Orientation="Vertical" VerticalAlignment="Top" HorizontalAlignment="Left"
                             Margin="3" IsHitTestVisible="False">
-                    <Image Width="16" Height="16" Margin="0,0,1,0" Source="/GameData/Images/Tokens/ephemeral.png"
+                    <Image Width="22" Height="22" Margin="0,0,0,1" Source="/GameData/Images/Tokens/ephemeral.png"
                            Visibility="{Binding Instance.IsEphemeral, Converter={StaticResource BoolToVisibility}}"/>
-                    <Image Width="16" Height="16" Margin="0,0,1,0" Source="/GameData/Images/Tokens/ignited.png"
+                    <Image Width="22" Height="22" Margin="0,0,0,1" Source="/GameData/Images/Tokens/ignited.png"
                            Visibility="{Binding Instance.IsIgnited, Converter={StaticResource BoolToVisibility}}"/>
-                    <Image Width="16" Height="16" Margin="0,0,1,0" Source="/GameData/Images/Tokens/imbued.png"
+                    <Image Width="22" Height="22" Margin="0,0,0,1" Source="/GameData/Images/Tokens/imbued.png"
                            Visibility="{Binding Instance.IsImbued, Converter={StaticResource BoolToVisibility}}"/>
-                    <Image Width="16" Height="16" Margin="0,0,1,0" Source="/GameData/Images/Tokens/ranged.png"
+                    <Image Width="22" Height="22" Margin="0,0,0,1" Source="/GameData/Images/Tokens/ranged.png"
                            Visibility="{Binding Instance.IsRanged, Converter={StaticResource BoolToVisibility}}"/>
-                    <Image Width="16" Height="16" Margin="0,0,1,0" Source="/GameData/Images/Tokens/rooted.png"
+                    <Image Width="22" Height="22" Margin="0,0,0,1" Source="/GameData/Images/Tokens/rooted.png"
                            Visibility="{Binding Instance.IsRooted, Converter={StaticResource BoolToVisibility}}"/>
-                    <Image Width="16" Height="16" Source="/GameData/Images/Tokens/warded.png"
+                    <Image Width="22" Height="22" Source="/GameData/Images/Tokens/warded.png"
                            Visibility="{Binding Instance.IsWarded, Converter={StaticResource BoolToVisibility}}"/>
                 </StackPanel>
 
-                <Border Background="#CC000000" CornerRadius="8" Padding="5,1" HorizontalAlignment="Right" VerticalAlignment="Top"
+                <Border Background="#E6000000" CornerRadius="10" Padding="7,1" HorizontalAlignment="Right" VerticalAlignment="Top"
                         Margin="3" IsHitTestVisible="False"
                         Visibility="{Binding Instance.Counter, Converter={StaticResource IntToVisibility}}">
-                    <TextBlock Text="{Binding Instance.Counter}" Foreground="White" FontSize="11" FontWeight="Bold"/>
+                    <TextBlock Text="{Binding Instance.Counter}" Foreground="#F6E05E" FontSize="16" FontWeight="Bold"/>
                 </Border>
             </Grid>
         </Border>
@@ -355,26 +355,26 @@
                            VerticalAlignment="Center" Foreground="White" Margin="4" FontSize="14"
                            Visibility="{Binding Artwork, Converter={StaticResource NullToVisibility}, ConverterParameter=Invert}"/>
 
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Top" HorizontalAlignment="Left"
+                <StackPanel Orientation="Vertical" VerticalAlignment="Top" HorizontalAlignment="Left"
                             Margin="3" IsHitTestVisible="False">
-                    <Image Width="16" Height="16" Margin="0,0,1,0" Source="/GameData/Images/Tokens/ephemeral.png"
+                    <Image Width="22" Height="22" Margin="0,0,0,1" Source="/GameData/Images/Tokens/ephemeral.png"
                            Visibility="{Binding Instance.IsEphemeral, Converter={StaticResource BoolToVisibility}}"/>
-                    <Image Width="16" Height="16" Margin="0,0,1,0" Source="/GameData/Images/Tokens/ignited.png"
+                    <Image Width="22" Height="22" Margin="0,0,0,1" Source="/GameData/Images/Tokens/ignited.png"
                            Visibility="{Binding Instance.IsIgnited, Converter={StaticResource BoolToVisibility}}"/>
-                    <Image Width="16" Height="16" Margin="0,0,1,0" Source="/GameData/Images/Tokens/imbued.png"
+                    <Image Width="22" Height="22" Margin="0,0,0,1" Source="/GameData/Images/Tokens/imbued.png"
                            Visibility="{Binding Instance.IsImbued, Converter={StaticResource BoolToVisibility}}"/>
-                    <Image Width="16" Height="16" Margin="0,0,1,0" Source="/GameData/Images/Tokens/ranged.png"
+                    <Image Width="22" Height="22" Margin="0,0,0,1" Source="/GameData/Images/Tokens/ranged.png"
                            Visibility="{Binding Instance.IsRanged, Converter={StaticResource BoolToVisibility}}"/>
-                    <Image Width="16" Height="16" Margin="0,0,1,0" Source="/GameData/Images/Tokens/rooted.png"
+                    <Image Width="22" Height="22" Margin="0,0,0,1" Source="/GameData/Images/Tokens/rooted.png"
                            Visibility="{Binding Instance.IsRooted, Converter={StaticResource BoolToVisibility}}"/>
-                    <Image Width="16" Height="16" Source="/GameData/Images/Tokens/warded.png"
+                    <Image Width="22" Height="22" Source="/GameData/Images/Tokens/warded.png"
                            Visibility="{Binding Instance.IsWarded, Converter={StaticResource BoolToVisibility}}"/>
                 </StackPanel>
 
-                <Border Background="#CC000000" CornerRadius="8" Padding="5,1" HorizontalAlignment="Right" VerticalAlignment="Top"
+                <Border Background="#E6000000" CornerRadius="10" Padding="7,1" HorizontalAlignment="Right" VerticalAlignment="Top"
                         Margin="3" IsHitTestVisible="False"
                         Visibility="{Binding Instance.Counter, Converter={StaticResource IntToVisibility}}">
-                    <TextBlock Text="{Binding Instance.Counter}" Foreground="White" FontSize="11" FontWeight="Bold"/>
+                    <TextBlock Text="{Binding Instance.Counter}" Foreground="#F6E05E" FontSize="16" FontWeight="Bold"/>
                 </Border>
             </Grid>
         </Border>
@@ -420,26 +420,26 @@
                            VerticalAlignment="Center" Foreground="White" Margin="4" FontSize="14"
                            Visibility="{Binding Artwork, Converter={StaticResource NullToVisibility}, ConverterParameter=Invert}"/>
 
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Top" HorizontalAlignment="Left"
+                <StackPanel Orientation="Vertical" VerticalAlignment="Top" HorizontalAlignment="Left"
                             Margin="3" IsHitTestVisible="False">
-                    <Image Width="16" Height="16" Margin="0,0,1,0" Source="/GameData/Images/Tokens/ephemeral.png"
+                    <Image Width="22" Height="22" Margin="0,0,0,1" Source="/GameData/Images/Tokens/ephemeral.png"
                            Visibility="{Binding Snapshot.IsEphemeral, Converter={StaticResource BoolToVisibility}}"/>
-                    <Image Width="16" Height="16" Margin="0,0,1,0" Source="/GameData/Images/Tokens/ignited.png"
+                    <Image Width="22" Height="22" Margin="0,0,0,1" Source="/GameData/Images/Tokens/ignited.png"
                            Visibility="{Binding Snapshot.IsIgnited, Converter={StaticResource BoolToVisibility}}"/>
-                    <Image Width="16" Height="16" Margin="0,0,1,0" Source="/GameData/Images/Tokens/imbued.png"
+                    <Image Width="22" Height="22" Margin="0,0,0,1" Source="/GameData/Images/Tokens/imbued.png"
                            Visibility="{Binding Snapshot.IsImbued, Converter={StaticResource BoolToVisibility}}"/>
-                    <Image Width="16" Height="16" Margin="0,0,1,0" Source="/GameData/Images/Tokens/ranged.png"
+                    <Image Width="22" Height="22" Margin="0,0,0,1" Source="/GameData/Images/Tokens/ranged.png"
                            Visibility="{Binding Snapshot.IsRanged, Converter={StaticResource BoolToVisibility}}"/>
-                    <Image Width="16" Height="16" Margin="0,0,1,0" Source="/GameData/Images/Tokens/rooted.png"
+                    <Image Width="22" Height="22" Margin="0,0,0,1" Source="/GameData/Images/Tokens/rooted.png"
                            Visibility="{Binding Snapshot.IsRooted, Converter={StaticResource BoolToVisibility}}"/>
-                    <Image Width="16" Height="16" Source="/GameData/Images/Tokens/warded.png"
+                    <Image Width="22" Height="22" Source="/GameData/Images/Tokens/warded.png"
                            Visibility="{Binding Snapshot.IsWarded, Converter={StaticResource BoolToVisibility}}"/>
                 </StackPanel>
 
-                <Border Background="#CC000000" CornerRadius="8" Padding="5,1" HorizontalAlignment="Right" VerticalAlignment="Top"
+                <Border Background="#E6000000" CornerRadius="10" Padding="7,1" HorizontalAlignment="Right" VerticalAlignment="Top"
                         Margin="3" IsHitTestVisible="False"
                         Visibility="{Binding Snapshot.Counter, Converter={StaticResource IntToVisibility}}">
-                    <TextBlock Text="{Binding Snapshot.Counter}" Foreground="White" FontSize="11" FontWeight="Bold"/>
+                    <TextBlock Text="{Binding Snapshot.Counter}" Foreground="#F6E05E" FontSize="16" FontWeight="Bold"/>
                 </Border>
             </Grid>
         </Border>
