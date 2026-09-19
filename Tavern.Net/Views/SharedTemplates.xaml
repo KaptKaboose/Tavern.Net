@@ -386,7 +386,9 @@
          (CardZoomBehavior routes CardSnapshotViewModel to GameBoardViewModel.ZoomSnapshotCardCommand
          instead of ZoomCardCommand). -->
     <DataTemplate x:Key="CardSnapshotTemplate" DataType="{x:Type vm:CardSnapshotViewModel}">
-        <Border Width="125" Height="175" CornerRadius="4" ClipToBounds="True"
+        <!-- ClipToBounds is on the inner Grid, not this Border: clipping the Border itself would also clip
+             the gold highlight glow (its Effect) to the card's own outline. -->
+        <Border Width="125" Height="175" CornerRadius="4"
                 BorderBrush="#55000000" BorderThickness="1"
                 Background="#333"
                 RenderTransformOrigin="0.5,0.5"
@@ -409,11 +411,17 @@
                             </Setter>
                             <Setter Property="Margin" Value="28,3,28,3"/>
                         </DataTrigger>
+                        <!-- The opponent panel's new arrivals / the review panel's event card. -->
+                        <DataTrigger Binding="{Binding IsHighlighted}" Value="True">
+                            <Setter Property="BorderBrush" Value="#F6E05E"/>
+                            <Setter Property="BorderThickness" Value="3"/>
+                            <Setter Property="Effect" Value="{StaticResource GoldGlow}"/>
+                        </DataTrigger>
                     </Style.Triggers>
                 </Style>
             </Border.Style>
 
-            <Grid>
+            <Grid ClipToBounds="True">
                 <Image Source="{Binding Artwork}" Stretch="UniformToFill"
                        Visibility="{Binding Artwork, Converter={StaticResource NullToVisibility}}"/>
                 <TextBlock Text="{Binding Name}" TextWrapping="Wrap" TextAlignment="Center"

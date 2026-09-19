@@ -506,7 +506,7 @@ public sealed class GameSession
         switch (to)
         {
             case ZoneType.Field:
-                RecordMajorEvent(player, $"Played {card.Card.Name} to the Field.", cardName: card.Card.Name);
+                RecordMajorEvent(player, $"Played {card.Card.Name} to the Field.", cardName: card.Card.Name, cardZone: ZoneType.Field);
                 if (from == ZoneType.Hand)
                 {
                     player.Stats.PlayedCardThisTurn = true;
@@ -515,7 +515,7 @@ public sealed class GameSession
 
                 break;
             case ZoneType.Graveyard:
-                RecordMajorEvent(player, $"{card.Card.Name} went to the Graveyard.", cardName: card.Card.Name);
+                RecordMajorEvent(player, $"{card.Card.Name} went to the Graveyard.", cardName: card.Card.Name, cardZone: ZoneType.Graveyard);
                 break;
             case ZoneType.Banishment:
                 if (from == ZoneType.Memory)
@@ -523,10 +523,10 @@ public sealed class GameSession
                     player.Stats.CardsLostToMemoryDecayCount++;
                 }
 
-                RecordMajorEvent(player, $"Banished {card.Card.Name}.", cardName: card.Card.Name);
+                RecordMajorEvent(player, $"Banished {card.Card.Name}.", cardName: card.Card.Name, cardZone: ZoneType.Banishment);
                 break;
             case ZoneType.Champion:
-                RecordMajorEvent(player, $"{card.Card.Name} materialized as Champion.", cardName: card.Card.Name);
+                RecordMajorEvent(player, $"{card.Card.Name} materialized as Champion.", cardName: card.Card.Name, cardZone: ZoneType.Champion);
                 break;
             case ZoneType.MaterialDeck:
                 // Face-down and easy to miss, so worth an entry — e.g. a Main card going in via an
@@ -555,7 +555,7 @@ public sealed class GameSession
             };
             player.GetZone(ZoneType.Field).Cards.Add(spawned);
             player.Stats.Log($"Summoned {card.Card.Name} token.");
-            RecordMajorEvent(player, $"Summoned {card.Card.Name} token.", cardName: card.Card.Name);
+            RecordMajorEvent(player, $"Summoned {card.Card.Name} token.", cardName: card.Card.Name, cardZone: ZoneType.Field);
             return;
         }
 
@@ -793,7 +793,7 @@ public sealed class GameSession
 
         if (destination == ZoneType.Field)
         {
-            RecordMajorEvent(player, $"{cardDto.Name} arrived on the Field via Give.", cardName: cardDto.Name);
+            RecordMajorEvent(player, $"{cardDto.Name} arrived on the Field via Give.", cardName: cardDto.Name, cardZone: ZoneType.Field);
         }
 
         return instance;
@@ -951,12 +951,13 @@ public sealed class GameSession
     /// <paramref name="cardName"/> is the card the description is about, if any — only so the Play
     /// Log can bold it (see MajorEvent.CardName).
     /// </summary>
-    private void RecordMajorEvent(Player player, string description, bool insertAtStart = false, string? cardName = null)
+    private void RecordMajorEvent(Player player, string description, bool insertAtStart = false, string? cardName = null, ZoneType? cardZone = null)
     {
         var majorEvent = new MajorEvent
         {
             Description = description,
             CardName = cardName,
+            CardZone = cardZone,
             Kind = MajorEventKind.Other,
             Turn = player.Stats.TurnCount,
             Snapshot = TakeSnapshot(player),

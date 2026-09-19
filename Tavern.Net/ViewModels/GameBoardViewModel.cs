@@ -99,6 +99,12 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
             HasUnseenOpponentActivity = false;
             CloseActionsMenu();
         }
+        else
+        {
+            // Closing the board means the new arrivals have been seen — drop their glow.
+            _unseenOpponentArrivals.Clear();
+            RebuildOpponentBoard();
+        }
     }
 
     /// <summary>Set once the connection drops — shown as a banner rather than forcing navigation
@@ -775,12 +781,10 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     /// card of every group after the first so the view can leave a little space between groups.</summary>
     private static List<CardSnapshotViewModel> OrderFieldByType(IEnumerable<CardSnapshotViewModel> cards)
     {
-        // Any kind of Ally (plain, Unique, ...) shares one group.
-        static string GroupKey(CardSnapshotViewModel c)
-        {
-            var type = DeckSorting.PrimaryType(c.Snapshot.Card).ToLowerInvariant();
-            return type.Contains("ally") ? "ally" : type;
-        }
+        // The card's real type, skipping the "Unique" modifier the API lists first ("UNIQUE","ALLY")
+        // — so an Ally and a Unique Ally share one group.
+        static string GroupKey(CardSnapshotViewModel c) =>
+            (c.Snapshot.Card.Types.FirstOrDefault(t => !t.Equals("unique", StringComparison.OrdinalIgnoreCase)) ?? "").ToLowerInvariant();
 
         static int Rank(CardSnapshotViewModel c)
         {
@@ -907,15 +911,8 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
             return;
         }
 
-        OpponentFieldCards.Clear();
-        foreach (var card in OrderFieldByType(BuildOpponentCardSnapshots(ZoneType.Field)))
-        {
-            OpponentFieldCards.Add(card);
-        }
-
-        OpponentChampionPile = new SnapshotZoneGroup(ZoneType.Champion, BuildOpponentCardSnapshots(ZoneType.Champion));
-        OpponentGraveyardPile = new SnapshotZoneGroup(ZoneType.Graveyard, BuildOpponentCardSnapshots(ZoneType.Graveyard));
-        OpponentBanishmentPile = new SnapshotZoneGroup(ZoneType.Banishment, BuildOpponentCardSnapshots(ZoneType.Banishment));
+        TrackOpponentArrivals();
+        RebuildOpponentBoard();
 
         OpponentHandCount = OpponentPlayer.GetZone(ZoneType.Hand).Cards.Count;
         OpponentMemoryCount = OpponentPlayer.GetZone(ZoneType.Memory).Cards.Count;
@@ -965,10 +962,104 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         _opponentLifeGlowTimer.Start();
     }
 
-    private List<CardSnapshotViewModel> BuildOpponentCardSnapshots(ZoneType zone) =>
-        OpponentPlayer!.GetZone(zone).Cards
+    // --- Arrival glow: cards that showed up on the opponent's Field/Champion/Graveyard/Banishment
+    // since the panel was last open glow gold (piles glow as a whole, and the card inside them when
+    // opened). Found by comparing zone contents across updates, not from the log: the log only knows
+    // a name, which is ambiguous with duplicate copies.
+
+    private static readonly ZoneType[] ArrivalZones = { ZoneType.Field, ZoneType.Champion, ZoneType.Graveyard, ZoneType.Banishment };
+
+    private Dictionary<(ZoneType Zone, string Slug), int>? _previousOpponentCounts;
+    private readonly Dictionary<(ZoneType Zone, string Slug), int> _unseenOpponentArrivals = new();
+
+    private void TrackOpponentArrivals()
+    {
+        var current = ArrivalZones
+            .SelectMany(zone => OpponentPlayer!.GetZone(zone).Cards.Select(card => (zone, card.Card.Slug)))
+            .GroupBy(key => key)
+            .ToDictionary(group => group.Key, group => group.Count());
+
+        // The very first update after joining / a New Game only sets the baseline.
+        if (_hasSeenInitialOpponentState && _previousOpponentCounts is not null)
+        {
+            foreach (var (key, count) in current)
+            {
+                var before = _previousOpponentCounts.GetValueOrDefault(key);
+                if (count > before)
+                {
+                    _unseenOpponentArrivals[key] = _unseenOpponentArrivals.GetValueOrDefault(key) + (count - before);
+                }
+            }
+        }
+
+        // An arrival that has since left (or been outnumbered) can't glow more copies than exist.
+        foreach (var key in _unseenOpponentArrivals.Keys.ToList())
+        {
+            var now = current.GetValueOrDefault(key);
+            if (now == 0)
+            {
+                _unseenOpponentArrivals.Remove(key);
+            }
+            else if (_unseenOpponentArrivals[key] > now)
+            {
+                _unseenOpponentArrivals[key] = now;
+            }
+        }
+
+        _previousOpponentCounts = current;
+    }
+
+    /// <summary>Rebuilds the opponent panel's Field and pile boxes from OpponentPlayer, marking the
+    /// unseen arrivals.</summary>
+    private void RebuildOpponentBoard()
+    {
+        if (OpponentPlayer is null)
+        {
+            return;
+        }
+
+        OpponentFieldCards.Clear();
+        foreach (var card in OrderFieldByType(BuildOpponentCardSnapshots(ZoneType.Field)))
+        {
+            OpponentFieldCards.Add(card);
+        }
+
+        OpponentChampionPile = OpponentPile(ZoneType.Champion);
+        OpponentGraveyardPile = OpponentPile(ZoneType.Graveyard);
+        OpponentBanishmentPile = OpponentPile(ZoneType.Banishment);
+    }
+
+    private SnapshotZoneGroup OpponentPile(ZoneType zone)
+    {
+        var cards = BuildOpponentCardSnapshots(zone);
+        return new SnapshotZoneGroup(zone, cards, HasNewArrival: cards.Any(card => card.IsHighlighted));
+    }
+
+    private List<CardSnapshotViewModel> BuildOpponentCardSnapshots(ZoneType zone)
+    {
+        var cards = OpponentPlayer!.GetZone(zone).Cards
             .Select(card => new CardSnapshotViewModel(CardSnapshot.From(card, zone), _apiClient, this))
             .ToList();
+
+        var remaining = _unseenOpponentArrivals
+            .Where(entry => entry.Key.Zone == zone)
+            .ToDictionary(entry => entry.Key.Slug, entry => entry.Value);
+        if (remaining.Count > 0)
+        {
+            // Newest first: the Field appends (newest last); the piles insert at the top (index 0).
+            foreach (var card in zone == ZoneType.Field ? Enumerable.Reverse(cards) : cards)
+            {
+                var slug = card.Snapshot.Card.Slug;
+                if (remaining.TryGetValue(slug, out var left) && left > 0)
+                {
+                    card.IsHighlighted = true;
+                    remaining[slug] = left - 1;
+                }
+            }
+        }
+
+        return cards;
+    }
 
     /// <summary>Picking a new event resets to its own tab and, online, looks up the other player's
     /// nearest preceding event so the second tab has something to show (see ViewedOtherPlayerEvent's
@@ -994,11 +1085,14 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
                 .FirstOrDefault();
         }
 
-        PopulateViewedCollections(value?.Snapshot);
+        PopulateViewedCollections(value?.Snapshot, value);
     }
 
-    partial void OnIsShowingOtherPlayerTabChanged(bool value) =>
-        PopulateViewedCollections((value ? ViewedOtherPlayerEvent : ViewedMajorEvent)?.Snapshot);
+    partial void OnIsShowingOtherPlayerTabChanged(bool value)
+    {
+        var shown = value ? ViewedOtherPlayerEvent : ViewedMajorEvent;
+        PopulateViewedCollections(shown?.Snapshot, shown);
+    }
 
     [RelayCommand]
     private void ShowPrimaryTab() => IsShowingOtherPlayerTab = false;
@@ -1006,7 +1100,9 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     [RelayCommand]
     private void ShowOtherPlayerTab() => IsShowingOtherPlayerTab = true;
 
-    private void PopulateViewedCollections(GameSnapshot? snapshot)
+    /// <param name="highlightEvent">The event whose card should glow (its CardName in its CardZone) —
+    /// the newest matching copy, since the log entry is about the card that just arrived.</param>
+    private void PopulateViewedCollections(GameSnapshot? snapshot, MajorEvent? highlightEvent = null)
     {
         ViewedSnapshotPiles.Clear();
         ViewedFieldCards.Clear();
@@ -1029,13 +1125,32 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         var hide = HideViewedPrivateZones;
         var hideMain = IsOnline;
 
-        foreach (var card in OrderFieldByType(cardsByZone[ZoneType.Field].Select(c => new CardSnapshotViewModel(c, _apiClient, this))))
+        // Newest copy of the event's card in the event's zone glows: the Field appends (newest last),
+        // the piles insert at the top (first).
+        void Highlight(ZoneType zone, IReadOnlyList<CardSnapshotViewModel> cards)
+        {
+            if (highlightEvent is not { CardName: { Length: > 0 } name, CardZone: { } eventZone } || eventZone != zone)
+            {
+                return;
+            }
+
+            var match = (zone == ZoneType.Field ? cards.Reverse() : cards).FirstOrDefault(c => c.Snapshot.Card.Name == name);
+            if (match is not null)
+            {
+                match.IsHighlighted = true;
+            }
+        }
+
+        var fieldCards = cardsByZone[ZoneType.Field].Select(c => new CardSnapshotViewModel(c, _apiClient, this)).ToList();
+        Highlight(ZoneType.Field, fieldCards);
+        foreach (var card in OrderFieldByType(fieldCards))
         {
             ViewedFieldCards.Add(card);
         }
 
-        ViewedChampionPile = new SnapshotZoneGroup(
-            ZoneType.Champion, cardsByZone[ZoneType.Champion].Select(c => new CardSnapshotViewModel(c, _apiClient, this)).ToList());
+        var championCards = cardsByZone[ZoneType.Champion].Select(c => new CardSnapshotViewModel(c, _apiClient, this)).ToList();
+        Highlight(ZoneType.Champion, championCards);
+        ViewedChampionPile = new SnapshotZoneGroup(ZoneType.Champion, championCards, HasNewArrival: championCards.Any(c => c.IsHighlighted));
 
         ViewedHandCount = cardsByZone[ZoneType.Hand].Count();
         ViewedMemoryCount = cardsByZone[ZoneType.Memory].Count();
@@ -1065,7 +1180,8 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
             }
 
             var cards = cardsByZone[zone].Select(c => new CardSnapshotViewModel(c, _apiClient, this)).ToList();
-            ViewedSnapshotPiles.Add(new SnapshotZoneGroup(zone, cards));
+            Highlight(zone, cards);
+            ViewedSnapshotPiles.Add(new SnapshotZoneGroup(zone, cards, HasNewArrival: cards.Any(c => c.IsHighlighted)));
         }
     }
 
@@ -2253,6 +2369,8 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         // button or flash their Life; re-seed instead of comparing (see _hasSeenInitialOpponentState).
         _hasSeenInitialOpponentState = false;
         _lastSeenOpponentMajorEventCount = 0;
+        _previousOpponentCounts = null;
+        _unseenOpponentArrivals.Clear();
 
         // Rebuild Main/Material from this player's current (possibly sideboarded) deck lists first —
         // StartNewGameForPlayer then resets everything as usual.

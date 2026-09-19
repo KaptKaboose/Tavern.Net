@@ -1,4 +1,4 @@
-using System.Windows.Media.Imaging;
+﻿using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Tavern.Net.Game;
 using Tavern.Net.GameData;
@@ -27,6 +27,11 @@ public sealed partial class CardSnapshotViewModel : ObservableObject
     /// <summary>True on the first card of each type group when a Field is laid out by type (see
     /// GameBoardViewModel.OrderFieldByType) — the view puts a little extra space before it.</summary>
     public bool StartsNewGroup { get; set; }
+
+    /// <summary>Glows gold in the opponent panel (this card arrived since the panel was last open) and
+    /// in the review panel (this is the card the clicked log entry is about).</summary>
+    [ObservableProperty]
+    private bool _isHighlighted;
 
     /// <summary>The board this snapshot belongs to, so CardZoomBehavior can reach
     /// ZoomSnapshotCardCommand — parallel to <see cref="CardViewModel.Board"/>.</summary>

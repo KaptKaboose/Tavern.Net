@@ -130,7 +130,7 @@ public static class GameSessionSerializer
 
         var savedSnapshot = new SavedGameSnapshot(snapshot.Life, snapshot.DamageDealtCount, snapshot.TurnCount, snapshot.Phase, cards);
 
-        return new SavedMajorEvent(majorEvent.Description, majorEvent.Kind, majorEvent.NetDelta, majorEvent.Turn, majorEvent.Timestamp, savedSnapshot, majorEvent.CardName);
+        return new SavedMajorEvent(majorEvent.Description, majorEvent.Kind, majorEvent.NetDelta, majorEvent.Turn, majorEvent.Timestamp, savedSnapshot, majorEvent.CardName, majorEvent.CardZone);
     }
 
     /// <summary>Rebuilds a full GameSession from a save. Throws if a card's slug can no longer be
@@ -282,6 +282,7 @@ public static class GameSessionSerializer
             {
                 Description = savedEvent.Description,
                 CardName = savedEvent.CardName,
+                CardZone = savedEvent.CardZone,
                 Kind = savedEvent.Kind,
                 NetDelta = savedEvent.NetDelta,
                 Turn = savedEvent.Turn,

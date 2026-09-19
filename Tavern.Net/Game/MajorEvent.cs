@@ -48,6 +48,11 @@ public sealed class MajorEvent : INotifyPropertyChanged
     /// Play Log shows in bold. Null for events with no single card (life, turns, game start).</summary>
     public string? CardName { get; init; }
 
+    /// <summary>Which zone <see cref="CardName"/> ended up in (Field, Graveyard, Banishment,
+    /// Champion, ...) — so the review panel highlights the right copy of the card. Null when unknown
+    /// (older saves) or when there is no card.</summary>
+    public ZoneType? CardZone { get; init; }
+
     public required MajorEventKind Kind { get; init; }
 
     /// <summary>When this event happened — set implicitly at construction. Used to interleave both

@@ -60,6 +60,9 @@
                                 Visibility="{Binding IsNotRedacted, Converter={StaticResource BoolToVisibility}}">
                             <TextBlock Foreground="White" FontWeight="Bold" Text="{Binding Count}"/>
                         </Border>
+                        <Border BorderBrush="#F6E05E" BorderThickness="3" CornerRadius="4" IsHitTestVisible="False"
+                                Effect="{StaticResource GoldGlow}"
+                                Visibility="{Binding HasNewArrival, Converter={StaticResource BoolToVisibility}}"/>
                     </Grid>
                     <Button.Style>
                         <Style TargetType="Button">
@@ -93,6 +96,9 @@
                         <Border Background="#CC000000" CornerRadius="8" Padding="6,2" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,6">
                             <TextBlock Foreground="White" FontWeight="Bold" Text="{Binding Count}"/>
                         </Border>
+                        <Border BorderBrush="#F6E05E" BorderThickness="3" CornerRadius="4" Width="125" HorizontalAlignment="Center" IsHitTestVisible="False"
+                                Effect="{StaticResource GoldGlow}"
+                                Visibility="{Binding HasNewArrival, Converter={StaticResource BoolToVisibility}}"/>
                     </Grid>
                 </Button>
             </StackPanel>

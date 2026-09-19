@@ -56,7 +56,8 @@ public sealed record SavedMajorEvent(
     int Turn,
     DateTime Timestamp,
     SavedGameSnapshot Snapshot,
-    string? CardName = null);
+    string? CardName = null,
+    ZoneType? CardZone = null);
 
 /// <summary>The full GameStats for one player — including PlayLog and MajorEvents (with their own
 /// snapshots), not just the current board. The whole point of saving a game here is resuming into

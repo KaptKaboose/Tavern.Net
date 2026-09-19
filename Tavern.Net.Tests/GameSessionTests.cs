@@ -1257,6 +1257,23 @@ public class GameSessionTests
         Assert.Contains(gameStarted.Snapshot.Cards, c => c.Card.Name == baseChampion.Card.Name && c.Zone == ZoneType.Champion);
     }
 
+    [Theory]
+    [InlineData(ZoneType.Field)]
+    [InlineData(ZoneType.Graveyard)]
+    [InlineData(ZoneType.Banishment)]
+    public void MajorEvents_RecordWhichZoneTheirCardWentTo(ZoneType destination)
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        var card = new CardInstance(new CardDto { Name = "Mover" }, ZoneType.MainDeck);
+        player.GetZone(ZoneType.Hand).Cards.Add(card);
+
+        session.MoveCard(player, card, ZoneType.Hand, destination);
+
+        var entry = Assert.Single(player.Stats.MajorEvents, e => e.CardName == "Mover");
+        Assert.Equal(destination, entry.CardZone);
+    }
+
     [Fact]
     public void MainCardPutIntoMaterial_IsLogged_AndReturnsToItsOwnDeckOnNewGame()
     {

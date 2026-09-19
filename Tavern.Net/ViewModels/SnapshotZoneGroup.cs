@@ -1,4 +1,4 @@
-using Tavern.Net.Game;
+﻿using Tavern.Net.Game;
 
 namespace Tavern.Net.ViewModels;
 
@@ -7,12 +7,14 @@ namespace Tavern.Net.ViewModels;
 /// Field/Hand/Memory are spread out directly instead and never wrapped in this. Always present
 /// even when empty (a "0" box) — see GameBoardViewModel.PopulateViewedCollections.
 /// <para>A redacted group (a live game's hidden Material/Main) carries no cards, only a face-down
-/// <see cref="RedactedCount"/>; it isn't clickable.</para></summary>
+/// <see cref="RedactedCount"/>; it isn't clickable. <see cref="HasNewArrival"/> glows the pile box
+/// (see GameBoardViewModel.BuildOpponentCardSnapshots / the review panel's event highlight).</para></summary>
 public sealed record SnapshotZoneGroup(
     ZoneType Zone,
     IReadOnlyList<CardSnapshotViewModel> Cards,
     bool IsRedacted = false,
-    int RedactedCount = 0)
+    int RedactedCount = 0,
+    bool HasNewArrival = false)
 {
     public int Count => IsRedacted ? RedactedCount : Cards.Count;
 
