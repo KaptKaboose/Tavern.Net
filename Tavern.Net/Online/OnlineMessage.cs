@@ -72,6 +72,14 @@ public sealed class OnlineMessage
     /// Deck) can surface more than one card at once.</summary>
     public List<RevealedCardEntry>? RevealedCards { get; set; }
 
+    /// <summary>RevealCards from the Reveal panel — every "Next" resends the whole set so far under
+    /// the same id, with a rising sequence number, so the receiver updates its already-open reveal in
+    /// place (and ignores a stale, out-of-order one) instead of stacking a new overlay each time.
+    /// Both null for a one-off reveal (the Zoom overlay's per-card Reveal).</summary>
+    public string? RevealId { get; set; }
+
+    public int RevealSeq { get; set; }
+
     /// <summary>TransferCard — the Give slugs (a batch for the same reason as RevealedCards, e.g. a
     /// blind top-N 'P' chord), the destination on the receiver's own board (Field or Sealed), and an
     /// informational label of where they came from (shown in the receiver's own log, nothing more).</summary>

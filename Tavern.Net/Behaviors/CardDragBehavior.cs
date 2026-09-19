@@ -252,6 +252,10 @@ public static class CardDragBehavior
         // a card dragged from inside one of these would have nowhere real to be dropped.
         card.Board.CloseOverlaysThatBlockDragTarget();
 
+        // A card dragged out of the Reveal panel fades the panel (it stays open — it comes back once
+        // the card lands) instead of closing it.
+        card.Board.BeginCardDrag(card);
+
         try
         {
             var payload = new CardDragPayload(card, _grabOffsetInElement);
@@ -266,6 +270,8 @@ public static class CardDragBehavior
         }
         finally
         {
+            card.Board.EndCardDrag();
+
             if (adorner is not null && adornerLayer is not null)
             {
                 adornerLayer.Remove(adorner);

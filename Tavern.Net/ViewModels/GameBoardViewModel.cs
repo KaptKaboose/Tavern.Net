@@ -225,19 +225,6 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         });
     }
 
-    /// <summary>'R' chord: reveals a batch off the top of Main at once — nothing to snapshot for
-    /// Undo here, since (unlike Bottom/Mill/Give's blind path) Reveal never actually moves anything.</summary>
-    private void RevealTopCards(int count)
-    {
-        if (!IsOnline)
-        {
-            return;
-        }
-
-        var cards = Player.GetZone(ZoneType.MainDeck).Cards.Take(count).ToList();
-        SendReveal(cards);
-    }
-
     // --- Give: self-initiated, no request/approval handshake — whoever's card effect calls for a
     // transfer is the one who reads it and performs it themselves, same "manual bookkeeping, no
     // rules engine" philosophy as every other action in this app. Both entry points (a specific
@@ -355,10 +342,27 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     // Hand, then moments later a batch off Main) — shown one at a time via a countdown-ring overlay
     // (CountdownRingView), auto-advancing to the next queued entry once the current one closes.
 
-    private readonly Queue<IReadOnlyList<CardSnapshotViewModel>> _pendingReveals = new();
+    private readonly Queue<(string? Id, IReadOnlyList<CardSnapshotViewModel> Cards)> _pendingReveals = new();
+
+    // The Reveal panel id of the reveal currently on screen (null for a one-off), and the highest
+    // sequence number applied per id — see EnqueueRevealAsync.
+    private string? _activeRevealId;
+    private readonly Dictionary<string, int> _revealSeqSeen = new();
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(RevealCardWidth), nameof(RevealCardHeight))]
     private IReadOnlyList<CardSnapshotViewModel>? _activeReveal;
+
+    /// <summary>Card size in the reveal overlay: full size up to 10 cards (two rows of five), then
+    /// smaller steps so a long run still fits several rows before it has to scroll.</summary>
+    public double RevealCardWidth => (ActiveReveal?.Count ?? 0) switch
+    {
+        <= 10 => 240,
+        <= 21 => 170,
+        _ => 125,
+    };
+
+    public double RevealCardHeight => RevealCardWidth * 1.4;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowKeepRevealOpenButton))]
@@ -380,7 +384,12 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         }
     }
 
-    private async Task EnqueueRevealAsync(IReadOnlyList<RevealedCardEntry> entries)
+    /// <summary>Queues (or, for the same Reveal-panel id, updates) an incoming reveal. A panel session
+    /// resends its whole set on every "Next": if that reveal is on screen or queued it is replaced in
+    /// place — the new card appears and the countdown restarts — rather than stacking another overlay;
+    /// if the opponent already closed it, it simply opens again. A stale (lower-sequence) resend that
+    /// arrives late is dropped.</summary>
+    private async Task EnqueueRevealAsync(IReadOnlyList<RevealedCardEntry> entries, string? revealId = null, int revealSeq = 0)
     {
         var resolved = new List<CardSnapshotViewModel>();
         foreach (var entry in entries)
@@ -390,7 +399,41 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
             resolved.Add(new CardSnapshotViewModel(snapshot, _apiClient, this));
         }
 
-        _pendingReveals.Enqueue(resolved);
+        if (revealId is not null)
+        {
+            if (_revealSeqSeen.TryGetValue(revealId, out var seen) && revealSeq <= seen)
+            {
+                return;
+            }
+
+            _revealSeqSeen[revealId] = revealSeq;
+
+            if (ActiveReveal is not null && _activeRevealId == revealId)
+            {
+                ActiveReveal = resolved;
+                if (!RevealKeptOpen)
+                {
+                    RevealRemainingFraction = 1.0;
+                    _revealStartedAt = DateTime.UtcNow;
+                }
+
+                return;
+            }
+
+            if (_pendingReveals.Any(p => p.Id == revealId))
+            {
+                var queued = _pendingReveals.ToList();
+                _pendingReveals.Clear();
+                foreach (var item in queued)
+                {
+                    _pendingReveals.Enqueue(item.Id == revealId ? (revealId, resolved) : item);
+                }
+
+                return;
+            }
+        }
+
+        _pendingReveals.Enqueue((revealId, resolved));
         if (ActiveReveal is null)
         {
             ShowNextReveal();
@@ -402,11 +445,14 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         if (_pendingReveals.Count == 0)
         {
             ActiveReveal = null;
+            _activeRevealId = null;
             _revealTimer?.Stop();
             return;
         }
 
-        ActiveReveal = _pendingReveals.Dequeue();
+        var next = _pendingReveals.Dequeue();
+        ActiveReveal = next.Cards;
+        _activeRevealId = next.Id;
         RevealKeptOpen = false;
         RevealRemainingFraction = 1.0;
         _revealStartedAt = DateTime.UtcNow;
@@ -417,8 +463,20 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         _revealTimer.Start();
     }
 
+    private DateTime _lastRevealTick = DateTime.UtcNow;
+
     private void OnRevealTimerTick(object? sender, EventArgs e)
     {
+        // Looking at a zoomed card shouldn't burn the countdown: slide the start time forward by
+        // however long this tick took, so the ring holds still until the zoom closes.
+        var now = DateTime.UtcNow;
+        if (ZoomedSnapshotCard is not null)
+        {
+            _revealStartedAt += now - _lastRevealTick;
+        }
+
+        _lastRevealTick = now;
+
         var fraction = 1.0 - (DateTime.UtcNow - _revealStartedAt).TotalSeconds / 5.0;
         if (fraction <= 0)
         {
@@ -1229,7 +1287,7 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
                 ApplyRemoteGameState(message.Phase.Value, message.ActivePlayerNumber.Value);
                 break;
             case OnlineMessageKind.RevealCards when message.RevealedCards is { Count: > 0 } entries:
-                _ = EnqueueRevealAsync(entries);
+                _ = EnqueueRevealAsync(entries, message.RevealId, message.RevealSeq);
                 break;
             case OnlineMessageKind.TransferCard when message.TransferCardSlugs is { Count: > 0 } slugs && message.TransferTargetZone is not null:
                 _ = ReceiveTransferAsync(slugs, message.TransferTargetZone.Value, message.TransferSourceLabel);
@@ -1477,6 +1535,165 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         }
     }
 
+    // --- Reveal panel: the Actions menu's Reveal pulls the top N off Main into this panel (like
+    // Glimpse, the cards are in no zone while it's open) and — online — shows them to the opponent.
+    // From here you drag any card to any zone a Main card may go (the panel fades while you drag, so
+    // the board's drop targets are reachable), "Next" pulls one more (for "reveal until X"), and
+    // Top/Bottom put whatever is left back into Main — shuffled first if Randomize is on. The panel
+    // is modal until the last card leaves it, like Glimpse, and has no Undo: a blind Main-deck
+    // restore would duplicate any card already dragged out, and the opponent has seen the cards anyway.
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RevealNextCommand), nameof(RevealToTopCommand), nameof(RevealToBottomCommand))]
+    private bool _isRevealPanelOpen;
+
+    partial void OnIsRevealPanelOpenChanged(bool value)
+    {
+        if (value)
+        {
+            CloseActionsMenu();
+        }
+    }
+
+    public ObservableCollection<CardViewModel> RevealPanelCards { get; } = new();
+
+    /// <summary>True while a card is being dragged out of the Reveal panel — the panel goes nearly
+    /// transparent and stops catching the mouse, so what's under it can receive the drop.</summary>
+    [ObservableProperty]
+    private bool _isDraggingFromRevealPanel;
+
+    /// <summary>Armed by the panel's switch; only takes effect when Top or Bottom is clicked.</summary>
+    [ObservableProperty]
+    private bool _revealRandomize;
+
+    // Everything revealed since the panel opened, in reveal order — including cards since dragged
+    // out, since the opponent's view shows the whole run. Resent in full (same id, rising sequence)
+    // on each "Next"; see OnlineMessage.RevealId.
+    private readonly List<CardInstance> _revealedThisSession = new();
+    private string _revealSessionId = "";
+    private int _revealSessionSeq;
+
+    private void StartRevealPanel(int count)
+    {
+        if (IsRevealPanelOpen)
+        {
+            return;
+        }
+
+        // A pending Undo (Mill/Bottom/...) would otherwise try to restore Main around cards that are
+        // now sitting in the panel.
+        DiscardUndo();
+
+        var pulled = _session.GlimpseCards(Player, count);
+        if (pulled.Count == 0)
+        {
+            return;
+        }
+
+        RevealRandomize = false;
+        _revealedThisSession.Clear();
+        _revealSessionId = Guid.NewGuid().ToString("N");
+        _revealSessionSeq = 0;
+
+        foreach (var card in pulled)
+        {
+            _revealedThisSession.Add(card);
+            RevealPanelCards.Add(new CardViewModel(card, _apiClient, this));
+        }
+
+        Player.Stats.Log($"Revealed {pulled.Count} card(s) from the Main Deck.");
+        IsRevealPanelOpen = true;
+        SendRevealSession();
+    }
+
+    private void SendRevealSession()
+    {
+        if (!IsOnline || _revealedThisSession.Count == 0)
+        {
+            return;
+        }
+
+        _revealSessionSeq++;
+        _ = _connection!.SendAsync(new OnlineMessage
+        {
+            Kind = OnlineMessageKind.RevealCards,
+            RevealedCards = _revealedThisSession.Select(c => new RevealedCardEntry(c.Card.Slug, c.IsFlipped)).ToList(),
+            RevealId = _revealSessionId,
+            RevealSeq = _revealSessionSeq,
+        });
+    }
+
+    private bool CanUseRevealPanel() => IsRevealPanelOpen;
+
+    private bool CanRevealNext() => IsRevealPanelOpen && Player.GetZone(ZoneType.MainDeck).Cards.Count > 0;
+
+    /// <summary>Reveals one more card off the top of Main into the panel and resends the whole set.</summary>
+    [RelayCommand(CanExecute = nameof(CanRevealNext))]
+    private void RevealNext()
+    {
+        var card = _session.GlimpseNextCard(Player);
+        if (card is null)
+        {
+            return;
+        }
+
+        _revealedThisSession.Add(card);
+        RevealPanelCards.Add(new CardViewModel(card, _apiClient, this));
+        Player.Stats.Log($"Revealed {card.Card.Name} from the Main Deck.");
+        SendRevealSession();
+        RevealNextCommand.NotifyCanExecuteChanged();
+    }
+
+    [RelayCommand(CanExecute = nameof(CanUseRevealPanel))]
+    private void RevealToTop() => FinishRevealPanel(toTop: true);
+
+    [RelayCommand(CanExecute = nameof(CanUseRevealPanel))]
+    private void RevealToBottom() => FinishRevealPanel(toTop: false);
+
+    private void FinishRevealPanel(bool toTop)
+    {
+        var remaining = RevealPanelCards.Select(c => c.Instance).ToList();
+        if (RevealRandomize)
+        {
+            // Fisher-Yates, on just what's left in the panel.
+            for (var i = remaining.Count - 1; i > 0; i--)
+            {
+                var j = Random.Shared.Next(i + 1);
+                (remaining[i], remaining[j]) = (remaining[j], remaining[i]);
+            }
+        }
+
+        _session.ReturnRevealedCards(Player, remaining, toTop);
+        CloseRevealPanel();
+    }
+
+    private void CloseRevealPanel()
+    {
+        RevealPanelCards.Clear();
+        _revealedThisSession.Clear();
+        IsDraggingFromRevealPanel = false;
+        RevealRandomize = false;
+        IsRevealPanelOpen = false;
+    }
+
+    /// <summary>A new game can't start with cards stranded outside every zone — anything still in the
+    /// panel goes back on top of Main first (the reset then rebuilds Main from each card's home).</summary>
+    private void AbortRevealPanel()
+    {
+        if (!IsRevealPanelOpen)
+        {
+            return;
+        }
+
+        _session.ReturnRevealedCards(Player, RevealPanelCards.Select(c => c.Instance).ToList(), toTop: true);
+        CloseRevealPanel();
+    }
+
+    /// <summary>Called by CardDragBehavior right before a drag starts / after it ends — fades the
+    /// Reveal panel out for the duration when the dragged card came from it.</summary>
+    internal void BeginCardDrag(CardViewModel card) => IsDraggingFromRevealPanel = RevealPanelCards.Contains(card);
+
+    internal void EndCardDrag() => IsDraggingFromRevealPanel = false;
     /// <summary>Advances to the next phase of the turn; advancing past End starts the next turn.
     /// Online, this no-ops unless it's currently this player's turn (see CanAdvancePhase) — playing
     /// cards is never gated this way, only phase progression itself.</summary>
@@ -1545,8 +1762,9 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         _ => "",
     };
 
-    /// <summary>Reveal and Give are online-only — solo has no opponent to reveal to or give to, so
-    /// the menu hides them entirely there rather than showing a permanently-disabled option.</summary>
+    /// <summary>Give is online-only — solo has no opponent to give to, so the menu hides it there
+    /// rather than showing a permanently-disabled option. (Reveal works solo too: the panel is useful
+    /// on its own; there is just no opponent to show it to.)</summary>
     public bool CanUseOnlineAction => IsOnline;
 
     [RelayCommand]
@@ -1628,7 +1846,7 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
                 GlimpseCardsForChord(count);
                 break;
             case ArmedChord.Reveal:
-                RevealTopCards(count);
+                StartRevealPanel(count);
                 break;
             case ArmedChord.Give:
                 ArmGiveBlind(count);
@@ -2021,6 +2239,7 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     private void PerformOnlineNewGame(int firstPlayerNumber)
     {
         DiscardUndo();
+        AbortRevealPanel();
         CloseNewGameReadyUp();
 
         // The match clock resets too — a whole new game shouldn't keep counting up from the
@@ -2160,6 +2379,7 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         // about to be wiped out — discard it now, or a still-visible toast clicked after the reset
         // would try to move a card that no longer exists where it expects.
         DiscardUndo();
+        AbortRevealPanel();
 
         // StartNewGame already draws the opening hand as part of setup — unless the base champion's
         // effect calls for an opening glimpse instead, in which case it hands the already-drawn
@@ -2184,7 +2404,7 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         // Glimpsing locks out every key — the count was already decided up front by the Glimpse
         // action that opened it, so there's nothing left for a keystroke to do until sorting
         // finishes.
-        if (IsGlimpsing)
+        if (IsGlimpsing || IsRevealPanelOpen)
         {
             return true;
         }
@@ -2338,11 +2558,7 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
                 StartActionFromKey(ArmedChord.Mill);
                 return true;
             case Key.R:
-                if (CanUseOnlineAction)
-                {
-                    StartActionFromKey(ArmedChord.Reveal);
-                }
-
+                StartActionFromKey(ArmedChord.Reveal);
                 return true;
             case Key.P:
                 if (CanUseOnlineAction)
@@ -2375,7 +2591,7 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     /// needs, since it toggles the opponent panel itself.</param>
     private bool IsAnyOverlayOpen(bool ignoreOpponentPanel = false) =>
         (IsOpponentPanelOpen && !ignoreOpponentPanel) || IsRollingDice || IsSavingGame || IsSealedPanelOpen || IsGiveTargetPickerOpen || IsActionsMenuOpen ||
-        IsGenerateSearchOpen || IsGenerateCountOpen || IsHelpOpen || IsSideboardPanelOpen || IsNewGameAgreementOpen ||
+        IsGenerateSearchOpen || IsGenerateCountOpen || IsHelpOpen || IsSideboardPanelOpen || IsNewGameAgreementOpen || IsRevealPanelOpen ||
         ZoomedCard is not null || PeekedZone is not null || ViewedMajorEvent is not null ||
         ViewedSnapshotPile is not null || ZoomedSnapshotCard is not null || ActiveReveal is not null;
 
@@ -2560,7 +2776,9 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     }
 
     private ZoneType? ZoneOfCard(CardViewModel card) =>
-        Player.Zones.FirstOrDefault(kv => kv.Value.Cards.Contains(card.Instance)).Value?.Type;
+        RevealPanelCards.Contains(card)
+            ? ZoneType.MainDeck
+            : Player.Zones.FirstOrDefault(kv => kv.Value.Cards.Contains(card.Instance)).Value?.Type;
 
     /// <summary>
     /// Tap state only means something on the Field, so a click anywhere else is a no-op — this
@@ -2580,7 +2798,7 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
             return;
         }
 
-        var zone = Player.Zones.First(kv => kv.Value.Cards.Contains(card.Instance)).Key;
+        var zone = Player.Zones.FirstOrDefault(kv => kv.Value.Cards.Contains(card.Instance)).Value?.Type;
         if (zone != ZoneType.Field)
         {
             return;
@@ -2719,6 +2937,21 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
 
         if (card is null)
         {
+            return;
+        }
+
+        if (RevealPanelCards.Contains(card))
+        {
+            if (_session.MoveRevealedCard(Player, card.Instance, destination, fieldX, fieldY))
+            {
+                RevealPanelCards.Remove(card);
+                RevealNextCommand.NotifyCanExecuteChanged();
+                if (RevealPanelCards.Count == 0)
+                {
+                    CloseRevealPanel();
+                }
+            }
+
             return;
         }
 

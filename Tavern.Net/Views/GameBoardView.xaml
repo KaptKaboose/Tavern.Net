@@ -149,6 +149,35 @@
             <Setter Property="FontWeight" Value="Normal"/>
         </Style>
 
+        <!-- Reveal panel's Randomize switch: dim and outlined when off, gold when on (it only arms;
+             the shuffle happens when Top/Bottom is clicked). -->
+        <Style x:Key="SwitchToggleStyle" TargetType="ToggleButton">
+            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="#A0AEC0"/>
+            <Setter Property="Background" Value="#1A202C"/>
+            <Setter Property="BorderBrush" Value="#4A5568"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsChecked" Value="True">
+                    <Setter Property="Foreground" Value="#F6E05E"/>
+                    <Setter Property="BorderBrush" Value="#F6E05E"/>
+                    <Setter Property="Background" Value="#4A5568"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
         <!-- Keyboard-shortcuts help panel: each row is a key "chip" + a plain label. -->
         <Style x:Key="ShortcutKeyStyle" TargetType="Border">
             <Setter Property="Background" Value="#1A202C"/>
@@ -1099,6 +1128,56 @@
             </Border>
         </Grid>
 
+        <!-- Reveal panel (Actions > Reveal): the top N of Main, out of the deck and in front of you (and,
+             online, the opponent). Drag any card to any zone a Main card may go — while a card is
+             dragged the whole panel goes nearly transparent and stops catching the mouse (see
+             IsDraggingFromRevealPanel), then returns once it lands. Next reveals one more card;
+             Top/Bottom put what is left back into Main, shuffled first if Randomize is on. Modal like
+             Glimpse: no scrim button, no close — it ends when the last card has gone somewhere. -->
+        <Grid Grid.Column="0" Grid.ColumnSpan="2"
+              Visibility="{Binding IsRevealPanelOpen, Converter={StaticResource BoolToVisibility}}"
+              d:IsHidden="True">
+            <Grid.Style>
+                <Style TargetType="Grid">
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsDraggingFromRevealPanel}" Value="True">
+                            <Setter Property="Opacity" Value="0.05"/>
+                            <Setter Property="IsHitTestVisible" Value="False"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Grid.Style>
+            <Border Background="#CC000000"/>
+
+            <Border MaxWidth="1200" MaxHeight="760" Margin="40" Padding="16"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Background="#2D3748" BorderBrush="White" BorderThickness="2" CornerRadius="10">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="Revealing" Foreground="White" FontSize="20" FontWeight="Bold" Margin="0,0,0,4"/>
+                    <TextBlock DockPanel.Dock="Top" Foreground="#A0AEC0" TextWrapping="Wrap" Margin="0,0,0,12"
+                               Text="Drag a card to any zone. Next reveals one more. Top or Bottom puts the cards still here back into Main (shuffled first if Randomize is on)."/>
+
+                    <Grid DockPanel.Dock="Bottom" Margin="0,16,0,0">
+                        <ToggleButton Style="{StaticResource SwitchToggleStyle}" Content="Randomize" HorizontalAlignment="Left"
+                                      IsChecked="{Binding RevealRandomize, Mode=TwoWay}"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button Style="{StaticResource ActionButtonStyle}" Content="Next" Margin="0,0,8,0" Command="{Binding RevealNextCommand}"/>
+                            <Button Style="{StaticResource ActionButtonStyle}" Content="Top" Margin="0,0,8,0" Command="{Binding RevealToTopCommand}"/>
+                            <Button Style="{StaticResource ActionButtonStyle}" Content="Bottom" Command="{Binding RevealToBottomCommand}"/>
+                        </StackPanel>
+                    </Grid>
+
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl ItemsSource="{Binding RevealPanelCards}" ItemTemplate="{StaticResource CardTemplate}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Grid>
+
         <!-- Glimpse overlay: 'G' draws the top card of Main into Staging (and opens this if not
              already open); every later 'G' press draws another, appending to Staging. Drag cards
              from Staging into Top or Bottom to sort them — dropping directly on another card
@@ -1268,7 +1347,7 @@
                         <Border Grid.Row="7" Grid.Column="0" Style="{StaticResource ShortcutKeyStyle}">
                             <TextBlock Text="R" Style="{StaticResource ShortcutKeyTextStyle}"/>
                         </Border>
-                        <TextBlock Grid.Row="7" Grid.Column="1" Text="Reveal top cards to opponent (online only)" Style="{StaticResource ShortcutLabelStyle}"/>
+                        <TextBlock Grid.Row="7" Grid.Column="1" Text="Reveal top cards of Main" Style="{StaticResource ShortcutLabelStyle}"/>
 
                         <Border Grid.Row="8" Grid.Column="0" Style="{StaticResource ShortcutKeyStyle}">
                             <TextBlock Text="P" Style="{StaticResource ShortcutKeyTextStyle}"/>
@@ -1609,8 +1688,7 @@
                         <Button Style="{StaticResource ActionButtonStyle}" Content="Banish" Margin="0,0,0,8" HorizontalContentAlignment="Left"
                                 Command="{Binding SelectActionCommand}" CommandParameter="{x:Static vm:ArmedChord.Banish}"/>
                         <Button Style="{StaticResource ActionButtonStyle}" Content="Reveal" Margin="0,0,0,8" HorizontalContentAlignment="Left"
-                                Command="{Binding SelectActionCommand}" CommandParameter="{x:Static vm:ArmedChord.Reveal}"
-                                Visibility="{Binding CanUseOnlineAction, Converter={StaticResource BoolToVisibility}}"/>
+                                Command="{Binding SelectActionCommand}" CommandParameter="{x:Static vm:ArmedChord.Reveal}"/>
                         <Button Style="{StaticResource ActionButtonStyle}" Content="Glimpse" Margin="0,0,0,8" HorizontalContentAlignment="Left"
                                 Command="{Binding SelectActionCommand}" CommandParameter="{x:Static vm:ArmedChord.Glimpse}"/>
                         <Button Style="{StaticResource ActionButtonStyle}" Content="Mill" Margin="0,0,0,8" HorizontalContentAlignment="Left"
@@ -1864,7 +1942,71 @@
             </StackPanel>
         </Grid>
 
-        <!-- Snapshot zoom overlay: right-click a card in the review panel (CardZoomBehavior routes
+
+
+        <!-- Reveal overlay: shows a card (or a batch, e.g. Main Deck's 'R' chord) the opponent chose
+             to reveal — placed last so it always renders on top of whatever else is open when one
+             arrives. A ring (CountdownRingView) depletes over 5s; clicking "Keep open" (RevealKeptOpen)
+             freezes it so the player can look as long as they want; the scrim closes it outright and
+             advances to the next queued reveal (see GameBoardViewModel.ShowNextReveal). -->
+        <Grid Grid.Column="0" Grid.ColumnSpan="2"
+              Visibility="{Binding ActiveReveal, Converter={StaticResource NullToVisibility}}"
+              d:IsHidden="True">
+            <Button Command="{Binding CloseActiveRevealCommand}" Focusable="False" Cursor="Arrow">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="#CC000000"/>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+
+            <!-- IsHitTestVisible=False only on the card art itself (clicking it falls through to
+                 the scrim, closing) — NOT on a shared ancestor of the ring/button below: WPF's
+                 IsHitTestVisible=False on a container blocks its whole subtree, with no way for a
+                 descendant to "opt back in", which is exactly what made Keep Open unclickable
+                 before this. -->
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <!-- A big reveal (e.g. "reveal until X") wraps into a grid, shrinks in steps (see
+                     RevealCardWidth) and scrolls once it still doesn't fit. The ScrollViewer has to be
+                     hit-testable for the mouse wheel, so a plain click on it closes the reveal through
+                     an input binding instead of falling through to the scrim (the scrollbar handles its own
+                     clicks, so dragging it doesn't close anything). Right-clicking a card zooms it (read-only,
+                     via the snapshot zoom overlay), and the countdown pauses while a zoom is open. -->
+                <ScrollViewer MaxWidth="1360" MaxHeight="700" Background="Transparent"
+                              VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <ScrollViewer.InputBindings>
+                        <MouseBinding MouseAction="LeftClick" Command="{Binding CloseActiveRevealCommand}"/>
+                    </ScrollViewer.InputBindings>
+                    <ItemsControl ItemsSource="{Binding ActiveReveal}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><WrapPanel HorizontalAlignment="Center"/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Width="{Binding DataContext.RevealCardWidth, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                        Height="{Binding DataContext.RevealCardHeight, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                        Margin="8" CornerRadius="10" ClipToBounds="True"
+                                        behaviors:CardZoomBehavior.IsZoomable="True"
+                                        Background="#333" BorderBrush="Black" BorderThickness="2">
+                                    <Image Source="{Binding Artwork}" Stretch="Uniform"
+                                           Visibility="{Binding Artwork, Converter={StaticResource NullToVisibility}}"/>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+
+                <!-- Both the ring and the button disappear together once kept open — the ring
+                     stopping but staying on screen read as "did my click not register?". -->
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,8,0,0"
+                            Visibility="{Binding ShowKeepRevealOpenButton, Converter={StaticResource BoolToVisibility}}">
+                    <views:CountdownRingView RemainingFraction="{Binding RevealRemainingFraction}" Diameter="56" Thickness="5" Margin="0,0,16,0"/>
+                    <Button Style="{StaticResource ActionButtonStyle}" Content="Keep open" Command="{Binding KeepRevealOpenCommand}"/>
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+
+        <!-- Snapshot zoom overlay (placed after the Reveal overlay so it renders above it): right-click a card in the review panel or a revealed card (CardZoomBehavior routes
              CardSnapshotViewModel to ZoomSnapshotCardCommand) opens it here full-size. No
              status/counter side panel like the live Zoom overlay above — a snapshot is read-only,
              nothing here is editable. Always shows FrontArtwork, the card's true printed face,
@@ -1899,53 +2041,6 @@
                     </ControlTemplate>
                 </Button.Template>
             </Button>
-        </Grid>
-
-        <!-- Reveal overlay: shows a card (or a batch, e.g. Main Deck's 'R' chord) the opponent chose
-             to reveal — placed last so it always renders on top of whatever else is open when one
-             arrives. A ring (CountdownRingView) depletes over 5s; clicking "Keep open" (RevealKeptOpen)
-             freezes it so the player can look as long as they want; the scrim closes it outright and
-             advances to the next queued reveal (see GameBoardViewModel.ShowNextReveal). -->
-        <Grid Grid.Column="0" Grid.ColumnSpan="2"
-              Visibility="{Binding ActiveReveal, Converter={StaticResource NullToVisibility}}"
-              d:IsHidden="True">
-            <Button Command="{Binding CloseActiveRevealCommand}" Focusable="False" Cursor="Arrow">
-                <Button.Template>
-                    <ControlTemplate TargetType="Button">
-                        <Border Background="#CC000000"/>
-                    </ControlTemplate>
-                </Button.Template>
-            </Button>
-
-            <!-- IsHitTestVisible=False only on the card art itself (clicking it falls through to
-                 the scrim, closing) — NOT on a shared ancestor of the ring/button below: WPF's
-                 IsHitTestVisible=False on a container blocks its whole subtree, with no way for a
-                 descendant to "opt back in", which is exactly what made Keep Open unclickable
-                 before this. -->
-            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                <ItemsControl ItemsSource="{Binding ActiveReveal}" IsHitTestVisible="False">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <Border Width="240" Height="336" Margin="8" CornerRadius="10" ClipToBounds="True"
-                                    Background="#333" BorderBrush="Black" BorderThickness="2">
-                                <Image Source="{Binding Artwork}" Stretch="Uniform"
-                                       Visibility="{Binding Artwork, Converter={StaticResource NullToVisibility}}"/>
-                            </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-
-                <!-- Both the ring and the button disappear together once kept open — the ring
-                     stopping but staying on screen read as "did my click not register?". -->
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,8,0,0"
-                            Visibility="{Binding ShowKeepRevealOpenButton, Converter={StaticResource BoolToVisibility}}">
-                    <views:CountdownRingView RemainingFraction="{Binding RevealRemainingFraction}" Diameter="56" Thickness="5" Margin="0,0,16,0"/>
-                    <Button Style="{StaticResource ActionButtonStyle}" Content="Keep open" Command="{Binding KeepRevealOpenCommand}"/>
-                </StackPanel>
-            </StackPanel>
         </Grid>
 
         <!-- Sideboard panel: opens at the start of every game (and on 'N'). Sideboard on the left,

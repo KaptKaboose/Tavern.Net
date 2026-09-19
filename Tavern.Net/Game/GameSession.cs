@@ -880,6 +880,52 @@ public sealed class GameSession
         player.Stats.Log($"Glimpsed {top.Count + bottom.Count} card(s): {top.Count} to the top, {bottom.Count} to the bottom.");
     }
 
+    /// <summary>
+    /// Reveal panel: puts a card that was pulled off Main (and is sitting in the panel, in no zone)
+    /// into <paramref name="to"/> — as an ordinary move out of Main, so it logs, counts as a draw for
+    /// Hand/Memory, records Major events and applies the Champion rules exactly like any other. Does
+    /// nothing (returns false) if a Main card may not go there (see <see cref="CanMove(CardInstance, ZoneType, ZoneType)"/>).
+    /// </summary>
+    public bool MoveRevealedCard(Player player, CardInstance card, ZoneType to, double? fieldX = null, double? fieldY = null)
+    {
+        if (!CanMove(card, ZoneType.MainDeck, to))
+        {
+            return false;
+        }
+
+        // MoveCard takes a card out of a zone, so give it one to come out of: back on top of Main
+        // for the instant before it moves on.
+        player.GetZone(ZoneType.MainDeck).Cards.Insert(0, card);
+        MoveCard(player, card, ZoneType.MainDeck, to, fieldX, fieldY);
+        return true;
+    }
+
+    /// <summary>Reveal panel: puts whatever is still in the panel back into Main — on top (the first
+    /// card ends up highest) or appended to the bottom, in the order given.</summary>
+    public void ReturnRevealedCards(Player player, IReadOnlyList<CardInstance> cards, bool toTop)
+    {
+        var deck = player.GetZone(ZoneType.MainDeck);
+        if (toTop)
+        {
+            for (var i = 0; i < cards.Count; i++)
+            {
+                deck.Cards.Insert(i, cards[i]);
+            }
+        }
+        else
+        {
+            foreach (var card in cards)
+            {
+                deck.Cards.Add(card);
+            }
+        }
+
+        if (cards.Count > 0)
+        {
+            player.Stats.Log($"Put {cards.Count} revealed card(s) on the {(toTop ? "top" : "bottom")} of the Main Deck.");
+        }
+    }
+
     /// <summary>Records the turn (1-based) a Champion level was first reached — a no-op if that
     /// level has already been recorded, since only the first time matters for a goldfish run's
     /// "how fast did I get there" purposes. Called for every Champion-zone top change, including

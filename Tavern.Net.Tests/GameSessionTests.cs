@@ -1279,6 +1279,67 @@ public class GameSessionTests
         Assert.Contains(preserved, player.Zones.Values.SelectMany(z => z.Cards));
     }
 
+    private static (GameSession Session, Player Player, List<CardInstance> Pulled) SessionWithPulledCards(int deckSize, int pull)
+    {
+        var session = new GameSession();
+        var player = session.AddPlayer("Solo");
+        for (var i = 0; i < deckSize; i++)
+        {
+            player.GetZone(ZoneType.MainDeck).Cards.Add(new CardInstance(new CardDto { Name = $"C{i}", Slug = $"c{i}" }, ZoneType.MainDeck));
+        }
+
+        return (session, player, session.GlimpseCards(player, pull));
+    }
+
+    [Fact]
+    public void MoveRevealedCard_PutsItInTheZone_AsAnOrdinaryMoveOutOfMain()
+    {
+        var (session, player, pulled) = SessionWithPulledCards(5, 3);
+
+        Assert.True(session.MoveRevealedCard(player, pulled[1], ZoneType.Hand));
+
+        Assert.Contains(pulled[1], player.GetZone(ZoneType.Hand).Cards);
+        Assert.DoesNotContain(pulled[1], player.GetZone(ZoneType.MainDeck).Cards);
+        Assert.Equal(1, player.Stats.CardsDrawnCount);
+        Assert.Equal(2, player.GetZone(ZoneType.MainDeck).Cards.Count);
+    }
+
+    [Fact]
+    public void MoveRevealedCard_ToAZoneAMainCardCannotEnter_IsRefusedAndLeavesMainAlone()
+    {
+        var (session, player, pulled) = SessionWithPulledCards(4, 2);
+
+        Assert.False(session.MoveRevealedCard(player, pulled[0], ZoneType.Champion));
+
+        Assert.DoesNotContain(pulled[0], player.GetZone(ZoneType.MainDeck).Cards);
+        Assert.Empty(player.GetZone(ZoneType.Champion).Cards);
+    }
+
+    [Fact]
+    public void ReturnRevealedCards_ToTop_KeepsTheGivenOrderAboveTheRestOfTheDeck()
+    {
+        var (session, player, pulled) = SessionWithPulledCards(5, 3);
+        var reversed = pulled.AsEnumerable().Reverse().ToList();
+
+        session.ReturnRevealedCards(player, reversed, toTop: true);
+
+        var deck = player.GetZone(ZoneType.MainDeck).Cards;
+        Assert.Equal(5, deck.Count);
+        Assert.Equal(reversed, deck.Take(3).ToList());
+    }
+
+    [Fact]
+    public void ReturnRevealedCards_ToBottom_AppendsInOrder()
+    {
+        var (session, player, pulled) = SessionWithPulledCards(5, 3);
+
+        session.ReturnRevealedCards(player, pulled, toTop: false);
+
+        var deck = player.GetZone(ZoneType.MainDeck).Cards;
+        Assert.Equal(5, deck.Count);
+        Assert.Equal(pulled, deck.Skip(2).ToList());
+    }
+
     [Fact]
     public void TakeSnapshot_ExcludesTokensZone()
     {
