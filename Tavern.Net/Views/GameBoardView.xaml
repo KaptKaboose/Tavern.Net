@@ -189,6 +189,36 @@
              screen away from whatever the player's doing just by moving a card. Clears the instant
              the panel is actually opened, by any means (see GameBoardViewModel.
              OnIsOpponentPanelOpenChanged). -->
+        <!-- The phase tracker doubles as the Advance Phase button (same command and CanExecute as
+             Space): transparent, with a subtle hover fill and hand cursor only while it can
+             actually be used — online on the opponent's turn it's disabled and looks like plain text. -->
+        <Style x:Key="PhaseBarButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="14,6"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#2D3748"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="True">
+                                <Setter Property="Cursor" Value="Hand"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bd" Property="Background" Value="Transparent"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <!-- Light orange by default (it's clicked constantly, so it should be easy to pick out of the
              header). While they've done something since the panel was last open it blinks — flips
              between that orange as a solid fill with dark text and the normal outlined look — until
@@ -273,7 +303,9 @@
                      centered group left of true-center (a right margin still counts toward what
                      gets centered, so it shifts the visible content left without needing a mirrored
                      spacer column). -->
-                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,100,0">
+                <Button Grid.Column="1" Style="{StaticResource PhaseBarButtonStyle}" Command="{Binding NextPhaseCommand}"
+                        HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,100,0">
+                <StackPanel Orientation="Horizontal">
                     <TextBlock Text="Wake Up" FontSize="16" VerticalAlignment="Center"
                                FontWeight="{Binding CurrentPhase, Converter={StaticResource PhaseToFontWeight}, ConverterParameter=WakeUp}">
                                <TextBlock.Foreground><MultiBinding Converter="{StaticResource PhaseToBrush}" ConverterParameter="WakeUp"><Binding Path="CurrentPhase"/><Binding Path="IsMyTurn"/></MultiBinding></TextBlock.Foreground>
@@ -304,6 +336,7 @@
                                <TextBlock.Foreground><MultiBinding Converter="{StaticResource PhaseToBrush}" ConverterParameter="End"><Binding Path="CurrentPhase"/><Binding Path="IsMyTurn"/></MultiBinding></TextBlock.Foreground>
                            </TextBlock>
                 </StackPanel>
+                </Button>
             </Grid>
 
             <!-- Stats/actions row: the Life/Turn/opponent stats box (left), Roll/Opponent/Damage
