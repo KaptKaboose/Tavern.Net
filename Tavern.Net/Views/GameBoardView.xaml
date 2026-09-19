@@ -647,7 +647,7 @@
                                          TargetZone="Banishment" MoveCommand="{Binding MoveCardToCommand}"
                                          PeekCommand="{Binding PeekZoneCommand}"/>
                     <views:StackZoneView Margin="8,20,0,16"
-                                         Zone="{Binding MainDeck}" HeaderText="Main" IsFaceDown="True"
+                                         Zone="{Binding MainDeck}" HeaderText="Main" IsFaceDown="True" ClickCommand="{Binding DrawCardCommand}" ShiftClickCommand="{Binding DrawCardIntoMemoryCommand}"
                                          TargetZone="MainDeck" MoveCommand="{Binding MoveCardToCommand}"
                                          PeekCommand="{Binding PeekZoneCommand}"/>
                     <views:StackZoneView Margin="8,20,0,0"

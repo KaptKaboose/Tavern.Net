@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using Tavern.Net.Game;
@@ -113,12 +113,52 @@ public partial class StackZoneView : UserControl
         set => SetValue(PeekCommandProperty, value);
     }
 
+    /// <summary>When set, a left click runs this instead of peeking (Main Deck: click to draw) —
+    /// peeking then moves to right-click, which every non-zoomable pile also accepts.</summary>
+    public static readonly DependencyProperty ClickCommandProperty =
+        DependencyProperty.Register(nameof(ClickCommand), typeof(ICommand), typeof(StackZoneView));
+
+    public ICommand? ClickCommand
+    {
+        get => (ICommand?)GetValue(ClickCommandProperty);
+        set => SetValue(ClickCommandProperty, value);
+    }
+
+    /// <summary>Like <see cref="ClickCommand"/>, but for Shift+click (Main Deck: draw into Memory).
+    /// Falls back to ClickCommand when unset.</summary>
+    public static readonly DependencyProperty ShiftClickCommandProperty =
+        DependencyProperty.Register(nameof(ShiftClickCommand), typeof(ICommand), typeof(StackZoneView));
+
+    public ICommand? ShiftClickCommand
+    {
+        get => (ICommand?)GetValue(ShiftClickCommandProperty);
+        set => SetValue(ShiftClickCommandProperty, value);
+    }
+
     public StackZoneView()
     {
         InitializeComponent();
     }
 
     private void OnPileClicked(object sender, MouseButtonEventArgs e)
+    {
+        if (ClickCommand is not null)
+        {
+            var command = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) && ShiftClickCommand is not null
+                ? ShiftClickCommand
+                : ClickCommand;
+            if (command.CanExecute(null))
+            {
+                command.Execute(null);
+            }
+
+            return;
+        }
+
+        Peek();
+    }
+
+    private void Peek()
     {
         if (Zone is null || Zone.Cards.Count == 0)
         {
@@ -140,12 +180,20 @@ public partial class StackZoneView : UserControl
     /// </summary>
     private void OnPileRightClicked(object sender, MouseButtonEventArgs e)
     {
-        if (!IsZoomable || Zone is null || Zone.Cards.Count == 0)
+        if (Zone is null || Zone.Cards.Count == 0)
         {
             return;
         }
 
         e.Handled = true;
+
+        // Piles without a live top card to zoom (everything but Champion) peek on right-click too.
+        if (!IsZoomable)
+        {
+            Peek();
+            return;
+        }
+
         var top = Zone.Cards[0];
         if (top.Board.ZoomCardCommand.CanExecute(top))
         {
