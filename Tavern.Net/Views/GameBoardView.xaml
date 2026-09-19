@@ -1130,6 +1130,7 @@
 
                     <TextBlock Text="None of these work while any overlay/panel is open." Foreground="#A0AEC0" FontSize="12"
                                Margin="0,16,0,0" TextWrapping="Wrap"/>
+                    <TextBlock Text="{Binding AppVersionText}" Foreground="#718096" FontSize="12" Margin="0,6,0,0"/>
 
                     <Button Style="{StaticResource ActionButtonStyle}" Content="Close" HorizontalAlignment="Center" Margin="0,16,0,0"
                             Command="{Binding CloseHelpCommand}"/>

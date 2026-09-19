@@ -241,9 +241,12 @@ public sealed class GameConnection : IDisposable
                 }
             }
         }
-        catch (Exception ex) when (ex is IOException or SocketException or ObjectDisposedException or OperationCanceledException)
+        catch (Exception ex) when (ex is IOException or SocketException or ObjectDisposedException or OperationCanceledException
+                                       or InvalidDataException or JsonException)
         {
-            // Falls through to the disconnect check below regardless of which of these fired.
+            // Falls through to the disconnect check below regardless of which of these fired. The
+            // last two mean a frame that couldn't be decoded — e.g. a peer on an incompatible
+            // (older) build — which ends the connection rather than crashing the receive loop.
         }
 
         if (!cancellationToken.IsCancellationRequested)

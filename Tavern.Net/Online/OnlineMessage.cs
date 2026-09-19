@@ -83,4 +83,8 @@ public sealed class OnlineMessage
 
     /// <summary>UndoNotice — which action got undone, if known, purely for the toast's own wording.</summary>
     public string? UndoActionLabel { get; set; }
+
+    /// <summary>Hello — the sender's app version (see AppVersion), so the lobby can warn when the two
+    /// players aren't on the same one. Absent (null) from builds that predate versions.</summary>
+    public string? AppVersion { get; set; }
 }

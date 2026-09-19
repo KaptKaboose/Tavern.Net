@@ -24,6 +24,8 @@ public sealed partial class StartMenuViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(HasActiveDeck), nameof(HasNoActiveDeck))]
     private string? _activeDeckName;
 
+    public string VersionText => $"v{AppVersion.Display}";
+
     public bool HasActiveDeck => ActiveDeckName is not null;
 
     public bool HasNoActiveDeck => ActiveDeckName is null;

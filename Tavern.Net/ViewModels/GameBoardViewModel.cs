@@ -2313,6 +2313,8 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
     [RelayCommand]
     private void CloseSaveGamePanel() => IsSavingGame = false;
 
+    public string AppVersionText => $"Tavern.Net v{AppVersion.Display}";
+
     /// <summary>Whether the keyboard-shortcuts reference panel is open.</summary>
     [ObservableProperty]
     private bool _isHelpOpen;

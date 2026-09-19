@@ -58,5 +58,8 @@
                        MaxWidth="400" TextWrapping="Wrap" TextAlignment="Center"
                        Visibility="{Binding ErrorMessage, Converter={StaticResource NullToVisibility}}"/>
         </StackPanel>
+
+        <TextBlock Text="{Binding VersionText}" Foreground="#718096" FontSize="12"
+                   HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,12"/>
     </Grid>
 </UserControl>

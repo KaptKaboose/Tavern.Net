@@ -56,6 +56,21 @@ public sealed partial class OnlineLobbyViewModel : ObservableObject
     [ObservableProperty]
     private string? _opponentName;
 
+    /// <summary>The opponent's app version, from their Hello — null until then, and also null from a
+    /// build old enough not to send one (see <see cref="VersionMismatchMessage"/>).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(VersionMismatchMessage))]
+    [NotifyCanExecuteChangedFor(nameof(StartGameCommand))]
+    private string? _opponentVersion;
+
+    private bool _opponentHasGreeted;
+
+    public string OwnVersionText => $"Version {AppVersion.Display}";
+
+    /// <summary>Shown when the two players are on different versions — starting is blocked until
+    /// they match, since builds that differ can disagree on the wire format or the rules.</summary>
+    public string? VersionMismatchMessage => AppVersion.DescribeMismatch(AppVersion.Display, OpponentVersion, _opponentHasGreeted);
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(StartGameCommand))]
     private bool _isReady;
@@ -212,7 +227,12 @@ public sealed partial class OnlineLobbyViewModel : ObservableObject
     {
         IsConnecting = false;
         IsConnected = true;
-        await _connection!.SendAsync(new OnlineMessage { Kind = OnlineMessageKind.Hello, PlayerName = PlayerName.Trim() });
+        await _connection!.SendAsync(new OnlineMessage
+        {
+            Kind = OnlineMessageKind.Hello,
+            PlayerName = PlayerName.Trim(),
+            AppVersion = AppVersion.Display,
+        });
     }
 
     private static bool TryParseAddress(string input, out string host, out int port)
@@ -286,7 +306,8 @@ public sealed partial class OnlineLobbyViewModel : ObservableObject
         }
     }
 
-    private bool CanStartGame() => IsHost && IsConnected && IsReady && OpponentReady && FirstPlayerNumber.HasValue;
+    private bool CanStartGame() =>
+        IsHost && IsConnected && IsReady && OpponentReady && FirstPlayerNumber.HasValue && VersionMismatchMessage is null;
 
     private void OnMessageReceived(OnlineMessage message)
     {
@@ -294,6 +315,12 @@ public sealed partial class OnlineLobbyViewModel : ObservableObject
         {
             case OnlineMessageKind.Hello:
                 OpponentName = message.PlayerName;
+                _opponentHasGreeted = true;
+                OpponentVersion = message.AppVersion;
+                // Raised by hand too: a build too old to send a version leaves OpponentVersion at
+                // null (no change notification), but the greeting itself changes the answer.
+                OnPropertyChanged(nameof(VersionMismatchMessage));
+                StartGameCommand.NotifyCanExecuteChanged();
                 break;
             case OnlineMessageKind.Ready:
                 OpponentReady = message.Ready;
@@ -313,7 +340,11 @@ public sealed partial class OnlineLobbyViewModel : ObservableObject
         }
     }
 
-    private void OnDisconnected() => ErrorMessage = "Connection lost.";
+    // Dropped before the opponent ever said hello usually means a build too old to speak this
+    // version's wire format at all (its messages can't even be read), not a flaky network.
+    private void OnDisconnected() => ErrorMessage = _opponentHasGreeted
+        ? "Connection lost."
+        : $"Connection lost before your opponent connected fully. If they're on an older version, you both need the same one (yours is {AppVersion.Display}).";
 
     /// <summary>
     /// Builds this side's own local, 2-player GameSession and raises GameStarted. Host and guest
