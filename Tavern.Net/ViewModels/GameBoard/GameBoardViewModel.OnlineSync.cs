@@ -131,6 +131,10 @@ public sealed partial class GameBoardViewModel
             return;
         }
 
+        // True when this side lands on a different phase than the one the sender broadcast (the
+        // first-turn skip below) — the sender is still showing its own WakeUp and has to be told.
+        var landedOnDifferentPhase = false;
+
         if (activePlayer == Player && _session.ActivePlayer != Player)
         {
             if (_session.IsAwaitingFirstTurn(Player))
@@ -140,6 +144,7 @@ public sealed partial class GameBoardViewModel
                 // "Turn 1" rather than "Turn 2". My own next AdvancePhase call (GameSession's own
                 // fast-forward branch) handles skipping straight to Draw from here.
                 phase = TurnPhase.Materialization;
+                landedOnDifferentPhase = true;
             }
             else
             {
@@ -157,6 +162,20 @@ public sealed partial class GameBoardViewModel
         _session.ApplyRemoteGameState(phase, activePlayer);
         CurrentPhase = _session.CurrentPhase;
         UpdateIsMyTurn();
+
+        // The passive side normally never answers a GameState, but here the sender's tracker would
+        // otherwise keep reading WakeUp until this side's first advance — while this side already
+        // skipped ahead. Reply once with where this side actually landed; the sender just mirrors it
+        // (I am not newly active from its point of view, so it does not answer back).
+        if (landedOnDifferentPhase && IsOnline)
+        {
+            _ = _connection!.SendAsync(new OnlineMessage
+            {
+                Kind = OnlineMessageKind.GameState,
+                Phase = _session.CurrentPhase,
+                ActivePlayerNumber = activePlayer.PlayerNumber,
+            });
+        }
     }
 
     /// <summary>Recomputes IsMyTurn from GameSession's shared ActivePlayer and, only on an actual
