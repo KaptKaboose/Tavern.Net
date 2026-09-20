@@ -120,7 +120,7 @@ public sealed partial class GameBoardViewModel
     [ObservableProperty]
     private bool _opponentLifeJustChanged;
 
-    private DispatcherTimer? _opponentLifeGlowTimer;
+    private FlashTimer? _opponentLifeFlash;
 
     /// <summary>Online only: both players' MajorEvents interleaved by Timestamp, "You"/"Opp"
     /// tagged — the actual order things happened in, including responses played during the other
@@ -191,23 +191,8 @@ public sealed partial class GameBoardViewModel
         RefreshMergedLog();
     }
 
-    private void FlashOpponentLifeChanged()
-    {
-        OpponentLifeJustChanged = true;
-
-        if (_opponentLifeGlowTimer is null)
-        {
-            _opponentLifeGlowTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-            _opponentLifeGlowTimer.Tick += (_, _) =>
-            {
-                OpponentLifeJustChanged = false;
-                _opponentLifeGlowTimer!.Stop();
-            };
-        }
-
-        _opponentLifeGlowTimer.Stop();
-        _opponentLifeGlowTimer.Start();
-    }
+    private void FlashOpponentLifeChanged() =>
+        (_opponentLifeFlash ??= new FlashTimer(lit => OpponentLifeJustChanged = lit)).Trigger();
 
     // --- Arrival glow: cards that showed up on the opponent's Field/Champion/Graveyard/Banishment
     // since the panel was last open glow gold (piles glow as a whole, and the card inside them when

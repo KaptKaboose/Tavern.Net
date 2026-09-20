@@ -1,4 +1,5 @@
 ﻿using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Windows.Input;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -34,6 +35,40 @@ public sealed partial class GameBoardViewModel
 
     [RelayCommand]
     private void DrawCardIntoMemory() => _session.DrawCard(Player, ZoneType.MainDeck, ZoneType.Memory);
+
+    // --- "Just changed" highlights for your own Life and Damage numbers (the header and the opponent
+    // panel bind to these — see the DataTriggers on those TextBlocks). Any change to the number lights
+    // it, whatever caused it (buttons, the +/- keys, a Champion level-up), except a new game's reset.
+
+    [ObservableProperty]
+    private bool _lifeJustChanged;
+
+    [ObservableProperty]
+    private bool _damageJustChanged;
+
+    private FlashTimer? _lifeFlash;
+    private FlashTimer? _damageFlash;
+
+    // True while a new game is resetting Life/Damage to their starting values, which isn't a change
+    // the player made and shouldn't flash.
+    private bool _suppressCounterFlash;
+
+    private void OnOwnCounterChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (_suppressCounterFlash)
+        {
+            return;
+        }
+
+        if (e.PropertyName == nameof(Player.Life))
+        {
+            (_lifeFlash ??= new FlashTimer(lit => LifeJustChanged = lit)).Trigger();
+        }
+        else if (e.PropertyName == nameof(GameStats.DamageDealtCount))
+        {
+            (_damageFlash ??= new FlashTimer(lit => DamageJustChanged = lit)).Trigger();
+        }
+    }
 
     [RelayCommand]
     private void IncreaseLife() => _session.AdjustLife(Player, 1);

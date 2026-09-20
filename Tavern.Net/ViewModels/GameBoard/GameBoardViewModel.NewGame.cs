@@ -277,7 +277,9 @@ public sealed partial class GameBoardViewModel
             Decklists.DeckSessionBuilder.ApplyArrangement(Player);
         }
 
+        _suppressCounterFlash = true;
         var glimpsedOnNewGame = _session.StartNewGameForPlayer(Player);
+        _suppressCounterFlash = false;
 
         var firstPlayer = firstPlayerNumber == Player.PlayerNumber ? Player : OpponentPlayer!;
         _session.ApplyRemoteGameState(TurnPhase.Materialization, firstPlayer);

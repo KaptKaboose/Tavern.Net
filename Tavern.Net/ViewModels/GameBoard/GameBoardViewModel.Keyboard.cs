@@ -107,6 +107,14 @@ public sealed partial class GameBoardViewModel
             }
         }
 
+        // +/- adjust life (or damage dealt in a non-Online game) — checked ahead of the general overlay
+        if (key is Key.Add or Key.OemPlus or Key.Subtract or Key.OemMinus && !IsAnyOverlayOpen(ignoreOpponentPanel: true))
+        {
+            var delta = key is Key.Add or Key.OemPlus ? 1 : -1;
+            if (IsOnline) _session.AdjustLife(Player, delta); else _session.AdjustDamageDealt(Player, delta);
+            return true;
+        }
+
         // O toggles the opponent panel — checked ahead of the general overlay guard below because
         // that guard would otherwise swallow the key while the panel itself is the open overlay (so
         // O could never close it). It only acts when nothing else is open, though: the panel sits

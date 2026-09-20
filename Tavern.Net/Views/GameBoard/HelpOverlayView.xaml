@@ -53,34 +53,34 @@
                     <TextBlock Grid.Row="2" Grid.Column="1" Text="Draw a card into Memory" Style="{StaticResource ShortcutLabelStyle}"/>
 
                     <Border Grid.Row="3" Grid.Column="0" Style="{StaticResource ShortcutKeyStyle}">
-                        <TextBlock Text="1-9" Style="{StaticResource ShortcutKeyTextStyle}"/>
+                        <TextBlock Text="+/-" Style="{StaticResource ShortcutKeyTextStyle}"/>
                     </Border>
-                    <TextBlock Grid.Row="3" Grid.Column="1" Text="Banish that many cards, at random" Style="{StaticResource ShortcutLabelStyle}"/>
+                    <TextBlock Grid.Row="3" Grid.Column="1" Text="Solo: Adjust damage; Online: Adjust life" Style="{StaticResource ShortcutLabelStyle}"/>
 
                     <Border Grid.Row="4" Grid.Column="0" Style="{StaticResource ShortcutKeyStyle}">
-                        <TextBlock Text="B" Style="{StaticResource ShortcutKeyTextStyle}"/>
+                        <TextBlock Text="1-9" Style="{StaticResource ShortcutKeyTextStyle}"/>
                     </Border>
-                    <TextBlock Grid.Row="4" Grid.Column="1" Text="Banish" Style="{StaticResource ShortcutLabelStyle}"/>
+                    <TextBlock Grid.Row="4" Grid.Column="1" Text="Banish that many cards, at random" Style="{StaticResource ShortcutLabelStyle}"/>
 
                     <Border Grid.Row="5" Grid.Column="0" Style="{StaticResource ShortcutKeyStyle}">
-                        <TextBlock Text="G" Style="{StaticResource ShortcutKeyTextStyle}"/>
+                        <TextBlock Text="B" Style="{StaticResource ShortcutKeyTextStyle}"/>
                     </Border>
-                    <TextBlock Grid.Row="5" Grid.Column="1" Text="Glimpse" Style="{StaticResource ShortcutLabelStyle}"/>
+                    <TextBlock Grid.Row="5" Grid.Column="1" Text="Banish" Style="{StaticResource ShortcutLabelStyle}"/>
 
                     <Border Grid.Row="6" Grid.Column="0" Style="{StaticResource ShortcutKeyStyle}">
-                        <TextBlock Text="M" Style="{StaticResource ShortcutKeyTextStyle}"/>
+                        <TextBlock Text="G" Style="{StaticResource ShortcutKeyTextStyle}"/>
                     </Border>
-                    <TextBlock Grid.Row="6" Grid.Column="1" Text="Mill" Style="{StaticResource ShortcutLabelStyle}"/>
+                    <TextBlock Grid.Row="6" Grid.Column="1" Text="Glimpse" Style="{StaticResource ShortcutLabelStyle}"/>
 
                     <Border Grid.Row="7" Grid.Column="0" Style="{StaticResource ShortcutKeyStyle}">
-                        <TextBlock Text="R" Style="{StaticResource ShortcutKeyTextStyle}"/>
+                        <TextBlock Text="M" Style="{StaticResource ShortcutKeyTextStyle}"/>
                     </Border>
-                    <TextBlock Grid.Row="7" Grid.Column="1" Text="Reveal top cards of Main" Style="{StaticResource ShortcutLabelStyle}"/>
+                    <TextBlock Grid.Row="7" Grid.Column="1" Text="Mill" Style="{StaticResource ShortcutLabelStyle}"/>
 
                     <Border Grid.Row="8" Grid.Column="0" Style="{StaticResource ShortcutKeyStyle}">
-                        <TextBlock Text="P" Style="{StaticResource ShortcutKeyTextStyle}"/>
+                        <TextBlock Text="R" Style="{StaticResource ShortcutKeyTextStyle}"/>
                     </Border>
-                    <TextBlock Grid.Row="8" Grid.Column="1" Text="Give top cards to opponent (online only)" Style="{StaticResource ShortcutLabelStyle}"/>
+                    <TextBlock Grid.Row="8" Grid.Column="1" Text="Reveal top cards of Main" Style="{StaticResource ShortcutLabelStyle}"/>
 
                     <Border Grid.Row="9" Grid.Column="0" Style="{StaticResource ShortcutKeyStyle}">
                         <TextBlock Text="S" Style="{StaticResource ShortcutKeyTextStyle}"/>

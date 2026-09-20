@@ -107,7 +107,9 @@ public sealed partial class GameBoardViewModel
         // effect calls for an opening glimpse instead, in which case it hands the already-drawn
         // cards back here so they can actually be shown (it has no reference to GlimpseStaging/
         // IsGlimpsing to do that itself).
+        _suppressCounterFlash = true;
         var glimpsedOnNewGame = _session.StartNewGame();
+        _suppressCounterFlash = false;
         CurrentPhase = _session.CurrentPhase;
         if (glimpsedOnNewGame.Count > 0)
         {

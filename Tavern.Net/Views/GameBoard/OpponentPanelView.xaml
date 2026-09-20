@@ -54,8 +54,18 @@
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                         <Button Style="{StaticResource CounterButtonStyle}" Content="-" Command="{Binding DecreaseLifeCommand}"/>
                         <TextBlock Text="Life:" FontSize="16" FontWeight="Bold" Foreground="#48BB78" VerticalAlignment="Center" Margin="10,0,0,0"/>
-                        <TextBlock Text="{Binding Player.Life}" FontSize="16" FontWeight="Bold" Margin="6,0,10,0" VerticalAlignment="Center"
-                                   Foreground="{Binding Player.Life, Converter={StaticResource LowLifeToBrush}}"/>
+                        <TextBlock Text="{Binding Player.Life}" FontSize="16" FontWeight="Bold" Margin="6,0,10,0" VerticalAlignment="Center">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{Binding Player.Life, Converter={StaticResource LowLifeToBrush}}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding LifeJustChanged}" Value="True">
+                                            <Setter Property="Foreground" Value="#F6E05E"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
                         <Button Style="{StaticResource CounterButtonStyle}" Content="+" Command="{Binding IncreaseLifeCommand}"/>
                     </StackPanel>
                 </Grid>

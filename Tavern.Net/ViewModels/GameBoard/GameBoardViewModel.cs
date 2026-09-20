@@ -118,6 +118,8 @@ public sealed partial class GameBoardViewModel : ObservableObject, IKeyboardShor
         _gameStorage = gameStorage;
         _connection = connection;
         Player = player;
+        Player.PropertyChanged += OnOwnCounterChanged;
+        Player.Stats.PropertyChanged += OnOwnCounterChanged;
         OpponentPlayer = opponentPlayer;
         _currentPhase = session.CurrentPhase;
         // Before an online game has started nobody is active yet: treat it as "mine" so that the
