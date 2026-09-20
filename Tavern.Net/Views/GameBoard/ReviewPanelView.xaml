@@ -1,0 +1,185 @@
+﻿<UserControl x:Class="Tavern.Net.Views.GameBoard.ReviewPanelView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:Tavern.Net.ViewModels"
+             xmlns:views="clr-namespace:Tavern.Net.Views"
+             xmlns:behaviors="clr-namespace:Tavern.Net.Behaviors"
+             xmlns:conv="clr-namespace:Tavern.Net.Converters"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:GameBoardViewModel}"
+             d:DesignWidth="1600" d:DesignHeight="950">
+    <!-- Snapshot viewer: read-only board state at the moment of a clicked Major event
+         (GameBoardViewModel.ViewMajorEventCommand / GameSession.TakeSnapshot). Never touches
+         the live game — closing it just hides it, same as every other overlay here. Laid out
+         spatially like the live board (Field/Memory/Hand directly, Field cards flowed into a
+         wrapping grid rather than their live drag positions) rather than a flat list;
+         Champion/Graveyard/Banishment/Material/Main render as clickable pile boxes — click one to open its full
+         contents (ViewedSnapshotPile, below) — mirroring which zones StackZoneView renders as
+         piles on the live board. All cards use CardSnapshotTemplate — no drag/zoom/tap/flip,
+         since this is history, not the live board. -->
+    <Grid
+          Visibility="{Binding ViewedMajorEvent, Converter={StaticResource NullToVisibility}}"
+          d:IsHidden="True">
+        <Button Command="{Binding CloseMajorEventViewCommand}" Focusable="False" Cursor="Arrow">
+            <Button.Template>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="#CC000000"/>
+                </ControlTemplate>
+            </Button.Template>
+        </Button>
+
+        <Border Width="1360" MaxHeight="820" Margin="40" Padding="16"
+                HorizontalAlignment="Center" VerticalAlignment="Center"
+                Background="#2D3748" BorderBrush="White" BorderThickness="2" CornerRadius="10">
+            <DockPanel>
+                <!-- Online only: switch between this event's own board and the opponent's
+                     nearest board at roughly the same moment (ViewedOtherPlayerEvent) — everything
+                     below (header line, Field/Memory/Hand, piles) follows CurrentlyViewedEvent,
+                     whichever tab that currently means. -->
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,12"
+                            Visibility="{Binding HasOtherPlayerTab, Converter={StaticResource BoolToVisibility}}">
+                    <Button Content="{Binding PrimaryTabLabel}" Style="{StaticResource PrimaryTabButtonStyle}" Margin="0,0,8,0"
+                            Command="{Binding ShowPrimaryTabCommand}"/>
+                    <Button Content="{Binding OtherTabLabel}" Style="{StaticResource OtherPlayerTabButtonStyle}"
+                            Command="{Binding ShowOtherPlayerTabCommand}"/>
+                </StackPanel>
+
+                <TextBlock DockPanel.Dock="Top" Foreground="White" FontSize="20" FontWeight="Bold" Margin="0,0,0,4"
+                           TextWrapping="Wrap"
+                           behaviors:BoldSubstring.Text="{Binding CurrentlyViewedEvent.Description}"
+                           behaviors:BoldSubstring.Bold="{Binding CurrentlyViewedEvent.CardName}"
+                           behaviors:BoldSubstring.BoldBrush="#90CDF4">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="behaviors:BoldSubstring.PrefixBrush" Value="#F6AD55"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding CurrentlyViewedEventIsOwn}" Value="True">
+                                    <Setter Property="behaviors:BoldSubstring.PrefixBrush" Value="#48BB78"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                    <behaviors:BoldSubstring.Prefix>
+                        <Binding Path="CurrentlyViewedEvent.Turn" Converter="{StaticResource TurnCountDisplay}" StringFormat="Turn {0}: "/>
+                    </behaviors:BoldSubstring.Prefix>
+                </TextBlock>
+                <!-- Life is colored per tab (green = yours, orange = theirs, matching the log);
+                     Phase always comes from the clicked entry (ViewedPhase) so both tabs agree. -->
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,12"
+                            Visibility="{Binding CurrentlyViewedEvent, Converter={StaticResource NullToVisibility}}">
+                    <TextBlock Text="Life:" FontSize="16" FontWeight="Bold" VerticalAlignment="Center">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="#F6AD55"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding CurrentlyViewedEventIsOwn}" Value="True">
+                                        <Setter Property="Foreground" Value="#48BB78"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <TextBlock Text="{Binding CurrentlyViewedEvent.Snapshot.Life}" FontSize="16" FontWeight="Bold"
+                               Foreground="#F7FAFC" VerticalAlignment="Center" Margin="6,0,0,0"/>
+                    <TextBlock Text="{Binding ViewedPhase, StringFormat='Phase: {0}'}" FontSize="16" Foreground="#F7FAFC"
+                               VerticalAlignment="Center" Margin="32,0,0,0"/>
+                </StackPanel>
+                <TextBlock DockPanel.Dock="Top" Text="No recorded state for them yet at this point." Foreground="#A0AEC0" Margin="0,0,0,12"
+                           Visibility="{Binding CurrentlyViewedEvent, Converter={StaticResource NullToVisibility}, ConverterParameter=Invert}"/>
+
+                <!-- Two fully independent columns (no RowSpan) — each sizes to its own natural
+                     content and sits at the top of the shared row, rather than one stretching
+                     to match the other's height. A RowSpan'd pile panel previously stretched
+                     to fill the Field+Memory+Hand height and then spread that inflated space
+                     evenly across its own rows (huge gaps), and the same interaction with
+                     Auto-sized rows was pushing Hand out of its own visible space. -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="290"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Left: Field / Memory / Hand, stacked. -->
+                        <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                            <!-- Field: cards flow left-to-right, wrapping to new rows as needed
+                                 (WrapPanel), rather than the live board's freeform x/y drag
+                                 positions — reconstructing the exact saved positions turned out
+                                 to be more trouble than it was worth for a read-only view. The
+                                 Border has no fixed Height, so it grows to fit however many rows
+                                 the cards wrap into instead of clipping them. -->
+                            <TextBlock Text="Field" Foreground="White" FontWeight="Bold" Margin="0,0,0,4"/>
+                            <Border MinHeight="190" Background="#1A202C" CornerRadius="6" Margin="0,0,0,12">
+                                <ItemsControl ItemsSource="{Binding ViewedFieldCards}" ItemTemplate="{StaticResource CardSnapshotTemplate}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate><WrapPanel Margin="3"/></ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemContainerStyle>
+                                        <Style TargetType="ContentPresenter">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding StartsNewGroup}" Value="True">
+                                                    <Setter Property="Margin" Value="22,0,0,0"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </ItemsControl.ItemContainerStyle>
+                                </ItemsControl>
+                            </Border>
+
+                            <!-- Live opponent's board: Memory/Hand as face-down counts, same as the
+                                 Opponent panel (see HideViewedPrivateZones). -->
+                            <StackPanel Orientation="Horizontal"
+                                        Visibility="{Binding HideViewedPrivateZones, Converter={StaticResource BoolToVisibility}}">
+                                <StackPanel Margin="0,0,16,0" HorizontalAlignment="Center">
+                                    <TextBlock Text="Memory" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                                    <ContentControl Content="{Binding ViewedMemoryCount}" ContentTemplate="{StaticResource FaceDownCountTemplate}"/>
+                                </StackPanel>
+                                <StackPanel HorizontalAlignment="Center">
+                                    <TextBlock Text="Hand" Foreground="White" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                                    <ContentControl Content="{Binding ViewedHandCount}" ContentTemplate="{StaticResource FaceDownCountTemplate}"/>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- Memory -->
+                            <StackPanel Margin="0,0,0,12"
+                                        Visibility="{Binding HasViewedMemoryCards, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="Memory" Foreground="White" FontWeight="Bold" Margin="0,0,0,4"/>
+                                <ItemsControl ItemsSource="{Binding ViewedMemoryCards}" ItemTemplate="{StaticResource CardSnapshotTemplate}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                </ItemsControl>
+                            </StackPanel>
+
+                            <!-- Hand -->
+                            <StackPanel Visibility="{Binding HasViewedHandCards, Converter={StaticResource BoolToVisibility}}">
+                                <TextBlock Text="Hand" Foreground="White" FontWeight="Bold" Margin="0,0,0,4"/>
+                                <ItemsControl ItemsSource="{Binding ViewedHandCards}" ItemTemplate="{StaticResource CardSnapshotTemplate}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                </ItemsControl>
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- Right: piles — Champion on a row of its own, then Graveyard/Banishment and Main/Material
+                             (same layout and names as the Opponent panel). Click one to open its full
+                             contents (ViewSnapshotPileCommand, below). Two per row (UniformGrid, not
+                             a width-dependent WrapPanel). VerticalAlignment Top keeps it sized to its
+                             own content instead of stretching to match the left column's height. -->
+                        <StackPanel Grid.Column="1" VerticalAlignment="Top">
+                            <ContentControl Content="{Binding ViewedChampionPile}" ContentTemplate="{StaticResource ChampionPileTemplate}"/>
+                            <ItemsControl ItemsSource="{Binding ViewedSnapshotPiles}" ItemTemplate="{StaticResource PileBoxTemplate}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate><UniformGrid Columns="2"/></ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Grid>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+    </Grid>
+</UserControl>

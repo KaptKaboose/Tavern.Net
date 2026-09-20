@@ -1,0 +1,223 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:Tavern.Net.ViewModels"
+             xmlns:views="clr-namespace:Tavern.Net.Views"
+             xmlns:behaviors="clr-namespace:Tavern.Net.Behaviors"
+             xmlns:conv="clr-namespace:Tavern.Net.Converters">
+    <!-- Button / toggle / label styles used across the game board's panels. Merged app-wide by GameBoardResources.xaml (which App.xaml merges), so every
+         panel under Views/GameBoard can use them. Each dictionary merges what it depends on, so it also loads on its own. -->
+    <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="pack://application:,,,/Tavern.Net;component/Views/SharedTemplates.xaml"/>
+    </ResourceDictionary.MergedDictionaries>
+
+    <!-- Zoom overlay's status buttons: dim/plain when off, gold-bordered when on — no other
+         visual state (hover/pressed) is styled since these are checked/unchecked toggles, not
+         momentary actions. -->
+    <Style x:Key="StatusToggleStyle" TargetType="ToggleButton">
+        <Setter Property="Width" Value="56"/>
+        <Setter Property="Height" Value="56"/>
+        <Setter Property="Margin" Value="3"/>
+        <Setter Property="Padding" Value="6"/>
+        <Setter Property="Background" Value="#1A202C"/>
+        <Setter Property="BorderBrush" Value="#4A5568"/>
+        <Setter Property="BorderThickness" Value="2"/>
+        <Style.Triggers>
+            <Trigger Property="IsChecked" Value="True">
+                <Setter Property="BorderBrush" Value="#99F6E05E"/>
+                <Setter Property="Effect" Value="{StaticResource GoldGlow}"/>
+                <Setter Property="Background" Value="#4A5568"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- Zoom overlay's counter +/- buttons: match the panel's dark palette instead of the
+         OS-default button chrome. -->
+    <Style x:Key="CounterButtonStyle" TargetType="Button">
+        <Setter Property="Width" Value="32"/>
+        <Setter Property="Height" Value="32"/>
+        <Setter Property="FontSize" Value="16"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="Foreground" Value="#F7FAFC"/>
+        <Setter Property="Background" Value="#1A202C"/>
+        <Setter Property="BorderBrush" Value="#4A5568"/>
+        <Setter Property="BorderThickness" Value="2"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="#4A5568"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- ActionButtonStyle (the app's shared button look) comes from SharedTemplates.xaml,
+         merged in App.xaml. -->
+
+    <!-- Meta-action bar (Menu, Save Game): a separate, deliberately small row above the
+         gameplay header, so those rarely-used actions don't compete with Life/phase/Roll/Damage
+         for space — see GameBoardView's own note on why this used to be one crowded row. -->
+    <Style x:Key="CompactButtonStyle" TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+        <Setter Property="Padding" Value="10,3"/>
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="FontWeight" Value="Normal"/>
+    </Style>
+
+    <!-- Reveal panel's Randomize switch: dim and outlined when off, gold when on (it only arms;
+         the shuffle happens when Top/Bottom is clicked). -->
+    <Style x:Key="SwitchToggleStyle" TargetType="ToggleButton">
+        <Setter Property="Padding" Value="16,8"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="Foreground" Value="#A0AEC0"/>
+        <Setter Property="Background" Value="#1A202C"/>
+        <Setter Property="BorderBrush" Value="#4A5568"/>
+        <Setter Property="BorderThickness" Value="2"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                    <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsChecked" Value="True">
+                <Setter Property="Foreground" Value="#F6E05E"/>
+                <Setter Property="BorderBrush" Value="#F6E05E"/>
+                <Setter Property="Background" Value="#4A5568"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- Keyboard-shortcuts help panel: each row is a key "chip" + a plain label. -->
+    <Style x:Key="ShortcutKeyStyle" TargetType="Border">
+        <Setter Property="Background" Value="#1A202C"/>
+        <Setter Property="BorderBrush" Value="#4A5568"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="Padding" Value="10,4"/>
+        <Setter Property="Margin" Value="0,0,12,10"/>
+        <Setter Property="MinWidth" Value="44"/>
+        <Setter Property="HorizontalAlignment" Value="Left"/>
+    </Style>
+
+    <Style x:Key="ShortcutKeyTextStyle" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="#F6E05E"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="TextAlignment" Value="Center"/>
+    </Style>
+
+    <Style x:Key="ShortcutLabelStyle" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="#F7FAFC"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="Margin" Value="0,0,0,10"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+    </Style>
+
+    <!-- Snapshot viewer's tab buttons — gold-bordered while active, same highlight color used
+         everywhere else in the app for an active/selected state (StatusToggleStyle, the online
+         lobby's turn-order choice). -->
+    <Style x:Key="PrimaryTabButtonStyle" TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding IsShowingOtherPlayerTab}" Value="False">
+                <Setter Property="BorderBrush" Value="#99F6E05E"/>
+                <Setter Property="Effect" Value="{StaticResource GoldGlow}"/>
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <Style x:Key="OtherPlayerTabButtonStyle" TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding IsShowingOtherPlayerTab}" Value="True">
+                <Setter Property="BorderBrush" Value="#99F6E05E"/>
+                <Setter Property="Effect" Value="{StaticResource GoldGlow}"/>
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- Header's Opponent button — gold-bordered while HasUnseenOpponentActivity, same
+         highlight color used everywhere else for an active/selected state. A deliberate glow
+         rather than auto-opening the panel itself: the opponent shouldn't be able to yank the
+         screen away from whatever the player's doing just by moving a card. Clears the instant
+         the panel is actually opened, by any means (see GameBoardViewModel.
+         OnIsOpponentPanelOpenChanged). -->
+    <!-- The phase tracker doubles as the Advance Phase button (same command and CanExecute as
+         Space): transparent, with a subtle hover fill and hand cursor only while it can
+         actually be used — online on the opponent's turn it's disabled and looks like plain text. -->
+    <Style x:Key="PhaseBarButtonStyle" TargetType="Button">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="14,6"/>
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="#2D3748"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="True">
+                            <Setter Property="Cursor" Value="Hand"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="Bd" Property="Background" Value="Transparent"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Light orange by default (it's clicked constantly, so it should be easy to pick out of the
+         header). While they've done something since the panel was last open it blinks — flips
+         between that orange as a solid fill with dark text and the normal outlined look — until
+         the panel is opened (see HasUnseenOpponentActivity). The flip is a discrete key-frame
+         swap rather than a color fade: the base brushes come from this style and are frozen, so
+         they can't be animated in place. -->
+    <Style x:Key="OpponentButtonStyle" TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+        <Setter Property="Foreground" Value="#F6AD55"/>
+        <Setter Property="BorderBrush" Value="#F6AD55"/>
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding HasUnseenOpponentActivity}" Value="True">
+                <Setter Property="BorderThickness" Value="3"/>
+                <DataTrigger.EnterActions>
+                    <BeginStoryboard x:Name="OpponentBlink">
+                        <Storyboard RepeatBehavior="Forever">
+                            <ObjectAnimationUsingKeyFrames Storyboard.TargetProperty="Background" Duration="0:0:1.2">
+                                <DiscreteObjectKeyFrame KeyTime="0:0:0" Value="{x:Static Brushes.Transparent}"/>
+                                <DiscreteObjectKeyFrame KeyTime="0:0:0.6">
+                                    <DiscreteObjectKeyFrame.Value><SolidColorBrush Color="#F6AD55"/></DiscreteObjectKeyFrame.Value>
+                                </DiscreteObjectKeyFrame>
+                            </ObjectAnimationUsingKeyFrames>
+                            <ObjectAnimationUsingKeyFrames Storyboard.TargetProperty="Foreground" Duration="0:0:1.2">
+                                <DiscreteObjectKeyFrame KeyTime="0:0:0">
+                                    <DiscreteObjectKeyFrame.Value><SolidColorBrush Color="#F6AD55"/></DiscreteObjectKeyFrame.Value>
+                                </DiscreteObjectKeyFrame>
+                                <DiscreteObjectKeyFrame KeyTime="0:0:0.6">
+                                    <DiscreteObjectKeyFrame.Value><SolidColorBrush Color="#1A202C"/></DiscreteObjectKeyFrame.Value>
+                                </DiscreteObjectKeyFrame>
+                            </ObjectAnimationUsingKeyFrames>
+                        </Storyboard>
+                    </BeginStoryboard>
+                </DataTrigger.EnterActions>
+                <DataTrigger.ExitActions>
+                    <StopStoryboard BeginStoryboardName="OpponentBlink"/>
+                </DataTrigger.ExitActions>
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- Header's Actions button — light blue, same reasoning as the Opponent button: a
+         frequently used, always-needed control that should stand out from the rest of the row. -->
+    <Style x:Key="ActionsButtonStyle" TargetType="Button" BasedOn="{StaticResource ActionButtonStyle}">
+        <Setter Property="Foreground" Value="#90CDF4"/>
+        <Setter Property="BorderBrush" Value="#90CDF4"/>
+    </Style>
+
+</ResourceDictionary>

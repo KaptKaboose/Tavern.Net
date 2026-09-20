@@ -1,0 +1,166 @@
+﻿<UserControl x:Class="Tavern.Net.Views.GameBoard.StatsPanelView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:Tavern.Net.ViewModels"
+             xmlns:views="clr-namespace:Tavern.Net.Views"
+             xmlns:behaviors="clr-namespace:Tavern.Net.Behaviors"
+             xmlns:conv="clr-namespace:Tavern.Net.Converters"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:GameBoardViewModel}"
+             d:DesignWidth="1600" d:DesignHeight="950">
+    <!-- Right: stats panel -->
+    <Border BorderBrush="#33FFFFFF" BorderThickness="1,0,0,0" Padding="10">
+        <DockPanel>
+            <TextBlock DockPanel.Dock="Top" Text="Session stats" FontSize="16" FontWeight="Bold" Foreground="#F7FAFC" Margin="0,0,0,8"/>
+
+            <!-- Each stat is a label/value pair (muted label, bold value) inside a shared card
+                 background, rather than plain "Label: value" lines — same info, easier to scan. -->
+            <Border DockPanel.Dock="Top" Background="#2D3748" CornerRadius="8" Padding="12,10" Margin="0,0,0,12">
+                <StackPanel>
+                    <Grid Margin="0,0,0,5">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Cards drawn" Foreground="#A0AEC0"/>
+                        <TextBlock Grid.Column="1" Text="{Binding Stats.CardsDrawnCount}" Foreground="#F7FAFC" FontWeight="Bold"/>
+                    </Grid>
+                    <Grid Margin="0,0,0,5">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Avg. cards/turn" Foreground="#A0AEC0"/>
+                        <TextBlock Grid.Column="1" Text="{Binding Stats.AverageCardsPlayedPerTurn, StringFormat={}{0:0.0}}" Foreground="#F7FAFC" FontWeight="Bold"/>
+                    </Grid>
+                    <Grid Margin="0,0,0,5">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Damage dealt" Foreground="#A0AEC0"/>
+                        <TextBlock Grid.Column="1" Text="{Binding Stats.DamageDealtCount}" Foreground="#F7FAFC" FontWeight="Bold"/>
+                    </Grid>
+                    <Grid Margin="0,0,0,5">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Life recovered" Foreground="#A0AEC0"/>
+                        <TextBlock Grid.Column="1" Text="{Binding Stats.LifeRecoveredCount}" Foreground="#F7FAFC" FontWeight="Bold"/>
+                    </Grid>
+                    <Grid Margin="0,0,0,5">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Dead turns" Foreground="#A0AEC0"/>
+                        <TextBlock Grid.Column="1" Text="{Binding Stats.DeadTurnsCount}" Foreground="#F7FAFC" FontWeight="Bold"/>
+                    </Grid>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="Lost to Memory decay" Foreground="#A0AEC0"/>
+                        <TextBlock Grid.Column="1" Text="{Binding Stats.CardsLostToMemoryDecayCount}" Foreground="#F7FAFC" FontWeight="Bold"/>
+                    </Grid>
+
+                    <!-- Champion level milestones as small pills rather than one-per-line —
+                         there are rarely more than 2-3, so a wrapping row reads better than a
+                         list. -->
+                    <TextBlock Text="Champion levels" Foreground="#A0AEC0" Margin="0,10,0,4"/>
+                    <ItemsControl ItemsSource="{Binding Stats.ChampionLevelMilestones}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="#4A5568" CornerRadius="10" Padding="8,3" Margin="0,0,6,6">
+                                    <TextBlock Foreground="#F7FAFC" FontSize="12">
+                                        <TextBlock.Text>
+                                            <MultiBinding StringFormat="Lv {0} · T{1}">
+                                                <Binding Path="Level"/>
+                                                <Binding Path="Turn"/>
+                                            </MultiBinding>
+                                        </TextBlock.Text>
+                                    </TextBlock>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
+            <!-- Curated, always-visible log — GameStats.PlayLog still records literally every
+                 action underneath, but is no longer shown directly here (see GameSession's
+                 RecordMajorEvent/RecordLifeOrDamageChange). Click an entry to open a read-only
+                 view of the board exactly as it was at that moment. -->
+            <TextBlock DockPanel.Dock="Top" Text="Play log" FontWeight="Bold" Foreground="#F7FAFC" Margin="0,4,0,4"/>
+            <ListBox ItemsSource="{Binding Stats.MajorEvents}" ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     Visibility="{Binding ShowSoloLog, Converter={StaticResource BoolToVisibility}}"
+                     behaviors:AutoScrollToBottomBehavior.IsEnabled="True">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Button Command="{Binding DataContext.ViewMajorEventCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                CommandParameter="{Binding}"
+                                HorizontalContentAlignment="Left" Padding="4,2"
+                                Background="Transparent" BorderThickness="0" Foreground="#F7FAFC" Cursor="Hand">
+                            <TextBlock TextWrapping="Wrap"
+                                       behaviors:BoldSubstring.Text="{Binding Description}"
+                                       behaviors:BoldSubstring.Bold="{Binding CardName}"
+                                       behaviors:BoldSubstring.PrefixBrush="#48BB78"
+                                       behaviors:BoldSubstring.BoldBrush="#90CDF4">
+                                <behaviors:BoldSubstring.Prefix>
+                                    <Binding Path="Turn" Converter="{StaticResource TurnCountDisplay}" StringFormat="Turn {0}: "/>
+                                </behaviors:BoldSubstring.Prefix>
+                            </TextBlock>
+                        </Button>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
+            <!-- Online: both players' MajorEvents interleaved by real chronological order (see
+                 GameBoardViewModel.MergedLog) rather than two disconnected per-player logs, so a
+                 response played during the opponent's turn reads in the order it actually
+                 happened. Reuses ViewMajorEventCommand as-is (CommandParameter is just the
+                 underlying MajorEvent). -->
+            <ListBox ItemsSource="{Binding MergedLog}" ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     Visibility="{Binding ShowMergedLog, Converter={StaticResource BoolToVisibility}}"
+                     behaviors:AutoScrollToBottomBehavior.IsEnabled="True">
+                <ListBox.ItemTemplate>
+                    <DataTemplate DataType="{x:Type vm:MergedLogEntry}">
+                        <Button Command="{Binding DataContext.ViewMajorEventCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                CommandParameter="{Binding Event}"
+                                HorizontalContentAlignment="Left" Padding="4,2"
+                                Background="Transparent" BorderThickness="0" Foreground="#F7FAFC" Cursor="Hand">
+                            <TextBlock TextWrapping="Wrap"
+                                       behaviors:BoldSubstring.Text="{Binding Event.Description}"
+                                       behaviors:BoldSubstring.Bold="{Binding Event.CardName}"
+                                       behaviors:BoldSubstring.BoldBrush="#90CDF4">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="behaviors:BoldSubstring.PrefixBrush" Value="#F6AD55"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsOwn}" Value="True">
+                                                <Setter Property="behaviors:BoldSubstring.PrefixBrush" Value="#48BB78"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                                <behaviors:BoldSubstring.Prefix>
+                                    <MultiBinding StringFormat="{}{0} · Turn {1}: ">
+                                        <Binding Path="IsOwn" Converter="{StaticResource BoolToPlayerLabel}"/>
+                                        <Binding Path="Event.Turn" Converter="{StaticResource TurnCountDisplay}"/>
+                                    </MultiBinding>
+                                </behaviors:BoldSubstring.Prefix>
+                            </TextBlock>
+                        </Button>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </DockPanel>
+    </Border>
+</UserControl>

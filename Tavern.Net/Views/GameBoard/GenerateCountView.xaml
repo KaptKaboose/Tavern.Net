@@ -1,0 +1,44 @@
+﻿<UserControl x:Class="Tavern.Net.Views.GameBoard.GenerateCountView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:Tavern.Net.ViewModels"
+             xmlns:views="clr-namespace:Tavern.Net.Views"
+             xmlns:behaviors="clr-namespace:Tavern.Net.Behaviors"
+             xmlns:conv="clr-namespace:Tavern.Net.Converters"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:GameBoardViewModel}"
+             d:DesignWidth="1600" d:DesignHeight="950">
+    <!-- Generate's count picker: how many fresh copies of the card picked above to create at
+         Main's bottom (GameSession.GenerateCard, looped) — same count-entry mechanics as the
+         Actions menu (+/-, digit typing via HandleKey's IsGenerateCountOpen branch). -->
+    <Grid
+          Visibility="{Binding IsGenerateCountOpen, Converter={StaticResource BoolToVisibility}}"
+          d:IsHidden="True">
+        <Button Command="{Binding CancelGenerateCountCommand}" Focusable="False" Cursor="Arrow">
+            <Button.Template>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="#CC000000"/>
+                </ControlTemplate>
+            </Button.Template>
+        </Button>
+
+        <Border MinWidth="280" Padding="20" HorizontalAlignment="Center" VerticalAlignment="Center"
+                Background="#2D3748" BorderBrush="White" BorderThickness="2" CornerRadius="10">
+            <StackPanel>
+                <TextBlock Text="Generate how many?" FontSize="18" FontWeight="Bold" Foreground="White" Margin="0,0,0,12"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,16">
+                    <Button Style="{StaticResource CounterButtonStyle}" Content="-" Command="{Binding DecreaseGenerateCountCommand}"/>
+                    <TextBlock Text="{Binding GenerateCount}" FontSize="20" FontWeight="Bold" Foreground="#F7FAFC"
+                               Width="44" TextAlignment="Center" VerticalAlignment="Center"/>
+                    <Button Style="{StaticResource CounterButtonStyle}" Content="+" Command="{Binding IncreaseGenerateCountCommand}"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <Button Style="{StaticResource ActionButtonStyle}" Content="Cancel" Margin="0,0,8,0" Command="{Binding CancelGenerateCountCommand}"/>
+                    <Button Style="{StaticResource ActionButtonStyle}" Content="Go" Command="{Binding ConfirmGenerateCountCommand}"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

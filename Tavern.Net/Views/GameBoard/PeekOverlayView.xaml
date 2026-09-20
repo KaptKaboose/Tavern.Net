@@ -1,0 +1,63 @@
+﻿<UserControl x:Class="Tavern.Net.Views.GameBoard.PeekOverlayView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:Tavern.Net.ViewModels"
+             xmlns:views="clr-namespace:Tavern.Net.Views"
+             xmlns:behaviors="clr-namespace:Tavern.Net.Behaviors"
+             xmlns:conv="clr-namespace:Tavern.Net.Converters"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:GameBoardViewModel}"
+             d:DesignWidth="1600" d:DesignHeight="950">
+    <!-- Peek overlay: clicking a pile (StackZoneView.PeekCommand) fans its cards out here,
+         above the main board but below the zoom overlay so zooming a card while peeking
+         still shows on top. Unlike the zoom overlay, only the scrim (not the card panel)
+         closes it on click — cards inside stay draggable/right-clickable, and the panel
+         scrolls instead of trying to fit an entire deck on screen at once. -->
+    <Grid
+          Visibility="{Binding PeekedZone, Converter={StaticResource NullToVisibility}}"
+          d:IsHidden="True">
+        <Button Command="{Binding ClosePeekCommand}" Focusable="False" Cursor="Arrow">
+            <Button.Template>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="#CC000000"/>
+                </ControlTemplate>
+            </Button.Template>
+        </Button>
+
+        <Border MaxWidth="1200" MaxHeight="820" Margin="40" Padding="16"
+                HorizontalAlignment="Center" VerticalAlignment="Center"
+                Background="#2D3748" BorderBrush="White" BorderThickness="2" CornerRadius="10">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Top" Text="{Binding PeekedZone.HeaderText}"
+                           Foreground="White" FontSize="20" FontWeight="Bold" Margin="0,0,0,12"/>
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                              behaviors:AutoScrollOnDragBehavior.IsEnabled="True">
+                    <!-- Champion's own peek uses ChampionPeekCardTemplate instead of the plain
+                         CardTemplate — same visual, but never shows the tapped rotation (tap/
+                         flip are themselves already no-ops for a Champion card here; see
+                         GameBoardViewModel.ToggleTapped/FlipCard). Every other zone's peek is
+                         unaffected. -->
+                    <ItemsControl ItemsSource="{Binding PeekedZone.Zone.Cards}">
+                        <ItemsControl.Style>
+                            <Style TargetType="ItemsControl">
+                                <Setter Property="ItemTemplate" Value="{StaticResource CardTemplate}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding PeekedZone.Zone.Type}" Value="Champion">
+                                        <Setter Property="ItemTemplate" Value="{StaticResource ChampionPeekCardTemplate}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ItemsControl.Style>
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+    </Grid>
+</UserControl>

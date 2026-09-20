@@ -1,0 +1,9 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Everything the game board's panels (Views/GameBoard) share. Merged in App.xaml after SharedTemplates.xaml. -->
+    <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="GameBoardConverters.xaml"/>
+        <ResourceDictionary Source="GameBoardStyles.xaml"/>
+        <ResourceDictionary Source="GameBoardTemplates.xaml"/>
+    </ResourceDictionary.MergedDictionaries>
+</ResourceDictionary>

@@ -1,0 +1,49 @@
+﻿<UserControl x:Class="Tavern.Net.Views.GameBoard.SnapshotZoomOverlayView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:Tavern.Net.ViewModels"
+             xmlns:views="clr-namespace:Tavern.Net.Views"
+             xmlns:behaviors="clr-namespace:Tavern.Net.Behaviors"
+             xmlns:conv="clr-namespace:Tavern.Net.Converters"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:GameBoardViewModel}"
+             d:DesignWidth="1600" d:DesignHeight="950">
+    <!-- Snapshot zoom overlay (placed after the Reveal overlay so it renders above it): right-click a card in the review panel or a revealed card (CardZoomBehavior routes
+         CardSnapshotViewModel to ZoomSnapshotCardCommand) opens it here full-size. No
+         status/counter side panel like the live Zoom overlay above — a snapshot is read-only,
+         nothing here is editable. Always shows FrontArtwork, the card's true printed face,
+         rather than whatever face happens to be showing on the board: the player owns every
+         card in their own snapshot, so there's no reason to hide it from them even if it's
+         currently flipped face-down. -->
+    <Grid
+          Visibility="{Binding ZoomedSnapshotCard, Converter={StaticResource NullToVisibility}}"
+          d:IsHidden="True">
+        <Button Command="{Binding CloseSnapshotZoomCommand}" Focusable="False" Cursor="Arrow">
+            <Button.Template>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="#CC000000"/>
+                </ControlTemplate>
+            </Button.Template>
+        </Button>
+
+        <Button Command="{Binding CloseSnapshotZoomCommand}" Focusable="False" Cursor="Arrow"
+                HorizontalAlignment="Center" VerticalAlignment="Center">
+            <Button.Template>
+                <ControlTemplate TargetType="Button">
+                    <Border Width="420" Height="588" CornerRadius="10" ClipToBounds="True"
+                            Background="#333" BorderBrush="Black" BorderThickness="2">
+                        <Grid>
+                            <Image Source="{Binding ZoomedSnapshotCard.FrontArtwork}" Stretch="Uniform"
+                                   Visibility="{Binding ZoomedSnapshotCard.FrontArtwork, Converter={StaticResource NullToVisibility}}"/>
+                            <TextBlock Text="{Binding ZoomedSnapshotCard.Snapshot.Card.Name}" TextWrapping="Wrap" TextAlignment="Center"
+                                       VerticalAlignment="Center" Foreground="White" FontSize="28" Margin="16"
+                                       Visibility="{Binding ZoomedSnapshotCard.FrontArtwork, Converter={StaticResource NullToVisibility}, ConverterParameter=Invert}"/>
+                        </Grid>
+                    </Border>
+                </ControlTemplate>
+            </Button.Template>
+        </Button>
+    </Grid>
+</UserControl>

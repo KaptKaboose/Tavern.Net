@@ -1,0 +1,71 @@
+﻿<UserControl x:Class="Tavern.Net.Views.GameBoard.DiceOverlayView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:Tavern.Net.ViewModels"
+             xmlns:views="clr-namespace:Tavern.Net.Views"
+             xmlns:behaviors="clr-namespace:Tavern.Net.Behaviors"
+             xmlns:conv="clr-namespace:Tavern.Net.Converters"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:GameBoardViewModel}"
+             d:DesignWidth="1600" d:DesignHeight="950">
+    <!-- Roll Dice overlay: click Roll in the header to open, set a count with the +/- pair,
+         then click Roll inside the panel to actually roll — each die cycles random faces on a
+         shared clock (GameBoardViewModel.RollDice/OnDiceAnimationTick) before settling on its
+         real, already-decided result and picking up a gold highlight border. -->
+    <Grid
+          Visibility="{Binding IsRollingDice, Converter={StaticResource BoolToVisibility}}"
+          d:IsHidden="True">
+        <Button Command="{Binding CloseDicePanelCommand}" Focusable="False" Cursor="Arrow">
+            <Button.Template>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="#CC000000"/>
+                </ControlTemplate>
+            </Button.Template>
+        </Button>
+
+        <Border MaxWidth="700" MinWidth="360" Padding="20"
+                HorizontalAlignment="Center" VerticalAlignment="Center"
+                Background="#2D3748" BorderBrush="White" BorderThickness="2" CornerRadius="10">
+            <StackPanel>
+                <TextBlock Text="Roll Dice" Foreground="White" FontSize="20" FontWeight="Bold" Margin="0,0,0,12"/>
+
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,16">
+                    <Button Style="{StaticResource CounterButtonStyle}" Content="-" Command="{Binding DecreaseDiceToRollCommand}"/>
+                    <TextBlock Text="{Binding DiceToRoll, StringFormat='Dice: {0}'}" FontSize="18" FontWeight="Bold"
+                               Foreground="#F7FAFC" VerticalAlignment="Center" Margin="8,0"/>
+                    <Button Style="{StaticResource CounterButtonStyle}" Content="+" Command="{Binding IncreaseDiceToRollCommand}"/>
+
+                    <Button Style="{StaticResource ActionButtonStyle}" Content="Roll" Margin="24,0,0,0" Command="{Binding RollDiceCommand}"/>
+                </StackPanel>
+
+                <ItemsControl ItemsSource="{Binding Dice}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel HorizontalAlignment="Center"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:DieViewModel}">
+                            <Border Width="64" Height="64" Margin="6" CornerRadius="6" BorderThickness="3">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="BorderBrush" Value="Transparent"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsSettled}" Value="True">
+                                                <Setter Property="BorderBrush" Value="#99F6E05E"/>
+                                                <Setter Property="Effect" Value="{StaticResource GoldGlow}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <Image Source="{Binding FaceValue, Converter={StaticResource DieFaceToImage}}" Stretch="Uniform"/>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

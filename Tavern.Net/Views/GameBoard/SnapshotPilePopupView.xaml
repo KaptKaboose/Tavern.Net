@@ -1,0 +1,45 @@
+﻿<UserControl x:Class="Tavern.Net.Views.GameBoard.SnapshotPilePopupView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:Tavern.Net.ViewModels"
+             xmlns:views="clr-namespace:Tavern.Net.Views"
+             xmlns:behaviors="clr-namespace:Tavern.Net.Behaviors"
+             xmlns:conv="clr-namespace:Tavern.Net.Converters"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:GameBoardViewModel}"
+             d:DesignWidth="1600" d:DesignHeight="950">
+    <!-- Snapshot pile popup: full contents of a clicked pile box (Champion/Graveyard/
+         Banishment/Material/Main), shared by both the snapshot viewer and the Opponent panel
+         above — declared after both so it always renders on top of whichever one it popped out
+         of, rather than being pinned above just one of them. Read-only either way — closing it
+         just hides it. -->
+    <Grid
+          Visibility="{Binding ViewedSnapshotPile, Converter={StaticResource NullToVisibility}}"
+          d:IsHidden="True">
+        <Button Command="{Binding CloseSnapshotPileViewCommand}" Focusable="False" Cursor="Arrow">
+            <Button.Template>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="#CC000000"/>
+                </ControlTemplate>
+            </Button.Template>
+        </Button>
+
+        <Border MaxWidth="1200" MaxHeight="820" Margin="40" Padding="16"
+                HorizontalAlignment="Center" VerticalAlignment="Center"
+                Background="#2D3748" BorderBrush="White" BorderThickness="2" CornerRadius="10">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Top" Text="{Binding ViewedSnapshotPile.DisplayName}"
+                           Foreground="White" FontSize="20" FontWeight="Bold" Margin="0,0,0,12"/>
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl ItemsSource="{Binding ViewedSnapshotPile.Cards}" ItemTemplate="{StaticResource CardSnapshotTemplate}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+    </Grid>
+</UserControl>

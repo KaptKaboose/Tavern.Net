@@ -1,0 +1,74 @@
+﻿<UserControl x:Class="Tavern.Net.Views.GameBoard.OpponentRevealOverlayView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:Tavern.Net.ViewModels"
+             xmlns:views="clr-namespace:Tavern.Net.Views"
+             xmlns:behaviors="clr-namespace:Tavern.Net.Behaviors"
+             xmlns:conv="clr-namespace:Tavern.Net.Converters"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:GameBoardViewModel}"
+             d:DesignWidth="1600" d:DesignHeight="950">
+    <!-- Reveal overlay: shows a card (or a batch, e.g. Main Deck's 'R' chord) the opponent chose
+         to reveal — placed last so it always renders on top of whatever else is open when one
+         arrives. A ring (CountdownRingView) depletes over 5s; clicking "Keep open" (RevealKeptOpen)
+         freezes it so the player can look as long as they want; the scrim closes it outright and
+         advances to the next queued reveal (see GameBoardViewModel.ShowNextReveal). -->
+    <Grid
+          Visibility="{Binding ActiveReveal, Converter={StaticResource NullToVisibility}}"
+          d:IsHidden="True">
+        <Button Command="{Binding CloseActiveRevealCommand}" Focusable="False" Cursor="Arrow">
+            <Button.Template>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="#CC000000"/>
+                </ControlTemplate>
+            </Button.Template>
+        </Button>
+
+        <!-- IsHitTestVisible=False only on the card art itself (clicking it falls through to
+             the scrim, closing) — NOT on a shared ancestor of the ring/button below: WPF's
+             IsHitTestVisible=False on a container blocks its whole subtree, with no way for a
+             descendant to "opt back in", which is exactly what made Keep Open unclickable
+             before this. -->
+        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+            <!-- A big reveal (e.g. "reveal until X") wraps into a grid, shrinks in steps (see
+                 RevealCardWidth) and scrolls once it still doesn't fit. The ScrollViewer has to be
+                 hit-testable for the mouse wheel, so a plain click on it closes the reveal through
+                 an input binding instead of falling through to the scrim (the scrollbar handles its own
+                 clicks, so dragging it doesn't close anything). Right-clicking a card zooms it (read-only,
+                 via the snapshot zoom overlay), and the countdown pauses while a zoom is open. -->
+            <ScrollViewer MaxWidth="1360" MaxHeight="700" Background="Transparent"
+                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <ScrollViewer.InputBindings>
+                    <MouseBinding MouseAction="LeftClick" Command="{Binding CloseActiveRevealCommand}"/>
+                </ScrollViewer.InputBindings>
+                <ItemsControl ItemsSource="{Binding ActiveReveal}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><WrapPanel HorizontalAlignment="Center"/></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Width="{Binding DataContext.RevealCardWidth, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    Height="{Binding DataContext.RevealCardHeight, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                    Margin="8" CornerRadius="10" ClipToBounds="True"
+                                    behaviors:CardZoomBehavior.IsZoomable="True"
+                                    Background="#333" BorderBrush="Black" BorderThickness="2">
+                                <Image Source="{Binding Artwork}" Stretch="Uniform"
+                                       Visibility="{Binding Artwork, Converter={StaticResource NullToVisibility}}"/>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <!-- Both the ring and the button disappear together once kept open — the ring
+                 stopping but staying on screen read as "did my click not register?". -->
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,8,0,0"
+                        Visibility="{Binding ShowKeepRevealOpenButton, Converter={StaticResource BoolToVisibility}}">
+                <views:CountdownRingView RemainingFraction="{Binding RevealRemainingFraction}" Diameter="56" Thickness="5" Margin="0,0,16,0"/>
+                <Button Style="{StaticResource ActionButtonStyle}" Content="Keep open" Command="{Binding KeepRevealOpenCommand}"/>
+            </StackPanel>
+        </StackPanel>
+    </Grid>
+</UserControl>

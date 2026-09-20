@@ -1,0 +1,128 @@
+﻿<UserControl x:Class="Tavern.Net.Views.GameBoard.ZoomOverlayView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:Tavern.Net.ViewModels"
+             xmlns:views="clr-namespace:Tavern.Net.Views"
+             xmlns:behaviors="clr-namespace:Tavern.Net.Behaviors"
+             xmlns:conv="clr-namespace:Tavern.Net.Converters"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:GameBoardViewModel}"
+             d:DesignWidth="1600" d:DesignHeight="950">
+    <!-- Zoom overlay: right-click any card (CardZoomBehavior) opens it here full-size, with a
+         side panel for its status/counter. The scrim and the card art are each their own
+         click-to-close Button (matching the old "click anywhere on the card closes it"
+         behavior); the side panel is deliberately NOT inside either of those, since its own
+         toggle/+-/- clicks need to change this card's state instead of closing the overlay. -->
+    <Grid
+          Visibility="{Binding ZoomedCard, Converter={StaticResource NullToVisibility}}"
+          d:IsHidden="True">
+        <Button Command="{Binding CloseZoomCommand}" Focusable="False" Cursor="Arrow">
+            <Button.Template>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="#CC000000"/>
+                </ControlTemplate>
+            </Button.Template>
+        </Button>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <Button Command="{Binding CloseZoomCommand}" Focusable="False" Cursor="Arrow">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border Width="420" Height="588" CornerRadius="10" ClipToBounds="True"
+                                Background="#333" BorderBrush="Black" BorderThickness="2">
+                            <Grid>
+                                <Image Source="{Binding ZoomedCard.Artwork}" Stretch="Uniform"
+                                       Visibility="{Binding ZoomedCard.Artwork, Converter={StaticResource NullToVisibility}}"/>
+                                <TextBlock Text="{Binding ZoomedCard.Name}" TextWrapping="Wrap" TextAlignment="Center"
+                                           VerticalAlignment="Center" Foreground="White" FontSize="28" Margin="16"
+                                           Visibility="{Binding ZoomedCard.Artwork, Converter={StaticResource NullToVisibility}, ConverterParameter=Invert}"/>
+                            </Grid>
+                        </Border>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+
+            <!-- Side panel — Status/Counter/Tapped only relevant in play (Field/Champion; see
+                 GameBoardViewModel.ShowCounterAndStatusPanel); Bottom/Reveal/Give matter for
+                 exactly the private zones that gate hides (Hand/Memory/Material/Sealed), so the
+                 outer Border's own Visibility is the broader ShowZoomSidePanel instead. Status
+                 buttons two-way bind straight to the CardInstance's own IsXxx properties (no
+                 command/parameter plumbing needed); highlighted (gold border) when checked via
+                 the StatusToggleStyle below. -->
+            <Border Width="170" Margin="16,0,0,0" Padding="14" VerticalAlignment="Center"
+                    Background="#2D3748" BorderBrush="White" BorderThickness="2" CornerRadius="10"
+                    Visibility="{Binding ShowZoomSidePanel, Converter={StaticResource BoolToVisibility}}">
+                <StackPanel>
+                    <StackPanel Visibility="{Binding ShowCounterAndStatusPanel, Converter={StaticResource BoolToVisibility}}">
+                        <!-- Status/Tap toggles bind IsChecked OneWay (display only) and drive the
+                             actual change through a Command instead — routing through
+                             GameSession.ToggleStatus/ToggleTapped so it's logged and (for Tap)
+                             breaks any open Life/Damage coalescing streak. A TwoWay binding here
+                             would double-toggle: WPF flips IsChecked itself on click, then the
+                             command would flip the real property again. -->
+                        <TextBlock Text="Status" Foreground="#F7FAFC" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                        <UniformGrid Columns="2" Margin="0,0,0,16">
+                            <ToggleButton Style="{StaticResource StatusToggleStyle}" IsChecked="{Binding ZoomedCard.Instance.IsEphemeral, Mode=OneWay}"
+                                          Command="{Binding ToggleZoomedCardStatusCommand}" CommandParameter="Ephemeral">
+                                <Image Source="/GameData/Images/Tokens/ephemeral.png" Stretch="Uniform"/>
+                            </ToggleButton>
+                            <ToggleButton Style="{StaticResource StatusToggleStyle}" IsChecked="{Binding ZoomedCard.Instance.IsIgnited, Mode=OneWay}"
+                                          Command="{Binding ToggleZoomedCardStatusCommand}" CommandParameter="Ignited">
+                                <Image Source="/GameData/Images/Tokens/ignited.png" Stretch="Uniform"/>
+                            </ToggleButton>
+                            <ToggleButton Style="{StaticResource StatusToggleStyle}" IsChecked="{Binding ZoomedCard.Instance.IsImbued, Mode=OneWay}"
+                                          Command="{Binding ToggleZoomedCardStatusCommand}" CommandParameter="Imbued">
+                                <Image Source="/GameData/Images/Tokens/imbued.png" Stretch="Uniform"/>
+                            </ToggleButton>
+                            <ToggleButton Style="{StaticResource StatusToggleStyle}" IsChecked="{Binding ZoomedCard.Instance.IsRanged, Mode=OneWay}"
+                                          Command="{Binding ToggleZoomedCardStatusCommand}" CommandParameter="Ranged">
+                                <Image Source="/GameData/Images/Tokens/ranged.png" Stretch="Uniform"/>
+                            </ToggleButton>
+                            <ToggleButton Style="{StaticResource StatusToggleStyle}" IsChecked="{Binding ZoomedCard.Instance.IsRooted, Mode=OneWay}"
+                                          Command="{Binding ToggleZoomedCardStatusCommand}" CommandParameter="Rooted">
+                                <Image Source="/GameData/Images/Tokens/rooted.png" Stretch="Uniform"/>
+                            </ToggleButton>
+                            <ToggleButton Style="{StaticResource StatusToggleStyle}" IsChecked="{Binding ZoomedCard.Instance.IsWarded, Mode=OneWay}"
+                                          Command="{Binding ToggleZoomedCardStatusCommand}" CommandParameter="Warded">
+                                <Image Source="/GameData/Images/Tokens/warded.png" Stretch="Uniform"/>
+                            </ToggleButton>
+                        </UniformGrid>
+
+                        <TextBlock Text="Counter" Foreground="#F7FAFC" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <Button Style="{StaticResource CounterButtonStyle}" Content="-" Command="{Binding DecreaseCounterCommand}"/>
+                            <TextBlock Text="{Binding ZoomedCard.Instance.Counter}" FontSize="20" FontWeight="Bold" Foreground="#F7FAFC"
+                                       Width="44" TextAlignment="Center" VerticalAlignment="Center"/>
+                            <Button Style="{StaticResource CounterButtonStyle}" Content="+" Command="{Binding IncreaseCounterCommand}"/>
+                        </StackPanel>
+
+                        <TextBlock Text="Tapped" Foreground="#F7FAFC" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,16,0,8"/>
+                        <ToggleButton Style="{StaticResource StatusToggleStyle}" HorizontalAlignment="Center"
+                                      IsChecked="{Binding ZoomedCard.Instance.IsTapped, Mode=OneWay}"
+                                      Command="{Binding ToggleZoomedCardTappedCommand}">
+                            <TextBlock Text="Tap" Foreground="#F7FAFC" FontWeight="Bold" FontSize="14"/>
+                        </ToggleButton>
+                    </StackPanel>
+
+                    <!-- Bottom: any card not already in Main Deck, sends it to the bottom. -->
+                    <Button Style="{StaticResource ActionButtonStyle}" Content="Bottom" Margin="0,12,0,0"
+                            Command="{Binding BottomZoomedCardCommand}"
+                            Visibility="{Binding CanBottomZoomedCard, Converter={StaticResource BoolToVisibility}}"/>
+
+                    <!-- Online only, private zones only (Hand/Memory/Material/Sealed) — shows
+                         the opponent this specific card without moving it. -->
+                    <Button Style="{StaticResource ActionButtonStyle}" Content="Reveal" Margin="0,8,0,0"
+                            Command="{Binding RevealZoomedCardCommand}"
+                            Visibility="{Binding CanRevealZoomedCard, Converter={StaticResource BoolToVisibility}}"/>
+
+                    <!-- Online only, any zone — opens the shared Field/Sealed target picker. -->
+                    <Button Style="{StaticResource ActionButtonStyle}" Content="Give" Margin="0,8,0,0"
+                            Command="{Binding OpenGiveTargetPickerForZoomedCardCommand}"
+                            Visibility="{Binding CanGiveZoomedCard, Converter={StaticResource BoolToVisibility}}"/>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </Grid>
+</UserControl>

@@ -1,0 +1,43 @@
+﻿<UserControl x:Class="Tavern.Net.Views.GameBoard.SaveGameOverlayView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vm="clr-namespace:Tavern.Net.ViewModels"
+             xmlns:views="clr-namespace:Tavern.Net.Views"
+             xmlns:behaviors="clr-namespace:Tavern.Net.Behaviors"
+             xmlns:conv="clr-namespace:Tavern.Net.Converters"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance vm:GameBoardViewModel}"
+             d:DesignWidth="1600" d:DesignHeight="950">
+    <!-- Save Game overlay: click Save Game in the header to open, name it, and Save — the board
+         has no persistent "management" screen of its own, so this is a modal panel rather than
+         DeckImportView's inline Save Deck row. Stays open after a successful save so the
+         confirmation is visible; Close (or the scrim) dismisses it. -->
+    <Grid
+          Visibility="{Binding IsSavingGame, Converter={StaticResource BoolToVisibility}}"
+          d:IsHidden="True">
+        <Button Command="{Binding CloseSaveGamePanelCommand}" Focusable="False" Cursor="Arrow">
+            <Button.Template>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="#CC000000"/>
+                </ControlTemplate>
+            </Button.Template>
+        </Button>
+
+        <Border MaxWidth="420" MinWidth="360" Padding="20"
+                HorizontalAlignment="Center" VerticalAlignment="Center"
+                Background="#2D3748" BorderBrush="White" BorderThickness="2" CornerRadius="10">
+            <StackPanel>
+                <TextBlock Text="Save Game" Foreground="White" FontSize="20" FontWeight="Bold" Margin="0,0,0,12"/>
+                <TextBox Text="{Binding SaveGameName, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,12"/>
+                <StackPanel Orientation="Horizontal">
+                    <Button Style="{StaticResource ActionButtonStyle}" Content="Save" Command="{Binding ConfirmSaveGameCommand}"/>
+                    <Button Style="{StaticResource ActionButtonStyle}" Content="Close" Margin="8,0,0,0" Command="{Binding CloseSaveGamePanelCommand}"/>
+                </StackPanel>
+                <TextBlock Text="{Binding SaveGameStatusMessage}" Foreground="#68D391" Margin="0,12,0,0" TextWrapping="Wrap"
+                           Visibility="{Binding SaveGameStatusMessage, Converter={StaticResource NullToVisibility}}"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>
